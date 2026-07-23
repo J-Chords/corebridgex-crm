@@ -1,0 +1,196 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+  Design tokens ported from design-reference/plexa-one-design-system-v5.html.
+  Semantic names (background/foreground/primary/...) are shadcn's existing
+  contract — every current and future shadcn component already consumes
+  these, so re-pointing the values here re-themes the whole app at once.
+  Plexa-specific extras (success/warning/info, the extended radius scale,
+  the spring easing) are layered on top via the same mechanism.
+*/
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+  --font-heading: var(--font-sans);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+
+  /* Plexa status colors — themable, not static, since success/primary shift hue between themes */
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-info: var(--info);
+
+  /* Plexa radius scale (fixed px, not the default calc() multiples) */
+  --radius-xs: 3px;
+  --radius-sm: 5px;
+  --radius-md: 9px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-2xl: 22px;
+
+  /* Plexa type scale — the sizes used pervasively across dense UI (badges, captions, body, table cells) */
+  --text-xs: 11px;
+  --text-sm: 13px;
+  --text-base: 15px;
+  --text-lg: 18px;
+
+  /* Plexa's named "spring" easing — used on every card/stat hover in the reference */
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+:root {
+  --background: #f8f9fc;
+  --foreground: #060d1a;
+  --card: #ffffff;
+  --card-foreground: #060d1a;
+  --popover: #ffffff;
+  --popover-foreground: #060d1a;
+  --primary: #1a4bdb;
+  --primary-foreground: #ffffff;
+  --secondary: #eef1f8;
+  --secondary-foreground: #060d1a;
+  --muted: #eef1f8;
+  --muted-foreground: #5a6e8a;
+  --accent: #eef1f8;
+  --accent-foreground: #060d1a;
+  --destructive: #f5405a;
+  --destructive-foreground: #ffffff;
+  --success: #10b981;
+  --warning: #f59e0b;
+  --info: #7da4ff;
+  --border: rgba(0, 0, 0, 0.07);
+  --input: rgba(0, 0, 0, 0.12);
+  --ring: #1a4bdb;
+  --chart-1: oklch(0.87 0 0);
+  --chart-2: oklch(0.556 0 0);
+  --chart-3: oklch(0.439 0 0);
+  --chart-4: oklch(0.371 0 0);
+  --chart-5: oklch(0.269 0 0);
+  --radius: 0.5625rem;
+  --sidebar: #ffffff;
+  --sidebar-foreground: #060d1a;
+  --sidebar-primary: #1a4bdb;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: rgba(26, 75, 219, 0.1);
+  --sidebar-accent-foreground: #1a4bdb;
+  --sidebar-border: rgba(0, 0, 0, 0.07);
+  --sidebar-ring: #1a4bdb;
+}
+
+.dark {
+  --background: #060d1a;
+  --foreground: #edf2ff;
+  --card: #0c1830;
+  --card-foreground: #edf2ff;
+  --popover: #0c1830;
+  --popover-foreground: #edf2ff;
+  --primary: #00e5b0;
+  /* Dark text on mint — mint is too light for white text (per source system's own rule) */
+  --primary-foreground: #060d1a;
+  --secondary: #0e1d33;
+  --secondary-foreground: #edf2ff;
+  --muted: #0e1d33;
+  --muted-foreground: #7a95b8;
+  --accent: #0e1d33;
+  --accent-foreground: #edf2ff;
+  --destructive: #f5405a;
+  --destructive-foreground: #ffffff;
+  /* Success shifts to warm lime in dark mode — stays visually distinct from brand mint */
+  --success: #4ade80;
+  --warning: #f59e0b;
+  --info: #7da4ff;
+  --border: rgba(255, 255, 255, 0.07);
+  --input: rgba(255, 255, 255, 0.12);
+  --ring: #00e5b0;
+  --chart-1: oklch(0.87 0 0);
+  --chart-2: oklch(0.556 0 0);
+  --chart-3: oklch(0.439 0 0);
+  --chart-4: oklch(0.371 0 0);
+  --chart-5: oklch(0.269 0 0);
+  --sidebar: #0c1830;
+  --sidebar-foreground: #edf2ff;
+  --sidebar-primary: #00e5b0;
+  --sidebar-primary-foreground: #060d1a;
+  --sidebar-accent: rgba(0, 229, 176, 0.1);
+  --sidebar-accent-foreground: #00e5b0;
+  --sidebar-border: rgba(255, 255, 255, 0.07);
+  --sidebar-ring: #00e5b0;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground text-base;
+  }
+  html {
+    @apply font-sans;
+  }
+}
+
+/* Decorative dot-matrix canvas from the reference — purely visual, sits behind content.
+   z-index:-1 on the pseudo-element keeps it behind normal-flow content without
+   requiring every content wrapper to opt into its own stacking context. */
+@layer base {
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    background-image: radial-gradient(
+      circle,
+      color-mix(in oklch, var(--primary) 12%, transparent) 1px,
+      transparent 1px
+    );
+    background-size: 24px 24px;
+    pointer-events: none;
+  }
+}
+
+/* The reference's scroll-reveal relies on transform/opacity transitions with no
+   reduced-motion guard (a real gap found during the audit) — every hover-lift
+   and transition in this app respects the user's motion preference instead. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

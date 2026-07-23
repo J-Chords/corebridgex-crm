@@ -1,0 +1,1884 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Plexa One — Design System v5</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<style>
+
+/* ═══════════════════════════════════════════════════════════════
+   PLEXA ONE · DESIGN SYSTEM v4 · BENTO COSMOS
+   All v3 design decisions preserved — presentation layer rebuilt
+   Light default · Dot matrix canvas · Mixed density bento
+═══════════════════════════════════════════════════════════════ */
+
+/* ── TOKENS ──────────────────────────────────────────────────── */
+:root {
+  --mint:          #00E5B0;
+  --mint-dim:      #00C899;
+  --mint-faint:    rgba(0,229,176,.10);
+  --mint-glow:     rgba(0,229,176,.20);
+  --blue:          #1A4BDB;
+  --blue-dim:      #1540C0;
+  --blue-faint:    rgba(26,75,219,.10);
+  --blue-glow:     rgba(26,75,219,.20);
+  --success:       #10B981;
+  --success-faint: rgba(16,185,129,.10);
+  --warning:       #F59E0B;
+  --warning-faint: rgba(245,158,11,.10);
+  --danger:        #F5405A;
+  --danger-faint:  rgba(245,64,90,.10);
+  --info-dark:     #7DA4FF;
+
+  --r-xs:3px; --r-sm:5px; --r-md:9px;
+  --r-lg:12px; --r-xl:16px; --r-2xl:22px; --r-pill:9999px;
+
+  --font-display: 'Artific','Inter',sans-serif;
+  --font-body:    'Inter',sans-serif;
+  --font-mono:    'DM Mono',monospace;
+
+  --s1:4px;--s2:8px;--s3:12px;--s4:16px;--s5:20px;
+  --s6:24px;--s8:32px;--s10:40px;--s12:48px;--s16:64px;--s20:80px;
+
+  --t-fast:   120ms ease;
+  --t-base:   220ms ease;
+  --t-slow:   380ms ease;
+  --t-spring: 320ms cubic-bezier(.34,1.56,.64,1);
+  --t-smooth: 400ms cubic-bezier(.4,0,.2,1);
+
+  /* Bento gap */
+  --gap: 14px;
+}
+
+/* ── LIGHT THEME (default) ───────────────────────────────────── */
+[data-theme="light"] {
+  --bg:          #F8F9FC;
+  --bg-2:        #FFFFFF;
+  --bg-3:        #EEF1F8;
+  --bg-4:        #E4E9F4;
+  --bg-raised:   #FFFFFF;
+  --border:      rgba(0,0,0,.07);
+  --border-mid:  rgba(0,0,0,.12);
+  --border-hi:   rgba(0,0,0,.22);
+  --text-1:      #060D1A;
+  --text-2:      #5A6E8A;
+  --text-3:      #A8B8CC;
+  --text-inv:    #FFFFFF;
+  --primary:     var(--blue);
+  --primary-dim: var(--blue-dim);
+  --primary-faint:var(--blue-faint);
+  --primary-glow: var(--blue-glow);
+  --dot-color:   rgba(26,75,219,.12);
+  --shadow-sm:   0 1px 3px rgba(0,0,0,.07);
+  --shadow-md:   0 4px 20px rgba(0,0,0,.09);
+  --shadow-lg:   0 12px 40px rgba(0,0,0,.11);
+  --shadow-card: 0 8px 32px rgba(26,75,219,.10), 0 0 0 1px rgba(26,75,219,.15);
+  --overlay:     rgba(0,0,0,.45);
+  color-scheme: light;
+}
+
+/* ── DARK THEME ──────────────────────────────────────────────── */
+[data-theme="dark"] {
+  --bg:          #060D1A;
+  --bg-2:        #0A1525;
+  --bg-3:        #0E1D33;
+  --bg-4:        #132440;
+  --bg-raised:   #0C1830;
+  --border:      rgba(255,255,255,.07);
+  --border-mid:  rgba(255,255,255,.12);
+  --border-hi:   rgba(255,255,255,.22);
+  --text-1:      #EDF2FF;
+  --text-2:      #7A95B8;
+  --text-3:      #2E4D6A;
+  --text-inv:    #060D1A;
+  --primary:     var(--mint);
+  --primary-dim: var(--mint-dim);
+  --primary-faint:var(--mint-faint);
+  --primary-glow: var(--mint-glow);
+  --dot-color:   rgba(0,229,176,.10);
+  --shadow-sm:   0 1px 3px rgba(0,0,0,.5);
+  --shadow-md:   0 4px 20px rgba(0,0,0,.6);
+  --shadow-lg:   0 12px 40px rgba(0,0,0,.7);
+  --shadow-card: 0 8px 32px rgba(0,0,0,.5), 0 0 0 1px rgba(0,229,176,.18);
+  --overlay:     rgba(6,13,26,.92);
+  /* Success shifted to warm lime in dark — clearly distinct from cool mint */
+  --success:       #4ADE80;
+  --success-faint: rgba(74,222,128,.10);
+  color-scheme: dark;
+}
+
+/* ── RESET ───────────────────────────────────────────────────── */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{
+  font-family:var(--font-body);font-size:15px;line-height:1.6;
+  background:var(--bg);color:var(--text-1);
+  -webkit-font-smoothing:antialiased;
+  transition:background var(--t-slow),color var(--t-slow);
+  min-height:100vh;
+}
+
+/* DOT MATRIX CANVAS */
+body::before{
+  content:'';
+  position:fixed;inset:0;
+  background-image:radial-gradient(circle, var(--dot-color) 1px, transparent 1px);
+  background-size:24px 24px;
+  pointer-events:none;z-index:0;
+  transition:background-image var(--t-slow);
+}
+
+::-webkit-scrollbar{width:5px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border-mid);border-radius:9px}
+::selection{background:var(--primary-faint);color:var(--primary)}
+
+/* ── NAV ─────────────────────────────────────────────────────── */
+.topnav{
+  position:sticky;top:0;z-index:200;
+  background:rgba(248,249,252,.85);
+  backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+  border-bottom:1px solid var(--border);
+  padding:0 var(--s8);height:56px;
+  display:flex;align-items:center;justify-content:space-between;
+  transition:background var(--t-slow),border-color var(--t-slow);
+}
+[data-theme="dark"] .topnav{background:rgba(6,13,26,.85)}
+.nav-left{display:flex;align-items:center;gap:var(--s4)}
+.nav-logo{display:flex;align-items:center;gap:10px;text-decoration:none}
+.nav-logo-img{
+  height:32px;width:auto;display:block;object-fit:contain;
+  border-radius:var(--r-sm);
+  transition:filter var(--t-slow),padding var(--t-slow),background var(--t-slow);
+}
+[data-theme="dark"] .nav-logo-img{
+  background:#fff;
+  border-radius:var(--r-sm);
+  padding:2px 6px;
+}
+.nav-wordmark{
+  font-family:var(--font-display);font-size:17px;font-weight:700;
+  letter-spacing:-.03em;color:var(--text-1);
+}
+.nav-wordmark span{color:var(--primary);transition:color var(--t-slow)}
+.nav-ver{
+  font-family:var(--font-mono);font-size:10px;color:var(--text-3);
+  border:1px solid var(--border-mid);padding:2px 7px;
+  border-radius:var(--r-pill);letter-spacing:.06em;
+}
+.nav-links{display:flex;gap:2px}
+.nav-links a{
+  font-size:13px;font-weight:500;color:var(--text-2);
+  text-decoration:none;padding:5px 10px;border-radius:var(--r-sm);
+  transition:background var(--t-fast),color var(--t-fast);
+}
+.nav-links a:hover{background:var(--bg-3);color:var(--text-1)}
+.nav-right{display:flex;align-items:center;gap:var(--s2)}
+.theme-toggle{
+  width:36px;height:36px;border-radius:var(--r-md);
+  border:1px solid var(--border-mid);background:var(--bg-2);
+  color:var(--text-2);cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  transition:all var(--t-fast);
+}
+.theme-toggle:hover{background:var(--bg-3);color:var(--text-1)}
+
+/* ── MAIN WRAPPER ────────────────────────────────────────────── */
+.page{
+  position:relative;z-index:1;
+  max-width:1200px;margin:0 auto;
+  padding:var(--s8) var(--s8) var(--s20);
+}
+
+/* ── BENTO GRID SYSTEM ───────────────────────────────────────── */
+.bento{
+  display:grid;
+  grid-template-columns:repeat(12,1fr);
+  gap:var(--gap);
+  margin-bottom:var(--gap);
+}
+
+/* Column spans */
+.b1 {grid-column:span 1}  .b2 {grid-column:span 2}
+.b3 {grid-column:span 3}  .b4 {grid-column:span 4}
+.b5 {grid-column:span 5}  .b6 {grid-column:span 6}
+.b7 {grid-column:span 7}  .b8 {grid-column:span 8}
+.b9 {grid-column:span 9}  .b10{grid-column:span 10}
+.b11{grid-column:span 11} .b12{grid-column:span 12}
+
+/* Row spans */
+.r2{grid-row:span 2} .r3{grid-row:span 3}
+
+/* ── BENTO CELL ──────────────────────────────────────────────── */
+.cell{
+  background:var(--bg-raised);
+  border:1px solid var(--border);
+  border-radius:var(--r-xl);
+  position:relative;overflow:hidden;
+  transition:border-color var(--t-base),box-shadow var(--t-base);
+}
+
+/* Padding presets */
+.cell-pad    {padding:var(--s6)}
+.cell-pad-sm {padding:var(--s4)}
+.cell-pad-lg {padding:var(--s8)}
+.cell-pad-xl {padding:var(--s10) var(--s8)}
+.cell-flush  {padding:0;overflow:hidden;display:flex;flex-direction:column}
+
+/* Hover state for interactive cells */
+.cell-hover{cursor:pointer;transition:transform .3s cubic-bezier(.34,1.56,.64,1),box-shadow .3s ease,border-color .3s ease}
+.cell-hover:hover{
+  transform:translateY(-4px) scale(1.015);
+  border-color:var(--primary);
+  box-shadow:var(--shadow-card);
+}
+.cell-hover::before{
+  content:'';position:absolute;top:0;left:0;right:0;height:2px;
+  background:var(--primary);
+  transform:scaleX(0);transform-origin:left;
+  transition:transform .35s var(--t-smooth),background var(--t-slow);
+}
+.cell-hover:hover::before{transform:scaleX(1)}
+
+/* Accent cells */
+.cell-accent{background:var(--primary-faint);border-color:var(--primary-glow)}
+.cell-dark{background:var(--bg-3)}
+.cell-mono{background:var(--bg-2)}
+
+/* Section label inside cell */
+.cell-tag{
+  font-family:var(--font-mono);font-size:10px;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--primary);
+  display:block;margin-bottom:var(--s2);
+  transition:color var(--t-slow);
+}
+.cell-title{
+  font-family:var(--font-display);
+  font-size:1.6rem;font-weight:700;
+  letter-spacing:-.03em;line-height:1.1;
+  margin-bottom:var(--s2);
+}
+.cell-title-xl{
+  font-family:var(--font-display);
+  font-size:clamp(2.4rem,4vw,3.8rem);
+  font-weight:700;letter-spacing:-.04em;line-height:1;
+}
+.cell-title-xl em{font-style:normal;color:var(--primary);transition:color var(--t-slow)}
+.cell-body{font-size:13px;color:var(--text-2);line-height:1.7}
+
+/* Big number hero */
+.hero-num{
+  font-family:var(--font-display);
+  font-size:clamp(2.8rem,5vw,4.2rem);
+  font-weight:700;letter-spacing:-.05em;
+  color:var(--primary);line-height:1;
+  display:block;transition:color var(--t-slow);
+}
+.hero-num-label{
+  font-size:11px;color:var(--text-3);
+  letter-spacing:.09em;text-transform:uppercase;
+  display:block;margin-top:var(--s2);
+}
+
+/* Section divider row */
+.section-break{
+  display:flex;align-items:center;gap:var(--s4);
+  padding:var(--s8) 0 var(--s4);
+}
+.section-break-line{flex:1;height:1px;background:var(--border)}
+.section-break-label{
+  font-family:var(--font-mono);font-size:11px;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--text-3);white-space:nowrap;
+}
+.section-break-num{
+  font-family:var(--font-mono);font-size:11px;color:var(--primary);
+  letter-spacing:.06em;transition:color var(--t-slow);
+}
+
+/* Sub label */
+.sub-label{
+  font-size:11px;font-weight:600;letter-spacing:.10em;
+  text-transform:uppercase;color:var(--text-3);
+  margin-bottom:var(--s4);display:block;
+}
+
+/* Utility */
+.row{display:flex;align-items:center;gap:var(--s3);flex-wrap:wrap}
+.col{display:flex;flex-direction:column;gap:var(--s3)}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:var(--s4)}
+.g3{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--s4)}
+.g4{display:grid;grid-template-columns:repeat(4,1fr);gap:var(--s4)}
+.mb4{margin-bottom:var(--s4)}.mb6{margin-bottom:var(--s6)}.mb8{margin-bottom:var(--s8)}
+code{font-family:var(--font-mono);font-size:.82em;background:var(--bg-3);color:var(--primary);padding:2px 7px;border-radius:var(--r-xs)}
+
+/* Reveal animation */
+.reveal{opacity:0;transform:translateY(20px);transition:opacity .55s ease,transform .55s ease}
+.reveal.visible{opacity:1;transform:none}
+.reveal-child{opacity:0;transform:translateY(14px);transition:opacity .5s ease,transform .5s ease}
+.reveal-child.visible{opacity:1;transform:none}
+
+/* ═══════════════════════════════════════════════════════════════
+   ALL COMPONENT STYLES FROM v3 — UNCHANGED
+═══════════════════════════════════════════════════════════════ */
+
+/* BUTTONS */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:var(--s2);font-family:var(--font-body);font-weight:500;font-size:14px;border-radius:var(--r-md);padding:9px var(--s5);border:1.5px solid transparent;cursor:pointer;text-decoration:none;white-space:nowrap;transition:all var(--t-fast);-webkit-user-select:none;user-select:none}
+.btn:active{transform:scale(.97)}
+.btn svg{width:15px;height:15px;flex-shrink:0}
+.btn-xs{font-size:12px;padding:5px 11px;border-radius:var(--r-sm)}
+.btn-sm{font-size:13px;padding:7px var(--s4);border-radius:var(--r-sm)}
+.btn-lg{font-size:15px;padding:12px var(--s8);border-radius:var(--r-lg)}
+.btn-xl{font-size:16px;padding:15px var(--s10);border-radius:var(--r-lg)}
+.btn-primary{background:transparent;color:var(--primary);border-color:var(--primary)}
+.btn-primary:hover{background:var(--primary-faint);box-shadow:0 0 20px var(--primary-glow)}
+.btn-primary-filled{background:var(--primary);color:var(--text-inv);border-color:var(--primary);font-weight:600}
+.btn-primary-filled:hover{background:var(--primary-dim);border-color:var(--primary-dim);box-shadow:0 0 20px var(--primary-glow)}
+.btn-secondary{background:var(--bg-3);color:var(--text-1);border-color:var(--border-mid)}
+.btn-secondary:hover{background:var(--bg-4);border-color:var(--border-hi)}
+.btn-ghost{background:transparent;color:var(--text-2);border-color:transparent}
+.btn-ghost:hover{background:var(--bg-3);color:var(--text-1)}
+.btn-danger{background:transparent;color:var(--danger);border-color:rgba(245,64,90,.35)}
+.btn-danger:hover{background:var(--danger-faint)}
+.btn-icon{padding:9px;background:var(--bg-2);color:var(--text-2);border-color:var(--border-mid)}
+.btn-icon:hover{color:var(--primary);border-color:var(--primary-glow);background:var(--primary-faint)}
+.btn:disabled{opacity:.35;cursor:not-allowed;pointer-events:none}
+.btn-loading::after{content:'';width:13px;height:13px;border:2px solid currentColor;border-top-color:transparent;border-radius:50%;animation:spin .7s linear infinite;flex-shrink:0}
+
+/* FLOATING LABEL INPUTS */
+.fl-field{display:flex;flex-direction:column;gap:6px}
+.fl-hint{font-size:12px;color:var(--text-3)}
+.fl-error-msg{font-size:12px;color:var(--danger)}
+.fl-wrap{position:relative}
+.fl-input{width:100%;padding:22px var(--s4) 8px;font-family:var(--font-body);font-size:14px;background:var(--bg-2);border:1.5px solid var(--border-mid);border-radius:var(--r-md);color:var(--text-1);outline:none;transition:border-color var(--t-fast),background var(--t-fast),box-shadow var(--t-fast)}
+.fl-input::placeholder{color:transparent}
+.fl-input:hover{border-color:var(--border-hi)}
+.fl-input:focus{border-color:var(--primary);background:var(--bg);box-shadow:0 0 0 3px var(--primary-faint)}
+.fl-input.has-error{border-color:var(--danger) !important}
+.fl-input.has-error:focus{box-shadow:0 0 0 3px var(--danger-faint) !important}
+.fl-input.is-success{border-color:var(--success)}
+.fl-label{position:absolute;left:var(--s4);top:50%;transform:translateY(-50%);font-size:14px;color:var(--text-3);pointer-events:none;transition:top .18s ease,transform .18s ease,font-size .18s ease,color .18s ease,letter-spacing .18s ease}
+.fl-input:focus~.fl-label,.fl-input.filled~.fl-label{top:10px;transform:none;font-size:10px;letter-spacing:.06em;color:var(--primary)}
+.fl-input.has-error~.fl-label,.fl-input.has-error:focus~.fl-label{color:var(--danger)}
+.fl-bar{position:absolute;bottom:0;left:50%;right:50%;height:2px;border-radius:0 0 var(--r-md) var(--r-md);background:var(--primary);transition:left .22s ease,right .22s ease}
+.fl-input:focus~.fl-bar{left:0;right:0}
+.fl-input.has-error~.fl-bar{background:var(--danger);left:0;right:0}
+.fl-input.is-success~.fl-bar{background:var(--success);left:0;right:0}
+.fl-wrap .fl-icon{position:absolute;right:var(--s4);top:50%;transform:translateY(-50%);color:var(--text-3);cursor:pointer;transition:color var(--t-fast)}
+.fl-wrap .fl-icon:hover{color:var(--text-1)}
+.fl-wrap.has-icon .fl-input{padding-right:40px}
+.fl-select{width:100%;padding:22px var(--s4) 8px;font-family:var(--font-body);font-size:14px;background:var(--bg-2);border:1.5px solid var(--border-mid);border-radius:var(--r-md);color:var(--text-1);outline:none;cursor:pointer;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%237A95B8' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 14px center;transition:border-color var(--t-fast),box-shadow var(--t-fast)}
+.fl-select:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-faint);outline:none}
+.fl-textarea{width:100%;padding:22px var(--s4) 8px;min-height:100px;font-family:var(--font-body);font-size:14px;line-height:1.6;background:var(--bg-2);border:1.5px solid var(--border-mid);border-radius:var(--r-md);color:var(--text-1);outline:none;resize:vertical;transition:border-color var(--t-fast),background var(--t-fast),box-shadow var(--t-fast)}
+.fl-textarea:focus{border-color:var(--primary);background:var(--bg);box-shadow:0 0 0 3px var(--primary-faint)}
+.fl-textarea~.fl-label{top:14px;transform:none}
+.fl-textarea:focus~.fl-label,.fl-textarea.filled~.fl-label{top:8px;font-size:10px;letter-spacing:.06em;color:var(--primary)}
+
+/* TOGGLE / CHECKBOX / RADIO / SLIDER */
+.toggle{display:flex;align-items:center;gap:var(--s3);cursor:pointer;user-select:none}
+.toggle input{display:none}
+.toggle-track{width:42px;height:24px;border-radius:var(--r-pill);background:var(--bg-4);border:1.5px solid var(--border-mid);position:relative;flex-shrink:0;transition:background var(--t-base),border-color var(--t-base)}
+.toggle-track::after{content:'';position:absolute;top:3px;left:3px;width:14px;height:14px;border-radius:50%;background:var(--text-3);transition:transform var(--t-spring),background var(--t-base)}
+.toggle input:checked~.toggle-track{background:var(--primary-faint);border-color:var(--primary)}
+.toggle input:checked~.toggle-track::after{transform:translateX(18px);background:var(--primary)}
+.toggle-text{font-size:14px;color:var(--text-1)}
+.toggle-sub{font-size:12px;color:var(--text-3)}
+.checkbox{display:flex;align-items:flex-start;gap:var(--s2);cursor:pointer;user-select:none}
+.checkbox input{display:none}
+.checkbox-box{width:18px;height:18px;flex-shrink:0;border-radius:var(--r-xs);border:1.5px solid var(--border-mid);background:var(--bg-2);display:flex;align-items:center;justify-content:center;transition:all var(--t-fast);margin-top:1px}
+.checkbox:hover .checkbox-box{border-color:var(--primary)}
+.checkbox input:checked~.checkbox-box{background:var(--primary);border-color:var(--primary)}
+.checkbox input:checked~.checkbox-box::after{content:'';display:block;width:4px;height:8px;border:2px solid var(--text-inv);border-top:none;border-left:none;transform:rotate(45deg) translate(-1px,-1px)}
+.checkbox-text{font-size:14px;color:var(--text-1)}
+.radio{display:flex;align-items:center;gap:var(--s2);cursor:pointer;user-select:none}
+.radio input{display:none}
+.radio-dot{width:18px;height:18px;flex-shrink:0;border-radius:50%;border:1.5px solid var(--border-mid);background:var(--bg-2);display:flex;align-items:center;justify-content:center;transition:all var(--t-fast)}
+.radio:hover .radio-dot{border-color:var(--primary)}
+.radio input:checked~.radio-dot{border-color:var(--primary)}
+.radio input:checked~.radio-dot::after{content:'';display:block;width:8px;height:8px;border-radius:50%;background:var(--primary)}
+.radio-text{font-size:14px;color:var(--text-1)}
+.slider{width:100%;height:4px;border-radius:var(--r-pill);appearance:none;background:var(--bg-4);outline:none;cursor:pointer}
+.slider::-webkit-slider-thumb{appearance:none;width:18px;height:18px;border-radius:50%;background:var(--primary);border:2px solid var(--bg);box-shadow:0 0 0 1px var(--primary);cursor:pointer;transition:transform var(--t-spring)}
+.slider::-webkit-slider-thumb:hover{transform:scale(1.2)}
+
+/* BADGES */
+.badge{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;padding:3px 9px;border-radius:var(--r-sm);letter-spacing:.02em}
+.badge-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.badge-success{background:var(--success-faint);color:var(--success);border:1px solid rgba(16,185,129,.25)}
+.badge-error  {background:var(--danger-faint); color:var(--danger); border:1px solid rgba(245,64,90,.25)}
+.badge-warn   {background:var(--warning-faint);color:var(--warning);border:1px solid rgba(245,158,11,.25)}
+.badge-info   {background:var(--blue-faint);   color:var(--info-dark);border:1px solid rgba(26,75,219,.2)}
+.badge-neutral{background:var(--bg-3);         color:var(--text-2);  border:1px solid var(--border-mid)}
+.badge-brand  {background:var(--mint-faint);   color:var(--mint);    border:1px solid rgba(0,229,176,.2)}
+.badge-pill{border-radius:var(--r-pill)}
+.badge-lg{font-size:13px;padding:5px 12px;border-radius:var(--r-md)}
+
+/* INFO CARDS */
+.info-card{background:var(--bg-raised);border:1px solid var(--border);border-radius:var(--r-xl);padding:var(--s6);position:relative;overflow:hidden;cursor:pointer;transition:transform .3s cubic-bezier(.34,1.56,.64,1),box-shadow .3s ease,border-color .3s ease;will-change:transform}
+.info-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--primary);transform:scaleX(0);transform-origin:left;transition:transform .35s var(--t-smooth),background var(--t-slow)}
+.info-card:hover{transform:translateY(-6px) scale(1.02);border-color:var(--primary);box-shadow:var(--shadow-card)}
+.info-card:hover::before{transform:scaleX(1)}
+.info-card-icon{width:40px;height:40px;border-radius:var(--r-md);background:var(--primary-faint);border:1px solid rgba(255,255,255,.05);display:flex;align-items:center;justify-content:center;margin-bottom:var(--s4);font-size:18px}
+.info-card-title{font-family:var(--font-display);font-size:16px;font-weight:600;margin-bottom:var(--s2);letter-spacing:-.02em}
+.info-card-body{font-size:13px;color:var(--text-2);line-height:1.6}
+.info-card-footer{margin-top:var(--s5);padding-top:var(--s4);border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+
+/* STAT CARD */
+.stat-card{background:var(--bg-raised);border:1px solid var(--border);border-radius:var(--r-xl);padding:var(--s5) var(--s6);cursor:pointer;transition:transform .3s cubic-bezier(.34,1.56,.64,1),box-shadow .3s ease,border-color .3s ease}
+.stat-card:hover{transform:translateY(-4px) scale(1.015);border-color:var(--primary);box-shadow:var(--shadow-card)}
+.stat-lbl{font-size:11px;color:var(--text-3);letter-spacing:.09em;text-transform:uppercase;display:block;margin-bottom:var(--s3)}
+.stat-val{font-family:var(--font-display);font-size:2rem;font-weight:700;color:var(--primary);letter-spacing:-.03em;line-height:1;display:block;margin-bottom:6px;transition:color var(--t-slow)}
+.stat-delta{font-size:12px;font-weight:500;display:inline-flex;align-items:center;gap:3px}
+.delta-up{color:var(--success)}.delta-dn{color:var(--danger)}
+
+/* PROGRESS */
+.progress-item{margin-bottom:var(--s4)}
+.progress-head{display:flex;justify-content:space-between;margin-bottom:6px}
+.progress-name{font-size:13px;font-weight:500;color:var(--text-1)}
+.progress-pct{font-family:var(--font-mono);font-size:12px;color:var(--text-3)}
+.progress-track{height:5px;background:var(--bg-4);border-radius:var(--r-pill);overflow:hidden}
+.progress-fill{height:100%;border-radius:var(--r-pill);background:var(--primary);transition:width 1.2s cubic-bezier(.4,0,.2,1),background var(--t-slow)}
+.progress-fill-success{background:var(--success)}
+.progress-fill-split{background:linear-gradient(90deg,var(--blue),var(--mint))}
+
+/* AVATAR */
+.avatar{border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-family:var(--font-display);font-weight:700;background:var(--primary-faint);color:var(--primary);border:2px solid var(--bg-2);flex-shrink:0}
+.av-xs{width:24px;height:24px;font-size:9px}
+.av-sm{width:32px;height:32px;font-size:11px}
+.av-md{width:40px;height:40px;font-size:14px}
+.av-lg{width:52px;height:52px;font-size:18px}
+.av-xl{width:64px;height:64px;font-size:22px}
+.av-blue{background:var(--blue-faint);color:var(--info-dark)}
+.av-neutral{background:var(--bg-3);color:var(--text-2)}
+.avatar-stack{display:flex}
+.avatar-stack .avatar{margin-left:-8px;border-width:2px}
+.avatar-stack .avatar:first-child{margin-left:0}
+
+/* TABLE */
+.table-wrap{border:1px solid var(--border);border-radius:var(--r-xl);overflow:hidden}
+.table-toolbar{padding:var(--s4) var(--s5);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;background:var(--bg-2)}
+.table-title{font-size:14px;font-weight:600;color:var(--text-1)}
+.table-actions{display:flex;gap:var(--s2)}
+table{width:100%;border-collapse:collapse;font-size:13px}
+thead tr{border-bottom:1px solid var(--border-mid)}
+th{text-align:left;padding:var(--s3) var(--s5);font-family:var(--font-mono);font-size:11px;font-weight:500;letter-spacing:.08em;text-transform:uppercase;color:var(--text-3);white-space:nowrap}
+th.sortable{cursor:pointer;transition:color var(--t-fast)}
+th.sortable:hover{color:var(--text-1)}
+td{padding:var(--s4) var(--s5);border-bottom:1px solid var(--border);color:var(--text-1);vertical-align:middle}
+tbody tr:last-child td{border-bottom:none}
+tbody tr{transition:background var(--t-fast)}
+tbody tr:hover td{background:var(--bg-2)}
+tbody tr.selected td{background:var(--primary-faint)}
+
+/* CHAT */
+.chat-container{border:1px solid var(--border);border-radius:var(--r-xl);overflow:hidden;display:flex;flex-direction:column;height:480px;background:var(--bg-raised)}
+.chat-header{padding:var(--s4) var(--s5);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:var(--s3);background:var(--bg-2);flex-shrink:0}
+.chat-avatar-el{width:36px;height:36px;border-radius:50%;background:var(--primary-faint);border:1px solid var(--primary-glow);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:var(--primary);flex-shrink:0;transition:background var(--t-slow),border-color var(--t-slow),color var(--t-slow)}
+.chat-name-el{font-size:14px;font-weight:600;color:var(--text-1)}
+.chat-status{font-size:12px;color:var(--text-3);display:flex;align-items:center;gap:5px}
+.chat-status::before{content:'';display:block;width:6px;height:6px;border-radius:50%;background:var(--success)}
+.chat-messages{flex:1;overflow-y:auto;padding:var(--s5);display:flex;flex-direction:column;gap:var(--s4)}
+.msg{display:flex;gap:var(--s3);max-width:85%;animation:msgIn .25s ease}
+.msg-in{align-self:flex-start}
+.msg-out{align-self:flex-end;flex-direction:row-reverse}
+.msg-avatar-el{width:28px;height:28px;border-radius:50%;background:var(--bg-3);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:var(--text-2);flex-shrink:0;align-self:flex-end}
+.msg-bubble{padding:var(--s3) var(--s4);border-radius:var(--r-lg);font-size:13px;line-height:1.6}
+.msg-in .msg-bubble{background:var(--bg-3);color:var(--text-1);border:1px solid var(--border);border-bottom-left-radius:var(--r-xs)}
+.msg-out .msg-bubble{background:var(--primary-faint);color:var(--text-1);border:1px solid var(--primary-glow);border-bottom-right-radius:var(--r-xs)}
+.msg-time{font-size:10px;color:var(--text-3);margin-top:4px;padding:0 4px}
+.msg-out .msg-time{text-align:right}
+.typing-indicator{display:flex;gap:5px;padding:var(--s3) var(--s4);background:var(--bg-3);border:1px solid var(--border);border-radius:var(--r-lg);border-bottom-left-radius:var(--r-xs);width:fit-content}
+.typing-dot{width:6px;height:6px;border-radius:50%;background:var(--text-3);animation:typingBounce 1.2s ease infinite}
+.typing-dot:nth-child(2){animation-delay:.2s}
+.typing-dot:nth-child(3){animation-delay:.4s}
+.date-sep{display:flex;align-items:center;gap:var(--s4);margin:var(--s2) 0}
+.date-sep-line{flex:1;height:1px;background:var(--border)}
+.date-sep-text{font-size:11px;color:var(--text-3);font-family:var(--font-mono);white-space:nowrap}
+.chat-footer{padding:var(--s4) var(--s5);border-top:1px solid var(--border);background:var(--bg-2);flex-shrink:0}
+.chat-tools{display:flex;gap:4px;margin-bottom:var(--s2)}
+.chat-tool-btn{width:30px;height:30px;border-radius:var(--r-sm);border:none;background:transparent;color:var(--text-3);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all var(--t-fast)}
+.chat-tool-btn:hover{background:var(--bg-3);color:var(--text-1)}
+.chat-input-row{display:flex;gap:var(--s2);align-items:flex-end}
+.chat-input{flex:1;background:var(--bg);border:1.5px solid var(--border-mid);border-radius:var(--r-lg);color:var(--text-1);font-family:var(--font-body);font-size:14px;padding:9px var(--s4);outline:none;resize:none;max-height:120px;overflow-y:auto;transition:border-color var(--t-fast),box-shadow var(--t-fast);line-height:1.5}
+.chat-input:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-faint)}
+.chat-input::placeholder{color:var(--text-3)}
+.chat-send{width:38px;height:38px;flex-shrink:0;border-radius:var(--r-md);background:var(--primary-faint);border:1.5px solid var(--primary);color:var(--primary);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all var(--t-fast)}
+.chat-send:hover{background:var(--primary);color:var(--text-inv)}
+.chat-send svg{width:16px;height:16px}
+
+/* ALERTS */
+.alert{display:flex;gap:var(--s4);padding:var(--s4) var(--s5);border-radius:var(--r-lg);border:1px solid;font-size:14px;line-height:1.5}
+.alert-icon{font-size:16px;flex-shrink:0;line-height:1.4;margin-top:1px}
+.alert-title{font-weight:600;display:block;margin-bottom:2px;font-size:13px}
+.alert-text{font-size:13px}
+.alert-success{background:var(--success-faint);border-color:rgba(16,185,129,.25)}
+.alert-success .alert-title{color:var(--success)}
+.alert-error  {background:var(--danger-faint); border-color:rgba(245,64,90,.25)}
+.alert-error .alert-title{color:var(--danger)}
+.alert-warn   {background:var(--warning-faint);border-color:rgba(245,158,11,.25)}
+.alert-warn .alert-title{color:var(--warning)}
+.alert-info   {background:var(--blue-faint);   border-color:rgba(26,75,219,.25)}
+.alert-info .alert-title{color:var(--info-dark)}
+.toast-stack{display:flex;flex-direction:column;gap:var(--s2)}
+.toast{display:flex;align-items:center;gap:var(--s3);padding:var(--s3) var(--s4);background:var(--bg-4);border:1px solid var(--border-mid);border-radius:var(--r-lg);box-shadow:var(--shadow-md);font-size:13px;animation:toastSlide .3s ease;transition:opacity .2s ease}
+.toast-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.toast-msg{flex:1;color:var(--text-1)}
+.toast-close{color:var(--text-3);cursor:pointer;font-size:16px;line-height:1;padding:2px 4px;border-radius:var(--r-xs);transition:color var(--t-fast)}
+.toast-close:hover{color:var(--text-1)}
+
+/* NAV PATTERNS */
+.tabs{display:flex;gap:2px;background:var(--bg-2);border:1px solid var(--border);border-radius:var(--r-lg);padding:3px;width:fit-content}
+.tab{font-size:13px;font-weight:500;padding:6px var(--s5);border-radius:var(--r-md);color:var(--text-2);border:none;background:transparent;cursor:pointer;transition:all var(--t-fast);white-space:nowrap}
+.tab:hover{color:var(--text-1)}
+.tab.active{background:var(--bg-raised);color:var(--text-1);box-shadow:var(--shadow-sm)}
+.tab-underline{display:flex;gap:0;border-bottom:1px solid var(--border);padding-bottom:0}
+.tab-ul{font-size:14px;font-weight:500;padding:var(--s3) var(--s5);color:var(--text-2);border:none;background:transparent;cursor:pointer;transition:color var(--t-fast);position:relative}
+.tab-ul::after{content:'';position:absolute;bottom:-1px;left:0;right:0;height:2px;background:var(--primary);transform:scaleX(0);transition:transform var(--t-base),background var(--t-slow)}
+.tab-ul:hover{color:var(--text-1)}
+.tab-ul.active{color:var(--text-1)}
+.tab-ul.active::after{transform:scaleX(1)}
+.breadcrumb{display:flex;align-items:center;gap:var(--s2);font-size:13px;flex-wrap:wrap}
+.bc-item{color:var(--text-2);text-decoration:none;transition:color var(--t-fast);cursor:pointer}
+.bc-item:hover{color:var(--text-1)}
+.bc-item.active{color:var(--text-1);font-weight:500}
+.bc-sep{color:var(--text-3);font-size:11px}
+.sidenav{background:var(--bg-raised);border:1px solid var(--border);border-radius:var(--r-xl);padding:var(--s3)}
+.sidenav-section{font-size:10px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--text-3);padding:var(--s3) var(--s4) var(--s2);display:block}
+.sidenav-item{display:flex;align-items:center;gap:var(--s3);padding:7px var(--s4);border-radius:var(--r-md);font-size:13px;font-weight:500;color:var(--text-2);cursor:pointer;transition:all var(--t-fast);text-decoration:none}
+.sidenav-item:hover{background:var(--bg-3);color:var(--text-1)}
+.sidenav-item.active{background:var(--primary-faint);color:var(--primary)}
+.sidenav-item svg{width:16px;height:16px;flex-shrink:0}
+.sidenav-badge{margin-left:auto;font-size:10px;font-weight:600;padding:1px 6px;border-radius:var(--r-pill);background:var(--primary-faint);color:var(--primary)}
+.dropdown-wrap{position:relative;display:inline-block}
+.dropdown-menu{position:absolute;top:calc(100% + 6px);left:0;background:var(--bg-raised);border:1px solid var(--border-mid);border-radius:var(--r-lg);padding:var(--s2);min-width:180px;box-shadow:var(--shadow-lg);z-index:50;animation:dropIn .18s ease}
+.dropdown-item{display:flex;align-items:center;gap:var(--s3);padding:8px var(--s3);border-radius:var(--r-sm);font-size:13px;color:var(--text-1);cursor:pointer;transition:background var(--t-fast)}
+.dropdown-item:hover{background:var(--bg-3)}
+.dropdown-item svg{width:15px;height:15px;color:var(--text-2);flex-shrink:0}
+.dropdown-item.danger{color:var(--danger)}
+.dropdown-divider{height:1px;background:var(--border);margin:var(--s2) 0}
+.tooltip-wrap{position:relative;display:inline-flex}
+.tooltip{position:absolute;bottom:calc(100% + 7px);left:50%;transform:translateX(-50%) translateY(4px);background:var(--bg-4);border:1px solid var(--border-mid);color:var(--text-1);font-size:12px;padding:5px 10px;border-radius:var(--r-sm);white-space:nowrap;opacity:0;pointer-events:none;transition:opacity var(--t-fast),transform var(--t-fast);box-shadow:var(--shadow-md)}
+.tooltip::after{content:'';position:absolute;top:100%;left:50%;transform:translateX(-50%);border:5px solid transparent;border-top-color:var(--border-mid)}
+.tooltip-wrap:hover .tooltip{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* MODAL */
+.modal{background:var(--bg-raised);border:1px solid var(--border-mid);border-radius:var(--r-xl);padding:var(--s8);box-shadow:var(--shadow-lg);animation:modalIn .3s var(--t-spring)}
+.modal-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:var(--s4)}
+.modal-title{font-family:var(--font-display);font-size:18px;font-weight:700;letter-spacing:-.02em}
+.modal-close{width:30px;height:30px;border-radius:var(--r-sm);border:1px solid var(--border-mid);background:transparent;color:var(--text-2);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all var(--t-fast);font-size:16px}
+.modal-close:hover{background:var(--bg-3);color:var(--text-1)}
+.modal-body{font-size:14px;color:var(--text-2);line-height:1.7;margin-bottom:var(--s6)}
+.modal-footer{display:flex;gap:var(--s3);justify-content:flex-end}
+
+/* SKELETON */
+.skeleton{background:var(--bg-3);border-radius:var(--r-sm);position:relative;overflow:hidden}
+.skeleton::after{content:'';position:absolute;inset:0;background:linear-gradient(90deg,transparent,var(--bg-4),transparent);animation:shimmer 1.5s ease infinite}
+
+/* MOTION */
+.motion-demo{width:52px;height:52px;border-radius:var(--r-lg);background:var(--primary-faint);border:1px solid var(--primary-glow);display:flex;align-items:center;justify-content:center;font-size:22px;cursor:pointer}
+.anim-pulse{animation:pulse 2s ease infinite}
+.anim-spin{animation:spin .9s linear infinite}
+.anim-bounce{animation:bounce 1.2s ease infinite}
+.anim-float{animation:float 3s ease infinite}
+.anim-wiggle{animation:wiggle .8s ease infinite}
+.anim-heartbeat{animation:heartbeat 1.4s ease infinite}
+.anim-shimmer-box{position:relative;overflow:hidden}
+.anim-shimmer-box::after{content:'';position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(255,255,255,.09),transparent);animation:shimmer 1.8s ease infinite}
+
+/* DO / DONT */
+.do-dont{display:grid;grid-template-columns:1fr 1fr;gap:var(--s5)}
+.do-card,.dont-card{border-radius:var(--r-xl);border:1px solid;padding:var(--s6)}
+.do-card{border-color:rgba(16,185,129,.25);background:rgba(16,185,129,.03)}
+.dont-card{border-color:rgba(245,64,90,.25);background:rgba(245,64,90,.03)}
+.do-label,.dont-label{font-family:var(--font-mono);font-size:11px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;display:flex;align-items:center;gap:var(--s2);margin-bottom:var(--s4)}
+.do-label{color:var(--success)}.dont-label{color:var(--danger)}
+.do-dont ul{list-style:none;display:flex;flex-direction:column;gap:var(--s3)}
+.do-dont li{display:flex;gap:var(--s2);font-size:13px;color:var(--text-2);align-items:flex-start}
+
+/* SPACING & RADIUS */
+.spacing-row{display:flex;align-items:center;gap:var(--s4);padding:var(--s3) var(--s4);background:var(--bg-raised);border:1px solid var(--border);border-radius:var(--r-lg);margin-bottom:var(--s2)}
+.sp-token{font-family:var(--font-mono);font-size:11px;color:var(--primary);min-width:80px}
+.sp-val{font-family:var(--font-mono);font-size:11px;color:var(--text-3);min-width:52px}
+.sp-bar{height:8px;border-radius:var(--r-pill);background:var(--primary);opacity:.6}
+.radius-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:var(--s3)}
+.radius-item{background:var(--bg-raised);border:1px solid var(--border);border-radius:var(--r-lg);padding:var(--s4);text-align:center;transition:transform var(--t-spring)}
+.radius-item:hover{transform:translateY(-2px)}
+.radius-preview{width:48px;height:48px;margin:0 auto var(--s3);background:var(--primary-faint);border:1.5px solid var(--primary-glow)}
+.radius-token{font-family:var(--font-mono);font-size:10px;color:var(--primary);display:block}
+.radius-val{font-family:var(--font-mono);font-size:10px;color:var(--text-3)}
+
+/* SWATCH */
+.swatch-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:var(--s3)}
+.swatch{border-radius:var(--r-lg);overflow:hidden;border:1px solid var(--border);cursor:pointer;transition:transform var(--t-spring)}
+.swatch:hover{transform:translateY(-3px)}
+.swatch-color{height:64px}
+.swatch-info{background:var(--bg-2);padding:var(--s2) var(--s3)}
+.swatch-name{font-size:11px;font-weight:600;color:var(--text-1);display:block;margin-bottom:1px}
+.swatch-hex{font-family:var(--font-mono);font-size:9px;color:var(--text-3)}
+
+/* TYPE SCALE ROW */
+.type-row{display:flex;align-items:baseline;gap:var(--s5);padding:var(--s3) 0;border-bottom:1px solid var(--border)}
+.type-row:last-child{border-bottom:none}
+.type-meta{min-width:110px;flex-shrink:0}
+.type-meta .sz{font-family:var(--font-mono);font-size:11px;color:var(--text-3)}
+.type-meta .nm{font-family:var(--font-mono);font-size:10px;color:var(--text-3);opacity:.6;margin-top:2px;text-transform:uppercase}
+
+/* ══ CONTAINED ICON SYSTEM — Style E ═══════════════════════════
+   Every icon lives in a 32×32 rounded square container.
+   Default: neutral surface + muted stroke.
+   Active/hover: primary faint fill + primary stroke.
+   Sizes: ic-sm (28px), ic-md (32px default), ic-lg (38px)
+═══════════════════════════════════════════════════════════════ */
+.ic-wrap{
+  display:inline-flex;align-items:center;justify-content:center;
+  flex-shrink:0;
+  border-radius:var(--r-md);
+  background:var(--bg-3);
+  border:1px solid var(--border-mid);
+  transition:background var(--t-fast),border-color var(--t-fast),box-shadow var(--t-fast);
+}
+.ic-wrap svg{
+  stroke-linecap:round;stroke-linejoin:round;
+  transition:stroke var(--t-fast);
+}
+/* Sizes */
+.ic-sm{width:28px;height:28px}.ic-sm svg{width:14px;height:14px}
+.ic-md{width:32px;height:32px}.ic-md svg{width:16px;height:16px}
+.ic-lg{width:38px;height:38px}.ic-lg svg{width:18px;height:18px}
+.ic-xl{width:44px;height:44px}.ic-xl svg{width:20px;height:20px}
+
+/* States */
+.ic-wrap.ic-active,
+.ic-wrap:hover{
+  background:var(--primary-faint);
+  border-color:var(--primary-glow);
+}
+.ic-wrap.ic-active svg,.ic-wrap:hover svg{stroke:var(--primary)}
+
+/* Semantic tints */
+.ic-success{background:var(--success-faint)!important;border-color:rgba(16,185,129,.25)!important}
+.ic-success svg{stroke:var(--success)!important}
+.ic-danger {background:var(--danger-faint)!important; border-color:rgba(245,64,90,.25)!important}
+.ic-danger  svg{stroke:var(--danger)!important}
+.ic-warn   {background:var(--warning-faint)!important;border-color:rgba(245,158,11,.25)!important}
+.ic-warn    svg{stroke:var(--warning)!important}
+
+/* Button using contained icon */
+.btn-icon{
+  padding:0;
+  background:var(--bg-3);
+  color:var(--text-2);
+  border-color:var(--border-mid);
+  width:36px;height:36px;
+  border-radius:var(--r-md);
+}
+.btn-icon svg{stroke:var(--text-2);stroke-linecap:round;stroke-linejoin:round;transition:stroke var(--t-fast)}
+.btn-icon:hover{background:var(--primary-faint);border-color:var(--primary-glow)}
+.btn-icon:hover svg{stroke:var(--primary)}
+
+/* Sidenav contained icons */
+.sidenav-item svg{
+  width:16px;height:16px;flex-shrink:0;
+  stroke:var(--text-2);stroke-linecap:round;stroke-linejoin:round;
+  transition:stroke var(--t-fast);
+}
+.sidenav-item.active svg{stroke:var(--primary)}
+
+/* Dropdown icons — smaller, muted */
+.dropdown-item svg{
+  width:15px;height:15px;color:var(--text-3);flex-shrink:0;
+  stroke:var(--text-3);stroke-linecap:round;stroke-linejoin:round;
+}
+.dropdown-item:hover svg{stroke:var(--text-1)}
+.dropdown-item.danger svg{stroke:var(--danger)}
+
+/* Chat tool buttons contained */
+.cb-pill-btn{
+  width:30px;height:30px;border-radius:var(--r-sm);
+  border:1px solid var(--border);
+  background:var(--bg-3);color:var(--text-3);
+  cursor:pointer;display:flex;align-items:center;justify-content:center;
+  transition:all var(--t-fast);flex-shrink:0;
+}
+.cb-pill-btn svg{stroke:var(--text-3);stroke-linecap:round;stroke-linejoin:round;transition:stroke var(--t-fast)}
+.cb-pill-btn:hover{background:var(--primary-faint);border-color:var(--primary-glow)}
+.cb-pill-btn:hover svg{stroke:var(--primary)}
+
+/* ── CLEAN BUBBLE CHAT ───────────────────────────────────────── */
+.cb-shell{display:flex;flex-direction:column;height:100%;min-height:480px;background:var(--bg-raised)}
+.cb-head{padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;background:var(--bg-2);flex-shrink:0}
+.cb-av{width:36px;height:36px;border-radius:50%;background:var(--primary-faint);border:2px solid var(--primary-glow);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:var(--primary);flex-shrink:0;transition:background var(--t-slow),border-color var(--t-slow),color var(--t-slow)}
+.cb-online{display:flex;align-items:center;gap:5px;font-size:12px;color:var(--text-3)}
+.cb-online::before{content:'';width:7px;height:7px;border-radius:50%;background:var(--success);flex-shrink:0}
+.cb-msgs{flex:1;overflow-y:auto;padding:20px 18px;display:flex;flex-direction:column;gap:4px}
+.cb-msgs::-webkit-scrollbar{width:3px}
+.cb-msgs::-webkit-scrollbar-thumb{background:var(--border-mid);border-radius:9px}
+.cb-group{display:flex;flex-direction:column;gap:2px;margin-bottom:12px}
+.cb-group.out{align-items:flex-end}
+.cb-group.in{align-items:flex-start}
+.cb-bubble{font-size:14px;line-height:1.55;max-width:72%;padding:10px 14px;animation:cbIn .22s cubic-bezier(.34,1.56,.64,1)}
+.cb-group.in .cb-bubble{background:var(--bg-raised);border:1px solid var(--border-mid);color:var(--text-1);border-radius:18px 18px 18px 4px;box-shadow:0 1px 4px rgba(0,0,0,.06)}
+.cb-group.out .cb-bubble{background:var(--primary);color:var(--text-inv);border-radius:18px 18px 4px 18px;border:none}
+[data-theme="dark"] .cb-group.out .cb-bubble{color:#060D1A}
+.cb-group.in .cb-bubble:not(:first-child){border-radius:18px}
+.cb-group.out .cb-bubble:not(:first-child){border-radius:18px}
+.cb-meta{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-3);margin-top:4px;padding:0 4px}
+.cb-group.out .cb-meta{justify-content:flex-end}
+.cb-tick{color:var(--primary);font-size:12px;transition:color var(--t-slow)}
+[data-theme="dark"] .cb-tick{color:var(--mint)}
+.cb-date{display:flex;align-items:center;gap:12px;margin:8px 0 14px}
+.cb-date-line{flex:1;height:1px;background:var(--border)}
+.cb-date-label{font-size:10px;color:var(--text-3);font-family:var(--font-mono);letter-spacing:.08em;white-space:nowrap}
+.cb-typing{display:inline-flex;gap:5px;align-items:center;background:var(--bg-raised);border:1px solid var(--border-mid);padding:12px 16px;border-radius:18px 18px 18px 4px;box-shadow:0 1px 4px rgba(0,0,0,.06)}
+.cb-dot{width:6px;height:6px;border-radius:50%;background:var(--text-3);animation:typingBounce 1.2s ease infinite}
+.cb-dot:nth-child(2){animation-delay:.15s}
+.cb-dot:nth-child(3){animation-delay:.3s}
+.cb-footer{padding:12px 16px;background:var(--bg-2);border-top:1px solid var(--border);flex-shrink:0}
+.cb-pill{display:flex;align-items:flex-end;gap:8px;background:var(--bg);border:1.5px solid var(--border-mid);border-radius:24px;padding:8px 8px 8px 16px;transition:border-color var(--t-fast),box-shadow var(--t-fast)}
+.cb-pill:focus-within{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-faint)}
+.cb-pill-input{flex:1;background:transparent;border:none;outline:none;font-family:var(--font-body);font-size:14px;color:var(--text-1);resize:none;max-height:96px;overflow-y:auto;line-height:1.5;padding:2px 0}
+.cb-pill-input::placeholder{color:var(--text-3)}
+.cb-pill-tools{display:flex;align-items:center;gap:4px}
+.cb-send-btn{width:34px;height:34px;border-radius:50%;flex-shrink:0;background:var(--primary);border:none;color:var(--text-inv);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all var(--t-spring)}
+.cb-send-btn:hover{transform:scale(1.08)}
+.cb-send-btn:active{transform:scale(.94)}
+.cb-send-btn svg{width:15px;height:15px}
+[data-theme="dark"] .cb-send-btn{color:#060D1A}
+@keyframes cbIn{from{opacity:0;transform:scale(.9) translateY(6px)}to{opacity:1;transform:scale(1) translateY(0)}}
+
+@keyframes spin        {to{transform:rotate(360deg)}}
+@keyframes pulse       {0%,100%{opacity:1;transform:scale(1)}50%{opacity:.5;transform:scale(.9)}}
+@keyframes bounce      {0%,100%{transform:translateY(0)}50%{transform:translateY(-12px)}}
+@keyframes shimmer     {0%{transform:translateX(-100%)}100%{transform:translateX(200%)}}
+@keyframes float       {0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+@keyframes wiggle      {0%,100%{transform:rotate(0)}25%{transform:rotate(-8deg)}75%{transform:rotate(8deg)}}
+@keyframes heartbeat   {0%,100%{transform:scale(1)}14%{transform:scale(1.2)}28%{transform:scale(1)}42%{transform:scale(1.15)}70%{transform:scale(1)}}
+@keyframes modalIn     {from{opacity:0;transform:scale(.95) translateY(10px)}to{opacity:1;transform:scale(1) translateY(0)}}
+@keyframes dropIn      {from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:translateY(0)}}
+@keyframes toastSlide  {from{opacity:0;transform:translateX(16px)}to{opacity:1;transform:translateX(0)}}
+@keyframes msgIn       {from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+@keyframes typingBounce{0%,60%,100%{transform:translateY(0)}30%{transform:translateY(-5px)}}
+
+/* FOOTER */
+.footer{border-top:1px solid var(--border);padding:var(--s12) var(--s8);margin-top:var(--s8);text-align:center;position:relative;z-index:1}
+.footer-logo{display:flex;align-items:center;justify-content:center;gap:var(--s3);margin-bottom:var(--s3)}
+.footer-text{font-size:13px;color:var(--text-3)}
+
+@media(max-width:900px){
+  .topnav .nav-links{display:none}
+  .b4,.b5,.b6,.b7,.b8{grid-column:span 12}
+  .b3{grid-column:span 6}
+  .page{padding:var(--s5)}
+  .do-dont{grid-template-columns:1fr}
+}
+@media(max-width:600px){
+  .b3,.b6{grid-column:span 12}
+  .g2,.g3,.g4{grid-template-columns:1fr}
+}
+
+</style>
+</head>
+<body>
+
+<!-- ── NAV ──────────────────────────────────────────────────── -->
+<nav class="topnav">
+  <div class="nav-left">
+    <a class="nav-logo" href="#">
+      <img src="plexa-logo.jpg" alt="Plexa One" class="nav-logo-img"/>
+    </a>
+    <span class="nav-ver">v5.0</span>
+  </div>
+  <nav class="nav-links">
+    <a href="#colors">Colors</a>
+    <a href="#type">Type</a>
+    <a href="#buttons">Buttons</a>
+    <a href="#forms">Forms</a>
+    <a href="#components">Components</a>
+    <a href="#chat">Chat</a>
+    <a href="#motion">Motion</a>
+    <a href="#icons">Icons</a>
+  </nav>
+  <div class="nav-right">
+    <button class="theme-toggle" id="themeBtn" aria-label="Toggle theme">
+      <svg id="icon-moon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
+      <svg id="icon-sun"  width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+    </button>
+  </div>
+</nav>
+
+<div class="page">
+
+<!-- ════════════════════════════════════════════════════════
+     HERO BENTO — Spacious
+════════════════════════════════════════════════════════ -->
+<div class="bento reveal" style="margin-top:var(--s8)">
+
+  <!-- Main hero cell -->
+  <div class="cell cell-pad-xl b8 reveal-child" style="min-height:280px;display:flex;flex-direction:column;justify-content:center">
+    <span class="cell-tag">Design System · v5.0</span>
+    <h1 class="cell-title-xl">Build with<br/><em>precision.</em></h1>
+    <p style="font-size:16px;color:var(--text-2);max-width:420px;line-height:1.7;margin-top:var(--s4)">Plexa One's complete design language.</p>
+  </div>
+
+  <!-- Logo mark cell — real logo -->
+  <div class="cell cell-pad b4 reveal-child" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:var(--s5);min-height:280px">
+    <div style="background:#fff;border-radius:var(--r-lg);padding:var(--s4) var(--s6);border:1px solid var(--border)">
+      <img src="plexa-logo.jpg" alt="Plexa One" style="width:100%;max-width:200px;height:auto;object-fit:contain;display:block"/>
+    </div>
+    <div class="row" style="justify-content:center">
+      <span class="badge badge-brand badge-pill">v5.0.0</span>
+      <span class="badge badge-success badge-pill"><span class="badge-dot" style="background:var(--success)"></span>Active</span>
+    </div>
+  </div>
+
+  <!-- 4 stat mini-cells -->
+  <div class="cell cell-pad b3 cell-hover reveal-child" style="display:flex;flex-direction:column;justify-content:center">
+    <span class="hero-num">200+</span>
+    <span class="hero-num-label">Design Tokens</span>
+  </div>
+  <div class="cell cell-pad b3 cell-hover reveal-child" style="display:flex;flex-direction:column;justify-content:center">
+    <span class="hero-num">50+</span>
+    <span class="hero-num-label">Components</span>
+  </div>
+  <div class="cell cell-pad b3 cell-hover cell-accent reveal-child" style="display:flex;flex-direction:column;justify-content:center">
+    <span class="hero-num">2</span>
+    <span class="hero-num-label">Themes</span>
+  </div>
+  <div class="cell cell-pad b3 cell-hover reveal-child" style="display:flex;flex-direction:column;justify-content:center">
+    <span class="hero-num">15+</span>
+    <span class="hero-num-label">Sections</span>
+  </div>
+</div>
+
+<!-- Quick token strip -->
+<div class="bento reveal">
+  <div class="cell cell-pad-sm b12 cell-mono reveal-child">
+    <div style="display:flex;align-items:center;gap:var(--s5);flex-wrap:wrap;font-family:var(--font-mono);font-size:11px;color:var(--text-3)">
+      <span>--primary: <span style="color:var(--primary)">context-aware</span></span>
+      <span style="color:var(--border-mid)">·</span>
+      <span>light → <span style="color:var(--blue)">#1A4BDB</span></span>
+      <span style="color:var(--border-mid)">·</span>
+      <span>dark → <span style="color:var(--mint)">#00E5B0</span></span>
+      <span style="color:var(--border-mid)">·</span>
+      <span>--success: <span style="color:var(--success)">#10B981</span></span>
+      <span style="color:var(--border-mid)">·</span>
+      <span>--r-md: <span style="color:var(--primary)">9px</span></span>
+      <span style="color:var(--border-mid)">·</span>
+      <span>--t-spring: <span style="color:var(--primary)">cubic-bezier(.34,1.56,.64,1)</span></span>
+      <span style="color:var(--border-mid)">·</span>
+      <span>--font-display: <span style="color:var(--primary)">Artific</span></span>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════
+     01 — COLORS
+════════════════════════════════════════════════════════ -->
+<div class="section-break reveal" id="colors">
+  <div class="section-break-line"></div>
+  <span class="section-break-num">01</span>
+  <span class="section-break-label">Color System</span>
+  <div class="section-break-line"></div>
+</div>
+
+<div class="bento reveal">
+  <!-- Big color intro -->
+  <div class="cell cell-pad b4 reveal-child" style="display:flex;flex-direction:column;gap:var(--s4)">
+    <span class="cell-tag">Primary — Context-Aware</span>
+    <h2 class="cell-title">Colors</h2>
+    <p class="cell-body">Blue in light mode (4.8:1 WCAG AA). Mint in dark mode (8.2:1 WCAG AAA). Success is teal-green — clearly separated from brand mint.</p>
+    <div style="margin-top:auto;display:flex;flex-direction:column;gap:var(--s2)">
+      <div style="display:flex;align-items:center;gap:var(--s3)">
+        <div style="width:36px;height:20px;background:#1A4BDB;border-radius:var(--r-sm);flex-shrink:0"></div>
+        <span style="font-family:var(--font-mono);font-size:11px;color:var(--text-2)">#1A4BDB — light primary · 4.8:1 ✓</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:var(--s3)">
+        <div style="width:36px;height:20px;background:#00E5B0;border-radius:var(--r-sm);flex-shrink:0"></div>
+        <span style="font-family:var(--font-mono);font-size:11px;color:var(--text-2)">#00E5B0 — dark primary · 8.2:1 ✓</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:var(--s3)">
+        <div style="width:36px;height:20px;background:#10B981;border-radius:var(--r-sm);flex-shrink:0"></div>
+        <span style="font-family:var(--font-mono);font-size:11px;color:var(--text-2)">#10B981 — success (not mint)</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Light mode button preview -->
+  <div class="cell cell-pad b4 reveal-child" style="background:#FFFFFF">
+    <span class="sub-label">Light mode — Blue primary</span>
+    <div class="row mb4">
+      <button style="background:#1A4BDB;color:#fff;border:none;border-radius:9px;padding:9px 20px;font-size:14px;font-weight:500;cursor:pointer;font-family:sans-serif">Deploy now</button>
+      <button style="background:transparent;color:#1A4BDB;border:1.5px solid #1A4BDB;border-radius:9px;padding:9px 20px;font-size:14px;font-weight:500;cursor:pointer;font-family:sans-serif">View docs</button>
+    </div>
+    <div style="display:flex;gap:var(--s2);flex-wrap:wrap">
+      <span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;padding:3px 9px;border-radius:5px;background:rgba(16,185,129,.10);color:#10B981;border:1px solid rgba(16,185,129,.25)"><span style="width:6px;height:6px;border-radius:50%;background:#10B981;flex-shrink:0"></span>Active</span>
+      <span style="font-size:11px;font-weight:600;padding:3px 9px;border-radius:5px;background:rgba(245,158,11,.10);color:#F59E0B;border:1px solid rgba(245,158,11,.25)">Warning</span>
+      <span style="font-size:11px;font-weight:600;padding:3px 9px;border-radius:5px;background:rgba(245,64,90,.10);color:#F5405A;border:1px solid rgba(245,64,90,.25)">Error</span>
+    </div>
+  </div>
+
+  <!-- Dark mode button preview -->
+  <div class="cell cell-pad b4 reveal-child" style="background:#060D1A">
+    <span class="sub-label" style="color:#2E4D6A">Dark mode — Mint primary</span>
+    <div class="row mb4">
+      <button style="background:transparent;color:#00E5B0;border:1.5px solid #00E5B0;border-radius:9px;padding:9px 20px;font-size:14px;font-weight:500;cursor:pointer;font-family:sans-serif">Deploy now</button>
+      <button style="background:rgba(0,229,176,.10);color:#00E5B0;border:1.5px solid rgba(0,229,176,.3);border-radius:9px;padding:9px 20px;font-size:14px;font-weight:500;cursor:pointer;font-family:sans-serif">View docs</button>
+    </div>
+    <div style="display:flex;gap:var(--s2);flex-wrap:wrap">
+      <span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;padding:3px 9px;border-radius:5px;background:rgba(16,185,129,.10);color:#10B981;border:1px solid rgba(16,185,129,.25)"><span style="width:6px;height:6px;border-radius:50%;background:#10B981;flex-shrink:0"></span>Active</span>
+      <span style="font-size:11px;font-weight:600;padding:3px 9px;border-radius:5px;background:rgba(245,158,11,.10);color:#F59E0B;border:1px solid rgba(245,158,11,.25)">Warning</span>
+      <span style="font-size:11px;font-weight:600;padding:3px 9px;border-radius:5px;background:rgba(245,64,90,.10);color:#F5405A;border:1px solid rgba(245,64,90,.25)">Error</span>
+    </div>
+  </div>
+
+  <!-- Full swatch palette -->
+  <div class="cell cell-pad b8 reveal-child">
+    <span class="sub-label">Status & Brand Palette</span>
+    <div class="swatch-grid">
+      <div class="swatch"><div class="swatch-color" style="background:#1A4BDB"></div><div class="swatch-info"><span class="swatch-name">Blue</span><span class="swatch-hex">#1A4BDB</span></div></div>
+      <div class="swatch"><div class="swatch-color" style="background:#00E5B0"></div><div class="swatch-info"><span class="swatch-name">Mint</span><span class="swatch-hex">#00E5B0</span></div></div>
+      <div class="swatch"><div class="swatch-color" style="background:#10B981"></div><div class="swatch-info"><span class="swatch-name">Success</span><span class="swatch-hex">#10B981</span></div></div>
+      <div class="swatch"><div class="swatch-color" style="background:#F59E0B"></div><div class="swatch-info"><span class="swatch-name">Warning</span><span class="swatch-hex">#F59E0B</span></div></div>
+      <div class="swatch"><div class="swatch-color" style="background:#F5405A"></div><div class="swatch-info"><span class="swatch-name">Danger</span><span class="swatch-hex">#F5405A</span></div></div>
+      <div class="swatch"><div class="swatch-color" style="background:#7DA4FF"></div><div class="swatch-info"><span class="swatch-name">Info</span><span class="swatch-hex">#7DA4FF</span></div></div>
+    </div>
+  </div>
+
+  <!-- Neutral strip -->
+  <div class="cell cell-pad b4 reveal-child">
+    <span class="sub-label">Neutral Scale</span>
+    <div style="display:flex;border-radius:var(--r-lg);overflow:hidden;border:1px solid var(--border);height:44px">
+      <div style="flex:1;background:#FFFFFF;border-right:1px solid rgba(0,0,0,.05)"></div>
+      <div style="flex:1;background:#F7F8FC"></div>
+      <div style="flex:1;background:#EEF1F8"></div>
+      <div style="flex:1;background:#E4E9F4"></div>
+      <div style="flex:1;background:#A8B8CC"></div>
+      <div style="flex:1;background:#5A6E8A"></div>
+      <div style="flex:1;background:#2E4D6A"></div>
+      <div style="flex:1;background:#0E1D33"></div>
+      <div style="flex:1;background:#0A1525"></div>
+      <div style="flex:1;background:#060D1A"></div>
+    </div>
+    <p style="font-size:11px;color:var(--text-3);margin-top:var(--s3)">10 stops · <code>#FFFFFF</code> → <code>#060D1A</code></p>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════
+     02 — TYPOGRAPHY
+════════════════════════════════════════════════════════ -->
+<div class="section-break reveal" id="type">
+  <div class="section-break-line"></div>
+  <span class="section-break-num">02</span>
+  <span class="section-break-label">Typography</span>
+  <div class="section-break-line"></div>
+</div>
+
+<div class="bento reveal">
+  <!-- Font families -->
+  <div class="cell cell-pad b4 reveal-child">
+    <span class="cell-tag">Display · Artific</span>
+    <div style="font-family:var(--font-display);font-size:3.5rem;font-weight:700;letter-spacing:-.05em;line-height:1;color:var(--text-1)">Aa</div>
+    <p style="font-family:var(--font-display);font-size:12px;color:var(--text-2);margin-top:var(--s3);line-height:1.7">ABCDEFGHIJKLMNOPQRSTUVWXYZ<br/>abcdefghijklmnopqrstuvwxyz<br/>0123456789 !@#$%</p>
+    <div style="margin-top:var(--s4)"><code>--font-display</code></div>
+  </div>
+  <div class="cell cell-pad b4 reveal-child">
+    <span class="cell-tag">Body · Inter</span>
+    <div style="font-family:var(--font-body);font-size:3.5rem;font-weight:400;line-height:1;color:var(--text-1)">Aa</div>
+    <p style="font-family:var(--font-body);font-size:12px;color:var(--text-2);margin-top:var(--s3);line-height:1.7">ABCDEFGHIJKLMNOPQRSTUVWXYZ<br/>abcdefghijklmnopqrstuvwxyz<br/>0123456789 !@#$%</p>
+    <div style="margin-top:var(--s4)"><code>--font-body</code></div>
+  </div>
+  <div class="cell cell-pad b4 reveal-child">
+    <span class="cell-tag">Mono · DM Mono</span>
+    <div style="font-family:var(--font-mono);font-size:3.5rem;font-weight:400;line-height:1;color:var(--text-1)">Aa</div>
+    <p style="font-family:var(--font-mono);font-size:12px;color:var(--text-2);margin-top:var(--s3);line-height:1.7">ABCDEFGHIJKLMNOPQRSTUVWXYZ<br/>abcdefghijklmnopqrstuvwxyz<br/>0123456789 !@#$%</p>
+    <div style="margin-top:var(--s4)"><code>--font-mono</code></div>
+  </div>
+
+  <!-- Type scale -->
+  <div class="cell cell-pad b12 reveal-child">
+    <span class="sub-label">Type Scale</span>
+    <div class="type-row"><div class="type-meta"><span class="sz">72px</span><span class="nm">--6xl</span></div><div style="font-family:var(--font-display);font-size:clamp(2rem,6vw,4.5rem);font-weight:700;letter-spacing:-.05em;line-height:1">Display</div></div>
+    <div class="type-row"><div class="type-meta"><span class="sz">48px</span><span class="nm">--4xl</span></div><div style="font-family:var(--font-display);font-size:clamp(1.6rem,4vw,3rem);font-weight:700;letter-spacing:-.04em;line-height:1">Heading XL</div></div>
+    <div class="type-row"><div class="type-meta"><span class="sz">36px</span><span class="nm">--3xl</span></div><div style="font-family:var(--font-display);font-size:2.25rem;font-weight:700;letter-spacing:-.03em">Heading LG</div></div>
+    <div class="type-row"><div class="type-meta"><span class="sz">24px</span><span class="nm">--xl</span></div><div style="font-family:var(--font-display);font-size:1.5rem;font-weight:600;letter-spacing:-.02em">Heading MD</div></div>
+    <div class="type-row"><div class="type-meta"><span class="sz">18px</span><span class="nm">--lg</span></div><div style="font-size:1.125rem;font-weight:500">Title / Lead paragraph intro text</div></div>
+    <div class="type-row"><div class="type-meta"><span class="sz">15px</span><span class="nm">--base</span></div><div style="font-size:15px">Body — standard reading size for paragraphs, forms, and general UI content.</div></div>
+    <div class="type-row"><div class="type-meta"><span class="sz">13px</span><span class="nm">--sm</span></div><div style="font-size:13px;color:var(--text-2)">Secondary text, captions, table cells, supporting copy, labels.</div></div>
+    <div class="type-row"><div class="type-meta"><span class="sz">11px</span><span class="nm">--xs</span></div><div style="font-size:11px;color:var(--text-3)">Micro labels, tokens, badges, timestamps, version strings</div></div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════
+     03 — BUTTONS
+════════════════════════════════════════════════════════ -->
+<div class="section-break reveal" id="buttons">
+  <div class="section-break-line"></div>
+  <span class="section-break-num">03</span>
+  <span class="section-break-label">Buttons</span>
+  <div class="section-break-line"></div>
+</div>
+
+<div class="bento reveal">
+  <div class="cell cell-pad b8 reveal-child">
+    <span class="sub-label">Variants</span>
+    <div class="row mb6">
+      <button class="btn btn-primary"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>Primary Outline</button>
+      <button class="btn btn-primary-filled">Primary Filled</button>
+      <button class="btn btn-secondary">Secondary</button>
+      <button class="btn btn-ghost">Ghost</button>
+      <button class="btn btn-danger"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>Delete</button>
+    </div>
+    <span class="sub-label">Sizes</span>
+    <div class="row mb6">
+      <button class="btn btn-primary btn-xs">Extra Small</button>
+      <button class="btn btn-primary btn-sm">Small</button>
+      <button class="btn btn-primary">Default</button>
+      <button class="btn btn-primary btn-lg">Large</button>
+      <button class="btn btn-primary btn-xl">Extra Large</button>
+    </div>
+    <span class="sub-label">States</span>
+    <div class="row">
+      <button class="btn btn-primary">Default</button>
+      <button class="btn btn-primary" style="background:var(--primary-faint);box-shadow:0 0 20px var(--primary-glow)">Hovered</button>
+      <button class="btn btn-primary btn-loading">Loading</button>
+      <button class="btn btn-primary" disabled>Disabled</button>
+      <button class="btn btn-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></button>
+      <button class="btn btn-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
+    </div>
+  </div>
+  <div class="cell cell-pad b4 reveal-child">
+    <span class="sub-label">Button Groups</span>
+    <div class="col">
+      <div style="display:inline-flex;border:1px solid var(--border-mid);border-radius:var(--r-md);overflow:hidden">
+        <button style="padding:8px 16px;font-size:13px;font-weight:500;background:var(--primary-faint);color:var(--primary);border:none;cursor:pointer;font-family:var(--font-body)">Day</button>
+        <button style="padding:8px 16px;font-size:13px;font-weight:500;background:transparent;color:var(--text-2);border-left:1px solid var(--border-mid);border-right:1px solid var(--border-mid);cursor:pointer;font-family:var(--font-body)">Week</button>
+        <button style="padding:8px 16px;font-size:13px;font-weight:500;background:transparent;color:var(--text-2);border:none;cursor:pointer;font-family:var(--font-body)">Month</button>
+      </div>
+      <div style="display:flex">
+        <input class="fl-input" placeholder=" " style="border-radius:var(--r-md) 0 0 var(--r-md);border-right:none;padding:12px var(--s4)"/>
+        <button class="btn btn-primary-filled" style="border-radius:0 var(--r-md) var(--r-md) 0;border-left:none;flex-shrink:0">Subscribe</button>
+      </div>
+    </div>
+    <span class="sub-label" style="margin-top:var(--s6)">Never use gradients on buttons</span>
+    <p class="cell-body">Primary is always flat — outline or solid fill. The brand gradient is reserved for the logo mark only.</p>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════
+     04 — FORMS  (dense)
+════════════════════════════════════════════════════════ -->
+<div class="section-break reveal" id="forms">
+  <div class="section-break-line"></div>
+  <span class="section-break-num">04</span>
+  <span class="section-break-label">Form Controls</span>
+  <div class="section-break-line"></div>
+</div>
+
+<div class="bento reveal">
+  <div class="cell cell-pad b6 reveal-child">
+    <span class="cell-tag">Floating Label Inputs</span>
+    <h2 class="cell-title" style="font-size:1.3rem;margin-bottom:var(--s3)">Stripe / Vercel-style</h2>
+    <p class="cell-body" style="margin-bottom:var(--s5)">Labels lift and shrink on focus. A 2px animated bar sweeps in from centre. Context-aware: blue bar in light, mint bar in dark.</p>
+    <div class="col">
+      <div class="fl-field">
+        <div class="fl-wrap"><input class="fl-input" type="text" id="f1" autocomplete="off"/><label class="fl-label" for="f1">Full name</label><div class="fl-bar"></div></div>
+      </div>
+      <div class="fl-field">
+        <div class="fl-wrap has-icon"><input class="fl-input" type="email" id="f2" autocomplete="off"/><label class="fl-label" for="f2">Email address</label><div class="fl-bar"></div><svg class="fl-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg></div>
+      </div>
+      <div class="fl-field">
+        <div class="fl-wrap has-icon"><input class="fl-input" type="password" id="f3" autocomplete="off"/><label class="fl-label" for="f3">Password</label><div class="fl-bar"></div><svg class="fl-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></div>
+      </div>
+      <div class="fl-field">
+        <div class="fl-wrap"><input class="fl-input has-error filled" type="text" id="f4" value="invalid@@email" autocomplete="off"/><label class="fl-label" for="f4">Email — error state</label><div class="fl-bar"></div></div>
+        <span class="fl-error-msg">Please enter a valid email address</span>
+      </div>
+      <div class="fl-field">
+        <div class="fl-wrap"><input class="fl-input is-success filled" type="text" id="f5" value="jane@company.com" autocomplete="off"/><label class="fl-label" for="f5">Email — success state</label><div class="fl-bar"></div></div>
+        <span style="font-size:12px;color:var(--success)">Looks good!</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="cell cell-pad b6 reveal-child">
+    <span class="sub-label">Select, Textarea & More</span>
+    <div class="col" style="margin-bottom:var(--s5)">
+      <div class="fl-field" style="max-width:100%">
+        <div class="fl-wrap">
+          <select class="fl-select" id="f6"><option value="" disabled selected></option><option>Engineering</option><option>Product Design</option><option>Operations</option></select>
+          <label class="fl-label" for="f6" style="top:14px;transform:none;font-size:10px;letter-spacing:.06em;color:var(--text-3)">Department</label>
+          <div class="fl-bar"></div>
+        </div>
+      </div>
+      <div class="fl-field" style="max-width:100%">
+        <div class="fl-wrap"><textarea class="fl-textarea" id="f7"></textarea><label class="fl-label" for="f7">Message</label><div class="fl-bar"></div></div>
+      </div>
+    </div>
+
+    <div class="g3">
+      <div>
+        <span class="sub-label">Toggles</span>
+        <div class="col" style="gap:var(--s3)">
+          <label class="toggle"><input type="checkbox" checked/><div class="toggle-track"></div><div><div class="toggle-text" style="font-size:13px">Notifications</div></div></label>
+          <label class="toggle"><input type="checkbox"/><div class="toggle-track"></div><div><div class="toggle-text" style="font-size:13px">2FA</div></div></label>
+          <label class="toggle"><input type="checkbox" checked/><div class="toggle-track"></div><div><div class="toggle-text" style="font-size:13px">API access</div></div></label>
+        </div>
+      </div>
+      <div>
+        <span class="sub-label">Checkboxes</span>
+        <div class="col" style="gap:var(--s3)">
+          <label class="checkbox"><input type="checkbox" checked/><div class="checkbox-box"></div><span class="checkbox-text" style="font-size:13px">Deploy</span></label>
+          <label class="checkbox"><input type="checkbox" checked/><div class="checkbox-box"></div><span class="checkbox-text" style="font-size:13px">Run tests</span></label>
+          <label class="checkbox"><input type="checkbox"/><div class="checkbox-box"></div><span class="checkbox-text" style="font-size:13px">Notify Slack</span></label>
+        </div>
+      </div>
+      <div>
+        <span class="sub-label">Radio</span>
+        <div class="col" style="gap:var(--s3)">
+          <label class="radio"><input type="radio" name="env" checked/><div class="radio-dot"></div><span class="radio-text" style="font-size:13px">Production</span></label>
+          <label class="radio"><input type="radio" name="env"/><div class="radio-dot"></div><span class="radio-text" style="font-size:13px">Staging</span></label>
+          <label class="radio"><input type="radio" name="env"/><div class="radio-dot"></div><span class="radio-text" style="font-size:13px">Dev</span></label>
+        </div>
+      </div>
+    </div>
+    <div style="margin-top:var(--s5)">
+      <span class="sub-label">Range Slider</span>
+      <div style="display:flex;align-items:center;gap:var(--s3)">
+        <input class="slider" type="range" min="0" max="100" value="65" id="slider1" step="1" style="flex:1"/>
+        <span id="sliderVal" style="font-family:var(--font-mono);font-size:12px;color:var(--primary);min-width:30px">65</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════
+     05 — BADGES  (dense)
+════════════════════════════════════════════════════════ -->
+<div class="section-break reveal" id="badges">
+  <div class="section-break-line"></div>
+  <span class="section-break-num">05</span>
+  <span class="section-break-label">Badges & Status</span>
+  <div class="section-break-line"></div>
+</div>
+
+<div class="bento reveal">
+  <div class="cell cell-pad b6 reveal-child">
+    <span class="sub-label">All Variants</span>
+    <div class="row mb6">
+      <span class="badge badge-success badge-pill"><span class="badge-dot" style="background:var(--success)"></span>Active</span>
+      <span class="badge badge-error badge-pill"><span class="badge-dot" style="background:var(--danger)"></span>Error</span>
+      <span class="badge badge-warn badge-pill"><span class="badge-dot" style="background:var(--warning)"></span>Warning</span>
+      <span class="badge badge-info">Info</span>
+      <span class="badge badge-neutral">Draft</span>
+      <span class="badge badge-brand">New</span>
+      <span class="badge badge-neutral badge-lg">v5.0.0</span>
+    </div>
+    <span class="sub-label">Inline status rows</span>
+    <div class="col" style="gap:var(--s2)">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:var(--s3) var(--s4);background:var(--bg-2);border:1px solid var(--border);border-radius:var(--r-lg)">
+        <div style="display:flex;align-items:center;gap:var(--s3)"><div class="avatar av-sm av-neutral">JA</div><div style="font-size:13px;font-weight:500">Jane Appleseed</div></div>
+        <span class="badge badge-success badge-pill"><span class="badge-dot" style="background:var(--success)"></span>Online</span>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:var(--s3) var(--s4);background:var(--bg-2);border:1px solid var(--border);border-radius:var(--r-lg)">
+        <div style="display:flex;align-items:center;gap:var(--s3)"><div style="width:7px;height:7px;border-radius:50%;background:var(--warning);animation:pulse 2s ease infinite;flex-shrink:0"></div><span style="font-size:13px">Data Pipeline</span></div>
+        <span class="badge badge-warn">Degraded</span>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:var(--s3) var(--s4);background:var(--bg-2);border:1px solid var(--border);border-radius:var(--r-lg)">
+        <div style="display:flex;align-items:center;gap:var(--s3)"><div style="width:7px;height:7px;border-radius:50%;background:var(--success);animation:pulse 2s ease infinite;flex-shrink:0"></div><span style="font-size:13px">API Gateway</span></div>
+        <span class="badge badge-success badge-pill"><span class="badge-dot" style="background:var(--success)"></span>Operational</span>
+      </div>
+    </div>
+  </div>
+  <div class="cell cell-pad b6 reveal-child">
+    <span class="sub-label">Avatars & Stacks</span>
+    <div class="row mb6">
+      <div class="avatar av-xs">JA</div>
+      <div class="avatar av-sm av-blue">MB</div>
+      <div class="avatar av-md">PO</div>
+      <div class="avatar av-lg av-neutral">KL</div>
+      <div class="avatar av-xl">TW</div>
+    </div>
+    <div class="avatar-stack mb6">
+      <div class="avatar av-md">JA</div>
+      <div class="avatar av-md av-blue">MB</div>
+      <div class="avatar av-md av-neutral">PO</div>
+      <div class="avatar av-md">KL</div>
+      <div class="avatar av-md" style="background:var(--bg-3);color:var(--text-2);font-size:12px;font-family:var(--font-body)">+5</div>
+    </div>
+    <span class="sub-label">Progress Bars</span>
+    <div class="progress-item"><div class="progress-head"><span class="progress-name" style="font-size:12px">API Usage</span><span class="progress-pct">78%</span></div><div class="progress-track"><div class="progress-fill" style="width:78%"></div></div></div>
+    <div class="progress-item"><div class="progress-head"><span class="progress-name" style="font-size:12px">Storage</span><span class="progress-pct">45%</span></div><div class="progress-track"><div class="progress-fill progress-fill-success" style="width:45%"></div></div></div>
+    <div class="progress-item" style="margin-bottom:0"><div class="progress-head"><span class="progress-name" style="font-size:12px">Onboarding</span><span class="progress-pct">92%</span></div><div class="progress-track"><div class="progress-fill progress-fill-split" style="width:92%"></div></div></div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════
+     06 — CARDS  (spacious)
+════════════════════════════════════════════════════════ -->
+<div class="section-break reveal" id="components">
+  <div class="section-break-line"></div>
+  <span class="section-break-num">06</span>
+  <span class="section-break-label">Cards & Components</span>
+  <div class="section-break-line"></div>
+</div>
+
+<div class="bento reveal">
+  <!-- Stat cards — dense row -->
+  <div class="cell cell-pad b3 cell-hover reveal-child">
+    <span class="stat-lbl">Monthly Revenue</span>
+    <span class="stat-val">$2.4M</span>
+    <span class="stat-delta delta-up">↑ 12.4%</span>
+  </div>
+  <div class="cell cell-pad b3 cell-hover reveal-child">
+    <span class="stat-lbl">Active Users</span>
+    <span class="stat-val">84.2K</span>
+    <span class="stat-delta delta-up">↑ 8.1%</span>
+  </div>
+  <div class="cell cell-pad b3 cell-hover reveal-child">
+    <span class="stat-lbl">Uptime</span>
+    <span class="stat-val">99.9%</span>
+    <span class="stat-delta delta-up">↑ Stable</span>
+  </div>
+  <div class="cell cell-pad b3 cell-hover reveal-child">
+    <span class="stat-lbl">Open Incidents</span>
+    <span class="stat-val">3</span>
+    <span class="stat-delta delta-dn">↓ 2 critical</span>
+  </div>
+
+  <!-- Info cards spacious -->
+  <div class="info-card b4 cell-pad reveal-child">
+    <div class="info-card-icon">🚀</div>
+    <div class="info-card-title">Deployment</div>
+    <div class="info-card-body">Build v5.0.0 deployed successfully to all regions with zero downtime.</div>
+    <div class="info-card-footer"><span class="badge badge-success badge-pill"><span class="badge-dot" style="background:var(--success)"></span>Live</span><span style="font-size:12px;color:var(--text-3)">2 min ago</span></div>
+  </div>
+  <div class="info-card b4 cell-pad reveal-child">
+    <div class="info-card-icon">📊</div>
+    <div class="info-card-title">Analytics</div>
+    <div class="info-card-body">Track key metrics and performance indicators across all enterprise products.</div>
+    <div class="info-card-footer"><span class="badge badge-info">Dashboard</span><button class="btn btn-ghost btn-sm" style="padding:4px 10px;font-size:12px">View →</button></div>
+  </div>
+  <div class="info-card b4 cell-pad reveal-child">
+    <div class="info-card-icon">🔐</div>
+    <div class="info-card-title">Security Audit</div>
+    <div class="info-card-body">Scheduled security review pending approval from the compliance team.</div>
+    <div class="info-card-footer"><span class="badge badge-warn"><span class="badge-dot" style="background:var(--warning)"></span>Pending</span><span style="font-size:12px;color:var(--text-3)">Due Tomorrow</span></div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════
+     07 — TABLE  (dense)
+════════════════════════════════════════════════════════ -->
+<div class="section-break reveal" id="table">
+  <div class="section-break-line"></div>
+  <span class="section-break-num">07</span>
+  <span class="section-break-label">Data Table</span>
+  <div class="section-break-line"></div>
+</div>
+
+<div class="bento reveal">
+  <div class="cell cell-flush b12 reveal-child">
+    <div class="table-toolbar">
+      <span class="table-title">Service Monitor</span>
+      <div class="table-actions">
+        <div style="position:relative"><svg style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text-3)" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input class="fl-input" placeholder="Filter..." style="padding:6px 10px 6px 32px;font-size:12px;border-radius:var(--r-sm);width:160px"/></div>
+        <button class="btn btn-primary btn-sm">Export</button>
+      </div>
+    </div>
+    <table>
+      <thead><tr>
+        <th><label class="checkbox" style="margin:0"><input type="checkbox"/><div class="checkbox-box" style="width:15px;height:15px;border-radius:3px"></div></label></th>
+        <th class="sortable">Service ↕</th><th>Status</th>
+        <th class="sortable">Uptime ↕</th><th class="sortable">Latency ↕</th>
+        <th>Region</th><th>Last Check</th><th></th>
+      </tr></thead>
+      <tbody>
+        <tr><td><label class="checkbox" style="margin:0"><input type="checkbox"/><div class="checkbox-box" style="width:15px;height:15px;border-radius:3px"></div></label></td><td><strong>API Gateway</strong></td><td><span class="badge badge-success badge-pill"><span class="badge-dot" style="background:var(--success)"></span>Operational</span></td><td><span style="font-family:var(--font-mono);font-size:12px">99.99%</span></td><td><span style="font-family:var(--font-mono);font-size:12px;color:var(--success)">12ms</span></td><td><span style="font-size:12px;color:var(--text-2)">us-east-1</span></td><td><span style="font-size:12px;color:var(--text-3)">30s ago</span></td><td><button class="btn btn-ghost btn-xs">···</button></td></tr>
+        <tr><td><label class="checkbox" style="margin:0"><input type="checkbox"/><div class="checkbox-box" style="width:15px;height:15px;border-radius:3px"></div></label></td><td><strong>Auth Service</strong></td><td><span class="badge badge-success badge-pill"><span class="badge-dot" style="background:var(--success)"></span>Operational</span></td><td><span style="font-family:var(--font-mono);font-size:12px">99.97%</span></td><td><span style="font-family:var(--font-mono);font-size:12px;color:var(--success)">8ms</span></td><td><span style="font-size:12px;color:var(--text-2)">eu-west-1</span></td><td><span style="font-size:12px;color:var(--text-3)">1m ago</span></td><td><button class="btn btn-ghost btn-xs">···</button></td></tr>
+        <tr class="selected"><td><label class="checkbox" style="margin:0"><input type="checkbox" checked/><div class="checkbox-box" style="width:15px;height:15px;border-radius:3px"></div></label></td><td><strong>Data Pipeline</strong></td><td><span class="badge badge-warn"><span class="badge-dot" style="background:var(--warning)"></span>Degraded</span></td><td><span style="font-family:var(--font-mono);font-size:12px">97.21%</span></td><td><span style="font-family:var(--font-mono);font-size:12px;color:var(--warning)">142ms</span></td><td><span style="font-size:12px;color:var(--text-2)">ap-south-1</span></td><td><span style="font-size:12px;color:var(--text-3)">5m ago</span></td><td><button class="btn btn-ghost btn-xs">···</button></td></tr>
+        <tr><td><label class="checkbox" style="margin:0"><input type="checkbox"/><div class="checkbox-box" style="width:15px;height:15px;border-radius:3px"></div></label></td><td><strong>CDN Edge</strong></td><td><span class="badge badge-error"><span class="badge-dot" style="background:var(--danger)"></span>Outage</span></td><td><span style="font-family:var(--font-mono);font-size:12px">91.3%</span></td><td><span style="font-family:var(--font-mono);font-size:12px;color:var(--danger)">—</span></td><td><span style="font-size:12px;color:var(--text-2)">global</span></td><td><span style="font-size:12px;color:var(--text-3)">2m ago</span></td><td><button class="btn btn-danger btn-xs">Fix</button></td></tr>
+      </tbody>
+    </table>
+    <div style="padding:var(--s3) var(--s5);border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;background:var(--bg-2);border-radius:0 0 var(--r-xl) var(--r-xl)">
+      <span style="font-size:12px;color:var(--text-3)">Showing 4 of 24 services</span>
+      <div class="row" style="gap:var(--s2)">
+        <button class="btn btn-secondary btn-xs">← Prev</button>
+        <span style="font-family:var(--font-mono);font-size:11px;color:var(--text-2);padding:0 var(--s2)">1 / 6</span>
+        <button class="btn btn-secondary btn-xs">Next →</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════
+     08 — CHAT + ALERTS  (spacious)
+════════════════════════════════════════════════════════ -->
+<div class="section-break reveal" id="chat">
+  <div class="section-break-line"></div>
+  <span class="section-break-num">08</span>
+  <span class="section-break-label">Chat & Feedback</span>
+  <div class="section-break-line"></div>
+</div>
+
+<div class="bento reveal">
+  <div class="cell cell-flush b7 reveal-child">
+
+    <div class="cb-shell">
+      <div class="cb-head">
+        <div class="cb-av">PO</div>
+        <div style="flex:1">
+          <div style="font-size:14px;font-weight:600;color:var(--text-1)">Plexa Support</div>
+          <div class="cb-online">Active now</div>
+        </div>
+        <button style="width:32px;height:32px;border-radius:var(--r-md);border:1px solid var(--border-mid);background:transparent;color:var(--text-2);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all var(--t-fast)" onmouseover="this.style.background='var(--bg-3)'" onmouseout="this.style.background='transparent'">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>
+        </button>
+      </div>
+
+      <div class="cb-msgs" id="chatMessages">
+        <div class="cb-date">
+          <div class="cb-date-line"></div>
+          <span class="cb-date-label">Today</span>
+          <div class="cb-date-line"></div>
+        </div>
+
+        <div class="cb-group in">
+          <div class="cb-bubble">Your API usage is approaching the limit. Want me to walk you through upgrading?</div>
+          <div class="cb-meta">09:42 AM</div>
+        </div>
+
+        <div class="cb-group out">
+          <div class="cb-bubble">Yes — how does Enterprise compare to Pro?</div>
+          <div class="cb-meta"><span class="cb-tick">✓✓</span> 09:44 AM</div>
+        </div>
+
+        <div class="cb-group in">
+          <div class="cb-bubble">Enterprise gives you unlimited API calls, dedicated infrastructure, and a 99.99% SLA.</div>
+          <div class="cb-bubble">You also get a dedicated account manager and priority support.</div>
+          <div class="cb-meta">09:45 AM</div>
+        </div>
+
+        <div class="cb-group out">
+          <div class="cb-bubble">Perfect. Can you send over the pricing details?</div>
+          <div class="cb-meta"><span class="cb-tick">✓✓</span> 09:46 AM</div>
+        </div>
+
+        <div class="cb-group in" id="typingMsg">
+          <div class="cb-typing">
+            <div class="cb-dot"></div>
+            <div class="cb-dot"></div>
+            <div class="cb-dot"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="cb-footer">
+        <div class="cb-pill">
+          <textarea class="cb-pill-input" placeholder="Message..." rows="1" id="chatInput"></textarea>
+          <div class="cb-pill-tools">
+            <button class="cb-pill-btn" title="Attach file">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/></svg>
+            </button>
+            <button class="cb-pill-btn" title="Emoji">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
+            </button>
+            <button class="cb-send-btn" id="chatSend">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="cell cell-pad b5 reveal-child">
+    <span class="sub-label">Alerts</span>
+    <div class="col" style="gap:var(--s3);margin-bottom:var(--s6)">
+      <div class="alert alert-success"><span class="alert-icon">✓</span><div><span class="alert-title">Deployment successful</span><span class="alert-text">Build v5.0.0 is live in all regions.</span></div></div>
+      <div class="alert alert-error"><span class="alert-icon">✕</span><div><span class="alert-title">Connection failed</span><span class="alert-text">DB cluster unreachable. Retrying in 30s.</span></div></div>
+      <div class="alert alert-warn"><span class="alert-icon">⚠</span><div><span class="alert-title">Storage limit approaching</span><span class="alert-text">87% of quota used.</span></div></div>
+      <div class="alert alert-info"><span class="alert-icon">ℹ</span><div><span class="alert-title">Maintenance scheduled</span><span class="alert-text">Sunday 02:00–04:00 UTC.</span></div></div>
+    </div>
+    <span class="sub-label">Toasts</span>
+    <div class="toast-stack">
+      <div class="toast"><div class="toast-dot" style="background:var(--success)"></div><span class="toast-msg">Changes saved successfully</span><span class="toast-close">×</span></div>
+      <div class="toast"><div class="toast-dot" style="background:var(--warning)"></div><span class="toast-msg">Session expires in 5 minutes</span><span class="toast-close">×</span></div>
+      <div class="toast"><div class="toast-dot" style="background:var(--danger)"></div><span class="toast-msg">Failed to upload attachment</span><button class="btn btn-danger btn-xs" style="margin-left:auto;flex-shrink:0">Retry</button></div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════
+     09 — NAVIGATION  (dense)
+════════════════════════════════════════════════════════ -->
+<div class="section-break reveal" id="nav">
+  <div class="section-break-line"></div>
+  <span class="section-break-num">09</span>
+  <span class="section-break-label">Navigation</span>
+  <div class="section-break-line"></div>
+</div>
+
+<div class="bento reveal">
+  <div class="cell cell-pad b4 reveal-child">
+    <span class="sub-label">Tab Bar</span>
+    <div class="tabs mb6">
+      <button class="tab active">Overview</button>
+      <button class="tab">Analytics</button>
+      <button class="tab">Settings</button>
+    </div>
+    <span class="sub-label">Underline Tabs</span>
+    <div class="tab-underline mb6">
+      <button class="tab-ul active">Overview</button>
+      <button class="tab-ul">Analytics</button>
+      <button class="tab-ul">Settings</button>
+    </div>
+    <span class="sub-label">Breadcrumb</span>
+    <nav class="breadcrumb mb6">
+      <span class="bc-item">Dashboard</span><span class="bc-sep">›</span>
+      <span class="bc-item">Products</span><span class="bc-sep">›</span>
+      <span class="bc-item active">Design System</span>
+    </nav>
+    <span class="sub-label">Tooltips</span>
+    <div class="row">
+      <div class="tooltip-wrap"><button class="btn btn-secondary btn-sm">Hover<div class="tooltip">This is a tooltip</div></button></div>
+      <div class="tooltip-wrap"><button class="btn btn-primary btn-sm">Action<div class="tooltip">Deploy now</div></button></div>
+    </div>
+  </div>
+
+  <div class="cell cell-pad b4 reveal-child">
+    <span class="sub-label">Sidebar Nav</span>
+    <div class="sidenav">
+      <span class="sidenav-section">Main</span>
+      <a class="sidenav-item active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>Dashboard</a>
+      <a class="sidenav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>Analytics<span class="sidenav-badge">New</span></a>
+      <a class="sidenav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>Alerts<span class="sidenav-badge" style="background:var(--danger-faint);color:var(--danger)">3</span></a>
+      <span class="sidenav-section">System</span>
+      <a class="sidenav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>Settings</a>
+    </div>
+  </div>
+
+  <div class="cell cell-pad b4 reveal-child">
+    <span class="sub-label">Dropdown</span>
+    <div class="dropdown-wrap mb6">
+      <button class="btn btn-secondary" onclick="var m=this.nextElementSibling;m.style.display=m.style.display==='block'?'none':'block'">Actions <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg></button>
+      <div class="dropdown-menu" style="display:none">
+        <div class="dropdown-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>Edit</div>
+        <div class="dropdown-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>Duplicate</div>
+        <div class="dropdown-divider"></div>
+        <div class="dropdown-item danger"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg>Delete</div>
+      </div>
+    </div>
+    <span class="sub-label">Modal</span>
+    <div style="background:var(--bg-2);border-radius:var(--r-lg);padding:var(--s4);position:relative;min-height:200px;display:flex;align-items:center;justify-content:center;overflow:hidden">
+      <div style="position:absolute;inset:0;background:var(--overlay);border-radius:var(--r-lg)"></div>
+      <div class="modal" style="width:260px;padding:var(--s5);position:relative;z-index:1">
+        <div class="modal-header"><span class="modal-title" style="font-size:15px">Confirm Deploy</span><button class="modal-close" style="width:24px;height:24px;font-size:14px">×</button></div>
+        <div class="modal-body" style="font-size:13px;margin-bottom:var(--s4)">Deploy v5.0.0 to production? This cannot be undone.</div>
+        <div class="modal-footer"><button class="btn btn-ghost btn-sm">Cancel</button><button class="btn btn-primary-filled btn-sm">Deploy</button></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════
+     10 — MOTION  (spacious)
+════════════════════════════════════════════════════════ -->
+<div class="section-break reveal" id="motion">
+  <div class="section-break-line"></div>
+  <span class="section-break-num">10</span>
+  <span class="section-break-label">Motion & Animation</span>
+  <div class="section-break-line"></div>
+</div>
+
+<div class="bento reveal">
+  <!-- Timing tokens — 3 large cells -->
+  <div class="cell cell-pad b4 cell-accent reveal-child" style="text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:140px">
+    <span style="font-family:var(--font-display);font-size:2.6rem;font-weight:700;color:var(--primary);letter-spacing:-.04em;line-height:1">120ms</span>
+    <span style="font-family:var(--font-mono);font-size:11px;color:var(--primary);margin-top:var(--s2);letter-spacing:.06em">--t-fast</span>
+    <span style="font-size:12px;color:var(--text-2);margin-top:var(--s2)">Hover, focus, micro</span>
+  </div>
+  <div class="cell cell-pad b4 reveal-child" style="text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:140px">
+    <span style="font-family:var(--font-display);font-size:2.6rem;font-weight:700;color:var(--primary);letter-spacing:-.04em;line-height:1">320ms</span>
+    <span style="font-family:var(--font-mono);font-size:11px;color:var(--primary);margin-top:var(--s2);letter-spacing:.06em">--t-spring</span>
+    <span style="font-size:12px;color:var(--text-2);margin-top:var(--s2)">Card hover, toggles, popups</span>
+  </div>
+  <div class="cell cell-pad b4 reveal-child" style="text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:140px">
+    <span style="font-family:var(--font-display);font-size:2.6rem;font-weight:700;color:var(--primary);letter-spacing:-.04em;line-height:1">600ms</span>
+    <span style="font-family:var(--font-mono);font-size:11px;color:var(--primary);margin-top:var(--s2);letter-spacing:.06em">stagger</span>
+    <span style="font-size:12px;color:var(--text-2);margin-top:var(--s2)">Section reveal, list entry</span>
+  </div>
+
+  <!-- 8 animation demos -->
+  <div class="cell cell-pad-sm b3 reveal-child" style="display:flex;align-items:center;gap:var(--s3)">
+    <div class="motion-demo anim-pulse">💚</div>
+    <div><span style="font-family:var(--font-mono);font-size:11px;color:var(--primary);display:block">pulse</span><span style="font-size:12px;color:var(--text-3)">Live indicators</span></div>
+  </div>
+  <div class="cell cell-pad-sm b3 reveal-child" style="display:flex;align-items:center;gap:var(--s3)">
+    <div class="motion-demo anim-spin" style="display:flex;align-items:center;justify-content:center"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2"><path d="M21 12a9 9 0 11-6.219-8.56"/></svg></div>
+    <div><span style="font-family:var(--font-mono);font-size:11px;color:var(--primary);display:block">spin</span><span style="font-size:12px;color:var(--text-3)">Async loading</span></div>
+  </div>
+  <div class="cell cell-pad-sm b3 reveal-child" style="display:flex;align-items:center;gap:var(--s3)">
+    <div class="motion-demo anim-bounce">⬆</div>
+    <div><span style="font-family:var(--font-mono);font-size:11px;color:var(--primary);display:block">bounce</span><span style="font-size:12px;color:var(--text-3)">Notifications</span></div>
+  </div>
+  <div class="cell cell-pad-sm b3 reveal-child" style="display:flex;align-items:center;gap:var(--s3)">
+    <div class="motion-demo anim-float">🌟</div>
+    <div><span style="font-family:var(--font-mono);font-size:11px;color:var(--primary);display:block">float</span><span style="font-size:12px;color:var(--text-3)">Hero elements</span></div>
+  </div>
+  <div class="cell cell-pad-sm b3 reveal-child" style="display:flex;align-items:center;gap:var(--s3)">
+    <div class="motion-demo anim-wiggle">🔔</div>
+    <div><span style="font-family:var(--font-mono);font-size:11px;color:var(--primary);display:block">wiggle</span><span style="font-size:12px;color:var(--text-3)">Error shake</span></div>
+  </div>
+  <div class="cell cell-pad-sm b3 reveal-child" style="display:flex;align-items:center;gap:var(--s3)">
+    <div class="motion-demo anim-heartbeat" style="font-size:24px">♥</div>
+    <div><span style="font-family:var(--font-mono);font-size:11px;color:var(--primary);display:block">heartbeat</span><span style="font-size:12px;color:var(--text-3)">Liked, saved</span></div>
+  </div>
+  <div class="cell cell-pad-sm b3 reveal-child" style="display:flex;align-items:center;gap:var(--s3)">
+    <div class="motion-demo anim-shimmer-box"></div>
+    <div><span style="font-family:var(--font-mono);font-size:11px;color:var(--primary);display:block">shimmer</span><span style="font-size:12px;color:var(--text-3)">Skeleton loaders</span></div>
+  </div>
+  <div class="cell cell-pad-sm b3 reveal-child" style="display:flex;align-items:center;gap:var(--s3)">
+    <div class="motion-demo" id="scaleDemo" style="transition:transform .32s cubic-bezier(.34,1.56,.64,1);font-size:22px;display:flex;align-items:center;justify-content:center" onmouseenter="this.style.transform='scale(1.2)'" onmouseleave="this.style.transform='scale(1)'">↔</div>
+    <div><span style="font-family:var(--font-mono);font-size:11px;color:var(--primary);display:block">scale-spring</span><span style="font-size:12px;color:var(--text-3)">Card hover ← try it</span></div>
+  </div>
+
+  <!-- Easing bar -->
+  <div class="cell cell-pad b12 reveal-child">
+    <span class="sub-label">Easing Comparison — hover each bar</span>
+    <div style="display:flex;flex-direction:column;gap:var(--s3)">
+      <div><span style="font-family:var(--font-mono);font-size:11px;color:var(--text-3);display:block;margin-bottom:4px">ease</span><div style="height:32px;background:var(--bg-2);border:1px solid var(--border);border-radius:var(--r-md);overflow:hidden;cursor:pointer" onmouseenter="this.querySelector('.eb').style.width='100%'" onmouseleave="this.querySelector('.eb').style.width='0%'"><div class="eb" style="height:100%;background:var(--primary-faint);border-right:2px solid var(--primary);width:0%;transition:width 400ms ease;display:flex;align-items:center;padding-left:12px"><span style="font-size:11px;color:var(--primary);font-family:var(--font-mono)">ease</span></div></div></div>
+      <div><span style="font-family:var(--font-mono);font-size:11px;color:var(--text-3);display:block;margin-bottom:4px">ease-in-out</span><div style="height:32px;background:var(--bg-2);border:1px solid var(--border);border-radius:var(--r-md);overflow:hidden;cursor:pointer" onmouseenter="this.querySelector('.eb').style.width='100%'" onmouseleave="this.querySelector('.eb').style.width='0%'"><div class="eb" style="height:100%;background:var(--blue-faint);border-right:2px solid var(--blue);width:0%;transition:width 400ms ease-in-out;display:flex;align-items:center;padding-left:12px"><span style="font-size:11px;color:var(--info-dark);font-family:var(--font-mono)">ease-in-out</span></div></div></div>
+      <div><span style="font-family:var(--font-mono);font-size:11px;color:var(--text-3);display:block;margin-bottom:4px">spring — cubic-bezier(.34, 1.56, .64, 1) · used on all card hovers</span><div style="height:32px;background:var(--bg-2);border:1px solid var(--border);border-radius:var(--r-md);overflow:hidden;cursor:pointer" onmouseenter="this.querySelector('.eb').style.width='100%'" onmouseleave="this.querySelector('.eb').style.width='0%'"><div class="eb" style="height:100%;background:var(--success-faint);border-right:2px solid var(--success);width:0%;transition:width 400ms cubic-bezier(.34,1.56,.64,1);display:flex;align-items:center;padding-left:12px"><span style="font-size:11px;color:var(--success);font-family:var(--font-mono)">spring</span></div></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════
+     11 — SPACING & RADIUS  (dense)
+════════════════════════════════════════════════════════ -->
+<div class="section-break reveal" id="tokens">
+  <div class="section-break-line"></div>
+  <span class="section-break-num">11</span>
+  <span class="section-break-label">Spacing & Radius</span>
+  <div class="section-break-line"></div>
+</div>
+
+<div class="bento reveal">
+  <div class="cell cell-pad b6 reveal-child">
+    <span class="sub-label">Spacing Scale — 4pt base</span>
+    <div class="spacing-row"><span class="sp-token">--s1</span><span class="sp-val">4px</span><div style="flex:1"><div class="sp-bar" style="width:4px"></div></div></div>
+    <div class="spacing-row"><span class="sp-token">--s2</span><span class="sp-val">8px</span><div style="flex:1"><div class="sp-bar" style="width:8px"></div></div></div>
+    <div class="spacing-row"><span class="sp-token">--s3</span><span class="sp-val">12px</span><div style="flex:1"><div class="sp-bar" style="width:12px"></div></div></div>
+    <div class="spacing-row"><span class="sp-token">--s4</span><span class="sp-val">16px</span><div style="flex:1"><div class="sp-bar" style="width:16px"></div></div></div>
+    <div class="spacing-row"><span class="sp-token">--s5</span><span class="sp-val">20px</span><div style="flex:1"><div class="sp-bar" style="width:20px"></div></div></div>
+    <div class="spacing-row"><span class="sp-token">--s6</span><span class="sp-val">24px</span><div style="flex:1"><div class="sp-bar" style="width:24px"></div></div></div>
+    <div class="spacing-row"><span class="sp-token">--s8</span><span class="sp-val">32px</span><div style="flex:1"><div class="sp-bar" style="width:32px"></div></div></div>
+    <div class="spacing-row"><span class="sp-token">--s10</span><span class="sp-val">40px</span><div style="flex:1"><div class="sp-bar" style="width:40px"></div></div></div>
+    <div class="spacing-row"><span class="sp-token">--s12</span><span class="sp-val">48px</span><div style="flex:1"><div class="sp-bar" style="width:48px"></div></div></div>
+    <div class="spacing-row"><span class="sp-token">--s16</span><span class="sp-val">64px</span><div style="flex:1"><div class="sp-bar" style="width:64px"></div></div></div>
+  </div>
+  <div class="cell cell-pad b6 reveal-child">
+    <span class="sub-label">Border Radius</span>
+    <div class="radius-grid">
+      <div class="radius-item"><div class="radius-preview" style="border-radius:var(--r-xs)"></div><span class="radius-token">--r-xs</span><span class="radius-val">3px</span></div>
+      <div class="radius-item"><div class="radius-preview" style="border-radius:var(--r-sm)"></div><span class="radius-token">--r-sm</span><span class="radius-val">5px</span></div>
+      <div class="radius-item"><div class="radius-preview" style="border-radius:var(--r-md)"></div><span class="radius-token">--r-md</span><span class="radius-val">9px</span></div>
+      <div class="radius-item"><div class="radius-preview" style="border-radius:var(--r-lg)"></div><span class="radius-token">--r-lg</span><span class="radius-val">12px</span></div>
+      <div class="radius-item"><div class="radius-preview" style="border-radius:var(--r-xl)"></div><span class="radius-token">--r-xl</span><span class="radius-val">16px</span></div>
+      <div class="radius-item"><div class="radius-preview" style="border-radius:var(--r-2xl)"></div><span class="radius-token">--r-2xl</span><span class="radius-val">22px</span></div>
+      <div class="radius-item"><div class="radius-preview" style="border-radius:var(--r-pill)"></div><span class="radius-token">--r-pill</span><span class="radius-val">∞</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════
+     12 — LOADING STATES  (dense)
+════════════════════════════════════════════════════════ -->
+<div class="section-break reveal">
+  <div class="section-break-line"></div>
+  <span class="section-break-num">12</span>
+  <span class="section-break-label">Skeleton Loaders</span>
+  <div class="section-break-line"></div>
+</div>
+
+<div class="bento reveal">
+  <div class="cell cell-pad b6 reveal-child">
+    <span class="sub-label">Card Skeleton</span>
+    <div style="display:flex;align-items:center;gap:var(--s3);margin-bottom:var(--s4)">
+      <div class="skeleton" style="width:40px;height:40px;border-radius:50%"></div>
+      <div style="flex:1"><div class="skeleton" style="height:13px;width:60%;margin-bottom:6px"></div><div class="skeleton" style="height:11px;width:40%"></div></div>
+    </div>
+    <div class="skeleton" style="height:12px;width:100%;margin-bottom:6px"></div>
+    <div class="skeleton" style="height:12px;width:85%;margin-bottom:6px"></div>
+    <div class="skeleton" style="height:12px;width:70%"></div>
+  </div>
+  <div class="cell cell-pad b6 reveal-child">
+    <span class="sub-label">List Skeleton</span>
+    <div style="display:flex;flex-direction:column;gap:var(--s3)">
+      <div style="display:flex;gap:var(--s4);align-items:center"><div class="skeleton" style="width:32px;height:32px;border-radius:50%;flex-shrink:0"></div><div style="flex:1"><div class="skeleton" style="height:12px;width:70%;margin-bottom:5px"></div><div class="skeleton" style="height:10px;width:40%"></div></div><div class="skeleton" style="width:60px;height:22px;border-radius:20px"></div></div>
+      <div style="display:flex;gap:var(--s4);align-items:center"><div class="skeleton" style="width:32px;height:32px;border-radius:50%;flex-shrink:0"></div><div style="flex:1"><div class="skeleton" style="height:12px;width:55%;margin-bottom:5px"></div><div class="skeleton" style="height:10px;width:35%"></div></div><div class="skeleton" style="width:60px;height:22px;border-radius:20px"></div></div>
+      <div style="display:flex;gap:var(--s4);align-items:center"><div class="skeleton" style="width:32px;height:32px;border-radius:50%;flex-shrink:0"></div><div style="flex:1"><div class="skeleton" style="height:12px;width:80%;margin-bottom:5px"></div><div class="skeleton" style="height:10px;width:50%"></div></div><div class="skeleton" style="width:60px;height:22px;border-radius:20px"></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════
+     13 — ICONOGRAPHY  (contained style)
+════════════════════════════════════════════════════════ -->
+<div class="section-break reveal" id="icons">
+  <div class="section-break-line"></div>
+  <span class="section-break-num">13</span>
+  <span class="section-break-label">Iconography</span>
+  <div class="section-break-line"></div>
+</div>
+
+<div class="bento reveal">
+  <!-- Intro + system rules -->
+  <div class="cell cell-pad b4 reveal-child">
+    <span class="cell-tag">Style E — Contained</span>
+    <h2 class="cell-title" style="font-size:1.3rem;margin-bottom:var(--s3)">Icon System</h2>
+    <p class="cell-body" style="margin-bottom:var(--s5)">Every icon lives in a rounded square container. Default state is neutral surface. Active and hover states use the context-aware primary fill and stroke.</p>
+    <div class="col" style="gap:var(--s3)">
+      <div style="display:flex;align-items:center;gap:var(--s4)">
+        <div class="ic-wrap ic-md"><svg viewBox="0 0 24 24" fill="none" stroke="var(--text-2)" stroke-width="1.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></div>
+        <div><div style="font-size:12px;font-weight:500;color:var(--text-1)">Default</div><div style="font-size:11px;color:var(--text-3)">Neutral bg · muted stroke</div></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:var(--s4)">
+        <div class="ic-wrap ic-md ic-active"><svg viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="1.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></div>
+        <div><div style="font-size:12px;font-weight:500;color:var(--text-1)">Active / Hover</div><div style="font-size:11px;color:var(--text-3)">Primary faint bg · primary stroke</div></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:var(--s4)">
+        <div class="ic-wrap ic-md ic-success"><svg viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="1.5"><polyline points="20 6 9 17 4 12"/></svg></div>
+        <div class="ic-wrap ic-md ic-danger"><svg viewBox="0 0 24 24" fill="none" stroke="var(--danger)" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg></div>
+        <div class="ic-wrap ic-md ic-warn"><svg viewBox="0 0 24 24" fill="none" stroke="var(--warning)" stroke-width="1.5"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></div>
+        <div><div style="font-size:11px;color:var(--text-3)">Semantic tints</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Size scale -->
+  <div class="cell cell-pad b4 reveal-child">
+    <span class="sub-label">Size Scale</span>
+    <div class="col" style="gap:var(--s4)">
+      <div style="display:flex;align-items:center;gap:var(--s4)">
+        <div class="ic-wrap ic-sm"><svg viewBox="0 0 24 24" fill="none" stroke="var(--text-2)" stroke-width="1.5"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg></div>
+        <span style="font-family:var(--font-mono);font-size:11px;color:var(--text-2)">ic-sm · 28×28 · 14px svg</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:var(--s4)">
+        <div class="ic-wrap ic-md"><svg viewBox="0 0 24 24" fill="none" stroke="var(--text-2)" stroke-width="1.5"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg></div>
+        <span style="font-family:var(--font-mono);font-size:11px;color:var(--text-2)">ic-md · 32×32 · 16px svg <span style="color:var(--primary)">← default</span></span>
+      </div>
+      <div style="display:flex;align-items:center;gap:var(--s4)">
+        <div class="ic-wrap ic-lg"><svg viewBox="0 0 24 24" fill="none" stroke="var(--text-2)" stroke-width="1.5"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg></div>
+        <span style="font-family:var(--font-mono);font-size:11px;color:var(--text-2)">ic-lg · 38×38 · 18px svg</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:var(--s4)">
+        <div class="ic-wrap ic-xl"><svg viewBox="0 0 24 24" fill="none" stroke="var(--text-2)" stroke-width="1.5"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg></div>
+        <span style="font-family:var(--font-mono);font-size:11px;color:var(--text-2)">ic-xl · 44×44 · 20px svg</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Usage contexts -->
+  <div class="cell cell-pad b4 reveal-child">
+    <span class="sub-label">Usage in Context</span>
+    <div class="col" style="gap:var(--s4)">
+      <!-- Toolbar row -->
+      <div>
+        <div style="font-size:11px;color:var(--text-3);margin-bottom:var(--s2)">Toolbar</div>
+        <div class="row">
+          <div class="ic-wrap ic-sm ic-active"><svg viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="1.5"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg></div>
+          <div class="ic-wrap ic-sm"><svg viewBox="0 0 24 24" fill="none" stroke="var(--text-2)" stroke-width="1.5"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg></div>
+          <div class="ic-wrap ic-sm"><svg viewBox="0 0 24 24" fill="none" stroke="var(--text-2)" stroke-width="1.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></div>
+          <div class="ic-wrap ic-sm ic-danger"><svg viewBox="0 0 24 24" fill="none" stroke="var(--danger)" stroke-width="1.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg></div>
+        </div>
+      </div>
+      <!-- Status row -->
+      <div>
+        <div style="font-size:11px;color:var(--text-3);margin-bottom:var(--s2)">Status indicators</div>
+        <div class="col" style="gap:var(--s2)">
+          <div style="display:flex;align-items:center;gap:var(--s3);padding:var(--s2) var(--s3);background:var(--bg-2);border:1px solid var(--border);border-radius:var(--r-md)">
+            <div class="ic-wrap ic-sm ic-success"><svg viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="1.5"><polyline points="20 6 9 17 4 12"/></svg></div>
+            <span style="font-size:12px;color:var(--text-1)">API Gateway</span>
+            <span class="badge badge-success badge-pill" style="margin-left:auto"><span class="badge-dot" style="background:var(--success)"></span>Operational</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:var(--s3);padding:var(--s2) var(--s3);background:var(--bg-2);border:1px solid var(--border);border-radius:var(--r-md)">
+            <div class="ic-wrap ic-sm ic-warn"><svg viewBox="0 0 24 24" fill="none" stroke="var(--warning)" stroke-width="1.5"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/></svg></div>
+            <span style="font-size:12px;color:var(--text-1)">Data Pipeline</span>
+            <span class="badge badge-warn" style="margin-left:auto">Degraded</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Full icon grid -->
+  <div class="cell cell-pad b12 reveal-child">
+    <span class="sub-label">Icon Library — hover any icon</span>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(64px,1fr));gap:var(--s3)">
+      <!-- Each icon: container + label -->
+      <div style="display:flex;flex-direction:column;align-items:center;gap:6px"><div class="ic-wrap ic-md" style="cursor:pointer"><svg viewBox="0 0 24 24" fill="none" stroke="var(--text-2)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg></div><span style="font-size:10px;color:var(--text-3);font-family:var(--font-mono);text-align:center">home</span></div>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:6px"><div class="ic-wrap ic-md" style="cursor:pointer"><svg viewBox="0 0 24 24" fill="none" stroke="var(--text-2)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg></div><span style="font-size:10px;color:var(--text-3);font-family:var(--font-mono);text-align:center">grid</span></div>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:6px"><div class="ic-wrap ic-md" style="cursor:pointer"><svg viewBox="0 0 24 24" fill="none" stroke="var(--text-2)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></div><span style="font-size:10px;color:var(--text-3);font-family:var(--font-mono);text-align:center">chart</span></div>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:6px"><div class="ic-wrap ic-md" style="cursor:pointer"><svg viewBox="0 0 24 24" fill="none" stroke="var(--text-2)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div><span style="font-size:10px;color:var(--text-3);font-family:var(--font-mono);text-align:center">user</span></div>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:6px"><div class="ic-wrap ic-md" style="cursor:pointer"><svg viewBox="0 0 24 24" fill="none" stroke="var(--text-2)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg></div><span style="font-size:10px;color:var(--text-3);font-family:var(--font-mono);text-align:center">users</span></div>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:6px"><div class="ic-wrap ic-md" style="cursor:pointer"><svg viewBox="0 0 24 24" fill="none" stroke="var(--text-2)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></div><span style="font-size:10px;color:var(--text-3);font-family:var(--font-mono);text-align:center">search</span></div>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:6px"><div class="ic-wrap ic-md" style="cursor:pointer"><svg viewBox="0 0 24 24" fill="none" stroke="var(--text-2)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg></div><span style="font-size:10px;color:var(--text-3);font-family:var(--font-mono);text-align:center">bell</span></div>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:6px"><div class="ic-wrap ic-md" style="cursor:pointer"><svg viewBox="0 0 24 24" fill="none" stroke="var(--text-2)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg></div><span style="font-size:10px;color:var(--text-3);font-family:var(--font-mono);text-align:center">lock</span></div>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:6px"><div class="ic-wrap ic-md" style="cursor:pointer"><svg viewBox="0 0 24 24" fill="none" stroke="var(--text-2)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 4v4"/></svg></div><span style="font-size:10px;color:var(--text-3);font-family:var(--font-mono);text-align:center">unlock</span></div>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:6px"><div class="ic-wrap ic-md" style="cursor:pointer"><svg viewBox="0 0 24 24" fill="none" stroke="var(--text-2)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg></div><span style="font-size:10px;color:var(--text-3);font-family:var(--font-mono);text-align:center">mail</span></div>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:6px"><div class="ic-wrap ic-md" style="cursor:pointer"><svg viewBox="0 0 24 24" fill="none" stroke="var(--text-2)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></div><span style="font-size:10px;color:var(--text-3);font-family:var(--font-mono);text-align:center">info</span></div>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:6px"><div class="ic-wrap ic-md" style="cursor:pointer"><svg viewBox="0 0 24 24" fill="none" stroke="var(--text-2)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div><span style="font-size:10px;color:var(--text-3);font-family:var(--font-mono);text-align:center">check</span></div>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:6px"><div class="ic-wrap ic-md" style="cursor:pointer"><svg viewBox="0 0 24 24" fill="none" stroke="var(--text-2)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></div><span style="font-size:10px;color:var(--text-3);font-family:var(--font-mono);text-align:center">x</span></div>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:6px"><div class="ic-wrap ic-md" style="cursor:pointer"><svg viewBox="0 0 24 24" fill="none" stroke="var(--text-2)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></div><span style="font-size:10px;color:var(--text-3);font-family:var(--font-mono);text-align:center">plus</span></div>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:6px"><div class="ic-wrap ic-md" style="cursor:pointer"><svg viewBox="0 0 24 24" fill="none" stroke="var(--text-2)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg></div><span style="font-size:10px;color:var(--text-3);font-family:var(--font-mono);text-align:center">trash</span></div>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:6px"><div class="ic-wrap ic-md" style="cursor:pointer"><svg viewBox="0 0 24 24" fill="none" stroke="var(--text-2)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></div><span style="font-size:10px;color:var(--text-3);font-family:var(--font-mono);text-align:center">edit</span></div>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:6px"><div class="ic-wrap ic-md" style="cursor:pointer"><svg viewBox="0 0 24 24" fill="none" stroke="var(--text-2)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></div><span style="font-size:10px;color:var(--text-3);font-family:var(--font-mono);text-align:center">download</span></div>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:6px"><div class="ic-wrap ic-md" style="cursor:pointer"><svg viewBox="0 0 24 24" fill="none" stroke="var(--text-2)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></div><span style="font-size:10px;color:var(--text-3);font-family:var(--font-mono);text-align:center">upload</span></div>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:6px"><div class="ic-wrap ic-md" style="cursor:pointer"><svg viewBox="0 0 24 24" fill="none" stroke="var(--text-2)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg></div><span style="font-size:10px;color:var(--text-3);font-family:var(--font-mono);text-align:center">share</span></div>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:6px"><div class="ic-wrap ic-md" style="cursor:pointer"><svg viewBox="0 0 24 24" fill="none" stroke="var(--text-2)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg></div><span style="font-size:10px;color:var(--text-3);font-family:var(--font-mono);text-align:center">copy</span></div>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:6px"><div class="ic-wrap ic-md" style="cursor:pointer"><svg viewBox="0 0 24 24" fill="none" stroke="var(--text-2)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10"/></svg></div><span style="font-size:10px;color:var(--text-3);font-family:var(--font-mono);text-align:center">refresh</span></div>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:6px"><div class="ic-wrap ic-md" style="cursor:pointer"><svg viewBox="0 0 24 24" fill="none" stroke="var(--text-2)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div><span style="font-size:10px;color:var(--text-3);font-family:var(--font-mono);text-align:center">clock</span></div>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:6px"><div class="ic-wrap ic-md" style="cursor:pointer"><svg viewBox="0 0 24 24" fill="none" stroke="var(--text-2)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div><span style="font-size:10px;color:var(--text-3);font-family:var(--font-mono);text-align:center">shield</span></div>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:6px"><div class="ic-wrap ic-md" style="cursor:pointer"><svg viewBox="0 0 24 24" fill="none" stroke="var(--text-2)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 010 14.14M4.93 4.93a10 10 0 000 14.14"/></svg></div><span style="font-size:10px;color:var(--text-3);font-family:var(--font-mono);text-align:center">wifi</span></div>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:6px"><div class="ic-wrap ic-md" style="cursor:pointer"><svg viewBox="0 0 24 24" fill="none" stroke="var(--text-2)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg></div><span style="font-size:10px;color:var(--text-3);font-family:var(--font-mono);text-align:center">monitor</span></div>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:6px"><div class="ic-wrap ic-md" style="cursor:pointer"><svg viewBox="0 0 24 24" fill="none" stroke="var(--text-2)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg></div><span style="font-size:10px;color:var(--text-3);font-family:var(--font-mono);text-align:center">mobile</span></div>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:6px"><div class="ic-wrap ic-md" style="cursor:pointer"><svg viewBox="0 0 24 24" fill="none" stroke="var(--text-2)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div><span style="font-size:10px;color:var(--text-3);font-family:var(--font-mono);text-align:center">activity</span></div>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:6px"><div class="ic-wrap ic-md" style="cursor:pointer"><svg viewBox="0 0 24 24" fill="none" stroke="var(--text-2)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 010 14.14M4.93 4.93a10 10 0 000 14.14"/></svg></div><span style="font-size:10px;color:var(--text-3);font-family:var(--font-mono);text-align:center">api</span></div>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:6px"><div class="ic-wrap ic-md" style="cursor:pointer"><svg viewBox="0 0 24 24" fill="none" stroke="var(--text-2)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg></div><span style="font-size:10px;color:var(--text-3);font-family:var(--font-mono);text-align:center">filter</span></div>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:6px"><div class="ic-wrap ic-md" style="cursor:pointer"><svg viewBox="0 0 24 24" fill="none" stroke="var(--text-2)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg></div><span style="font-size:10px;color:var(--text-3);font-family:var(--font-mono);text-align:center">tag</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════
+     14 — DO / DON'T  (spacious)
+════════════════════════════════════════════════════════ -->
+<div class="section-break reveal" id="guidelines">
+  <div class="section-break-line"></div>
+  <span class="section-break-num">14</span>
+  <span class="section-break-label">Guidelines</span>
+  <div class="section-break-line"></div>
+</div>
+
+<div class="bento reveal">
+  <div class="cell cell-pad b12 reveal-child">
+    <div class="do-dont">
+      <div class="do-card">
+        <div class="do-label">✓ Do</div>
+        <ul>
+          <li><span style="color:var(--success)">•</span>Use blue as primary in light mode, mint in dark — always context-aware</li>
+          <li><span style="color:var(--success)">•</span>Reserve success color (#10B981) for positive status only — not mint</li>
+          <li><span style="color:var(--success)">•</span>Use floating labels on all text inputs — never static placeholder-only</li>
+          <li><span style="color:var(--success)">•</span>Apply spring easing to scale/hover interactions for premium feel</li>
+          <li><span style="color:var(--success)">•</span>Stagger section reveals at 60ms per element for smooth page entry</li>
+          <li><span style="color:var(--success)">•</span>Dark text on mint — mint is too light for white text</li>
+          <li><span style="color:var(--success)">•</span>Keep the 4pt spacing rhythm throughout all layouts</li>
+        </ul>
+      </div>
+      <div class="dont-card">
+        <div class="dont-label">✕ Don't</div>
+        <ul>
+          <li><span style="color:var(--danger)">•</span>Fill buttons with gradients — always flat or outline only</li>
+          <li><span style="color:var(--danger)">•</span>Use mint as a success color — it conflicts with brand identity</li>
+          <li><span style="color:var(--danger)">•</span>Use blue as primary in dark mode — contrast drops significantly</li>
+          <li><span style="color:var(--danger)">•</span>Use static placeholder text as the only label — disappears on focus</li>
+          <li><span style="color:var(--danger)">•</span>Use linear easing on spring interactions — it feels mechanical</li>
+          <li><span style="color:var(--danger)">•</span>Place white text on mint surfaces — use dark (#060D1A) instead</li>
+          <li><span style="color:var(--danger)">•</span>Mix arbitrary pixel values outside the spacing scale</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+
+</div><!-- /.page -->
+
+<!-- FOOTER -->
+<footer class="footer">
+  <div class="footer-logo">
+    <img src="plexa-logo.jpg" alt="Plexa One" style="height:28px;width:auto;object-fit:contain;display:block;background:#fff;border-radius:4px;padding:2px 6px"/>
+  </div>
+  <p class="footer-text">Design System v5.0 · Bento Cosmos · Context-aware color · Floating inputs · Spring-scale cards<br/>
+  <span style="font-size:11px;color:var(--text-3);margin-top:4px;display:block">Internal enterprise property. All tokens, components, and patterns are proprietary.</span></p>
+</footer>
+
+<script>
+/* THEME */
+const html=document.documentElement,btn=document.getElementById('themeBtn');
+const moon=document.getElementById('icon-moon'),sun=document.getElementById('icon-sun');
+btn.addEventListener('click',()=>{
+  const dark=html.getAttribute('data-theme')==='dark';
+  html.setAttribute('data-theme',dark?'light':'dark');
+  moon.style.display=dark?'none':'block';
+  sun.style.display=dark?'block':'none';
+});
+
+/* FLOATING LABELS */
+document.querySelectorAll('.fl-input,.fl-textarea').forEach(inp=>{
+  function check(){inp.value.trim()?inp.classList.add('filled'):inp.classList.remove('filled')}
+  inp.addEventListener('input',check);check();
+});
+
+/* SLIDER */
+const sl=document.getElementById('slider1'),sv=document.getElementById('sliderVal');
+if(sl)sl.addEventListener('input',()=>sv.textContent=sl.value);
+
+/* TABS */
+document.querySelectorAll('.tab').forEach(t=>{
+  t.addEventListener('click',()=>{t.closest('.tabs').querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));t.classList.add('active')});
+});
+document.querySelectorAll('.tab-ul').forEach(t=>{
+  t.addEventListener('click',()=>{t.closest('.tab-underline').querySelectorAll('.tab-ul').forEach(x=>x.classList.remove('active'));t.classList.add('active')});
+});
+
+/* CHAT */
+const chatInput=document.getElementById('chatInput'),chatSend=document.getElementById('chatSend'),chatMsgs=document.getElementById('chatMessages'),typingMsg=document.getElementById('typingMsg');
+function sendMsg(){
+  const val=chatInput.value.trim();if(!val)return;
+  const g=document.createElement('div');g.className='cb-group out';
+  g.innerHTML=`<div class="cb-bubble">${val}</div><div class="cb-meta"><span class="cb-tick">✓✓</span> Now</div>`;
+  chatMsgs.insertBefore(g,typingMsg);
+  chatInput.value='';chatInput.style.height='auto';
+  chatMsgs.scrollTop=chatMsgs.scrollHeight;
+}
+chatSend.addEventListener('click',sendMsg);
+chatInput.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendMsg()}});
+chatInput.addEventListener('input',function(){this.style.height='auto';this.style.height=Math.min(this.scrollHeight,96)+'px'});
+
+/* TOAST CLOSE */
+document.querySelectorAll('.toast-close').forEach(x=>{
+  x.addEventListener('click',()=>{const t=x.closest('.toast');t.style.opacity='0';setTimeout(()=>t.remove(),220)});
+});
+
+/* CONTAINED ICON HOVER */
+document.querySelectorAll('.ic-wrap[style*="cursor:pointer"],.ic-wrap[style*="cursor: pointer"]').forEach(el=>{
+  if(el.classList.contains('ic-active')||el.classList.contains('ic-success')||el.classList.contains('ic-danger')||el.classList.contains('ic-warn'))return;
+  el.addEventListener('mouseenter',()=>{el.classList.add('ic-active')});
+  el.addEventListener('mouseleave',()=>{el.classList.remove('ic-active')});
+});
+
+/* DROPDOWN CLOSE */
+document.addEventListener('click',e=>{
+  if(!e.target.closest('.dropdown-wrap'))document.querySelectorAll('.dropdown-menu').forEach(m=>m.style.display='none');
+});
+
+/* STAGGERED SCROLL REVEAL */
+const allReveals=document.querySelectorAll('.reveal');
+const obs=new IntersectionObserver(entries=>{
+  entries.forEach(e=>{
+    if(e.isIntersecting){
+      e.target.classList.add('visible');
+      e.target.querySelectorAll('.reveal-child').forEach((c,i)=>{
+        setTimeout(()=>c.classList.add('visible'),i*55);
+      });
+      obs.unobserve(e.target);
+    }
+  });
+},{threshold:0.05});
+allReveals.forEach(el=>obs.observe(el));
+</script>
+</body>
+</html>
