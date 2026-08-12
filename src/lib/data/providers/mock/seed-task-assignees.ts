@@ -1,0 +1,28 @@
+import type { TaskAssignee } from "../../types";
+
+export const seedTaskAssignees: TaskAssignee[] = [
+  { taskId: "task-1", userId: "user-employee-1" },
+  { taskId: "task-2", userId: "user-employee-1" },
+  { taskId: "task-2", userId: "user-supervisor-1" },
+  { taskId: "task-3", userId: "user-employee-1" },
+  { taskId: "task-4", userId: "user-employee-2" },
+  { taskId: "task-5", userId: "user-employee-2" },
+  { taskId: "task-5", userId: "user-supervisor-1" },
+  { taskId: "task-6", userId: "user-employee-2" },
+  { taskId: "task-7", userId: "user-employee-3" },
+  { taskId: "task-8", userId: "user-employee-3" },
+  { taskId: "task-8", userId: "user-supervisor-2" },
+  { taskId: "task-9", userId: "user-employee-3" },
+  { taskId: "task-10", userId: "user-employee-4" },
+  { taskId: "task-11", userId: "user-employee-4" },
+  { taskId: "task-11", userId: "user-supervisor-2" },
+  { taskId: "task-12", userId: "user-employee-4" },
+  { taskId: "task-13", userId: "user-supervisor-1" },
+  { taskId: "task-14", userId: "user-superadmin-1" },
+  { taskId: "task-15", userId: "user-superadmin-1" },
+  { taskId: "task-16", userId: "user-superadmin-1" },
+  { taskId: "task-17", userId: "user-employee-1" },
+  { taskId: "task-18", userId: "user-employee-1" },
+  { taskId: "task-19", userId: "user-employee-4" },
+  { taskId: "task-20", userId: "user-employee-4" },
+];

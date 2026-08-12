@@ -1,0 +1,213 @@
+import type { WorkstreamsProvider, WorkstreamWithRelations } from "../workstreams-provider";
+import type { Workstream, User } from "../../types";
+import { canAccessCompany, canAccessWorkstream, canManageWorkstreams } from "../../permissions";
+import { computeWorkstreamBudget } from "../../time-budget";
+import { computeWorkstreamRecurrence } from "../../recurrence";
+import { db } from "./mock-db";
+
+function todayDateString(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function workstreamTeamIds(workstreamId: string): string[] {
+  return db.workstreamMembers.filter((m) => m.workstreamId === workstreamId).map((m) => m.userId);
+}
+
+/**
+ * The workstream itself carries no estimate of its own — "expected" is a roll-up, summed from its
+ * own tasks' `expectedMinutes` (null if literally none of them has one set, matching the identical
+ * "only count items that actually have a budget" rule `computeBudgetRollup` already uses one level
+ * up for the client-level rollup). Only completed entries count toward logged hours — a still-running
+ * timer's partial elapsed time isn't "logged" yet, matching every other hours-logged surface in the app.
+ */
+function workstreamHours(workstreamId: string) {
+  const tasks = db.tasks.filter((t) => t.workstreamId === workstreamId);
+  const expectedMinutes = tasks.some((t) => t.expectedMinutes != null)
+    ? tasks.reduce((sum, t) => sum + (t.expectedMinutes ?? 0), 0)
+    : null;
+  const taskIds = tasks.map((t) => t.id);
+  const entries = db.timeEntries.filter((te) => taskIds.includes(te.taskId) && te.durationMinutes !== null);
+
+  let billableMinutes = 0;
+  let nonBillableMinutes = 0;
+  for (const entry of entries) {
+    if (entry.billable) billableMinutes += entry.durationMinutes ?? 0;
+    else nonBillableMinutes += entry.durationMinutes ?? 0;
+  }
+
+  return computeWorkstreamBudget({
+    expectedMinutes,
+    actualMinutes: billableMinutes + nonBillableMinutes,
+    billableMinutes,
+    nonBillableMinutes,
+  });
+}
+
+function toWorkstreamWithRelations(workstream: Workstream): WorkstreamWithRelations {
+  const company = db.companies.find((c) => c.id === workstream.companyId);
+  if (!company) {
+    throw new Error(`Workstream ${workstream.id} references unknown company ${workstream.companyId}`);
+  }
+  const brand = db.brands.find((b) => b.id === workstream.brandId);
+  if (!brand) {
+    throw new Error(`Workstream ${workstream.id} references unknown brand ${workstream.brandId}`);
+  }
+  const serviceLine = workstream.serviceLineId
+    ? (db.serviceLines.find((sl) => sl.id === workstream.serviceLineId) ?? null)
+    : null;
+  const lead = db.users.find((u) => u.id === workstream.leadUserId);
+  if (!lead) {
+    throw new Error(`Workstream ${workstream.id} references unknown lead ${workstream.leadUserId}`);
+  }
+  const team = db.users.filter((u) => workstreamTeamIds(workstream.id).includes(u.id));
+
+  const tasks = db.tasks.filter((t) => t.workstreamId === workstream.id);
+  const taskCount = tasks.length;
+  const doneTaskCount = tasks.filter((t) => t.status === "done").length;
+  const progressPercent = taskCount === 0 ? 0 : Math.round((doneTaskCount / taskCount) * 100);
+  const budget = workstreamHours(workstream.id);
+
+  const hasSuccessor = db.workstreams.some((w) => w.previousOccurrenceWorkstreamId === workstream.id);
+  const recurrence = computeWorkstreamRecurrence(
+    workstream.recurrenceFrequency
+      ? {
+          frequency: workstream.recurrenceFrequency,
+          anchorDate: workstream.recurrenceAnchorDate ?? workstream.startDate ?? todayDateString(),
+          customIntervalDays: workstream.recurrenceCustomIntervalDays,
+        }
+      : null,
+    workstream.startDate,
+    hasSuccessor,
+    todayDateString()
+  );
+
+  return {
+    ...workstream,
+    company,
+    serviceLine,
+    brand,
+    lead,
+    team,
+    taskCount,
+    doneTaskCount,
+    progressPercent,
+    budget,
+    recurrence,
+  };
+}
+
+function requireAccess(viewer: User, workstream: Workstream) {
+  const accessible = canAccessWorkstream(
+    viewer,
+    { leadUserId: workstream.leadUserId, teamUserIds: workstreamTeamIds(workstream.id), companyId: workstream.companyId },
+    db.users
+  );
+  if (!accessible) throw new Error("You don't have access to this workstream.");
+}
+
+function requireManage(viewer: User, workstream?: Workstream) {
+  if (!canManageWorkstreams(viewer)) {
+    throw new Error("Only supervisors and superadmins can manage workstreams.");
+  }
+  if (workstream) requireAccess(viewer, workstream);
+}
+
+function syncTeam(workstreamId: string, userIds: string[]) {
+  db.workstreamMembers = [
+    ...db.workstreamMembers.filter((m) => m.workstreamId !== workstreamId),
+    ...userIds.map((userId) => ({ workstreamId, userId })),
+  ];
+}
+
+export const mockWorkstreamsProvider: WorkstreamsProvider = {
+  async listWorkstreams(viewer, filters) {
+    let workstreams = db.workstreams.filter((e) =>
+      canAccessWorkstream(
+        viewer,
+        { leadUserId: e.leadUserId, teamUserIds: workstreamTeamIds(e.id), companyId: e.companyId },
+        db.users
+      )
+    );
+    if (filters?.companyId) {
+      workstreams = workstreams.filter((e) => e.companyId === filters.companyId);
+    }
+    return workstreams.map(toWorkstreamWithRelations);
+  },
+
+  async getWorkstream(viewer, id) {
+    const workstream = db.workstreams.find((e) => e.id === id);
+    if (!workstream) return null;
+    const accessible = canAccessWorkstream(
+      viewer,
+      { leadUserId: workstream.leadUserId, teamUserIds: workstreamTeamIds(id), companyId: workstream.companyId },
+      db.users
+    );
+    if (!accessible) return null;
+    return toWorkstreamWithRelations(workstream);
+  },
+
+  async createWorkstream(viewer, input) {
+    requireManage(viewer);
+    if (!canAccessCompany(viewer, input.companyId, db.users)) {
+      throw new Error("You don't have access to that company.");
+    }
+    const company = db.companies.find((c) => c.id === input.companyId);
+    if (!company) throw new Error("Company not found.");
+
+    const id = crypto.randomUUID();
+    const now = new Date().toISOString();
+    const workstream: Workstream = {
+      id,
+      name: input.name,
+      description: input.description,
+      companyId: input.companyId,
+      serviceLineId: input.serviceLineId,
+      brandId: company.brandId,
+      leadUserId: input.leadUserId,
+      status: input.status,
+      startDate: input.startDate,
+      endDate: input.endDate,
+      recurrenceFrequency: input.recurrenceFrequency,
+      recurrenceAnchorDate: input.recurrenceFrequency ? input.recurrenceAnchorDate : null,
+      recurrenceCustomIntervalDays: input.recurrenceFrequency === "custom" ? input.recurrenceCustomIntervalDays : null,
+      previousOccurrenceWorkstreamId: input.previousOccurrenceWorkstreamId ?? null,
+      createdById: viewer.id,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    db.workstreams = [...db.workstreams, workstream];
+    syncTeam(id, input.teamUserIds);
+
+    return toWorkstreamWithRelations(workstream);
+  },
+
+  async updateWorkstream(viewer, id, input) {
+    const existing = db.workstreams.find((e) => e.id === id);
+    if (!existing) throw new Error("Workstream not found.");
+    requireManage(viewer, existing);
+    if (!canAccessCompany(viewer, input.companyId, db.users)) {
+      throw new Error("You don't have access to that company.");
+    }
+
+    const updated: Workstream = {
+      ...existing,
+      name: input.name,
+      description: input.description,
+      serviceLineId: input.serviceLineId,
+      leadUserId: input.leadUserId,
+      status: input.status,
+      startDate: input.startDate,
+      endDate: input.endDate,
+      recurrenceFrequency: input.recurrenceFrequency,
+      recurrenceAnchorDate: input.recurrenceFrequency ? input.recurrenceAnchorDate : null,
+      recurrenceCustomIntervalDays: input.recurrenceFrequency === "custom" ? input.recurrenceCustomIntervalDays : null,
+      updatedAt: new Date().toISOString(),
+    };
+
+    db.workstreams = db.workstreams.map((e) => (e.id === id ? updated : e));
+    syncTeam(id, input.teamUserIds);
+
+    return toWorkstreamWithRelations(updated);
+  },
+};

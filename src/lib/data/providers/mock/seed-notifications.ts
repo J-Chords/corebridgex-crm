@@ -1,0 +1,73 @@
+import type { AppNotification } from "../../types";
+
+export const seedNotifications: AppNotification[] = [
+  // Alicia Chen self-added task-3 -> notify her supervisor (Priya) + superadmin (Jordan)
+  {
+    id: "notif-1",
+    recipientId: "user-supervisor-1",
+    type: "self-added-task",
+    message: "Alicia Chen added a new task: \"Social campaign creative review\"",
+    relatedTaskId: "task-3",
+    relatedReportId: null,
+    relatedClientReportId: null,
+    read: true,
+    createdAt: "2026-07-05T09:05:00.000Z",
+  },
+  {
+    id: "notif-2",
+    recipientId: "user-superadmin-1",
+    type: "self-added-task",
+    message: "Alicia Chen added a new task: \"Social campaign creative review\"",
+    relatedTaskId: "task-3",
+    relatedReportId: null,
+    relatedClientReportId: null,
+    read: true,
+    createdAt: "2026-07-05T09:05:00.000Z",
+  },
+  // Sam Torres self-added task-6 -> notify Priya + Jordan
+  {
+    id: "notif-3",
+    recipientId: "user-supervisor-1",
+    type: "self-added-task",
+    message: "Sam Torres added a new task: \"Prepare workstream proposal\"",
+    relatedTaskId: "task-6",
+    relatedReportId: null,
+    relatedClientReportId: null,
+    read: false,
+    createdAt: "2026-07-20T09:05:00.000Z",
+  },
+  {
+    id: "notif-4",
+    recipientId: "user-superadmin-1",
+    type: "self-added-task",
+    message: "Sam Torres added a new task: \"Prepare workstream proposal\"",
+    relatedTaskId: "task-6",
+    relatedReportId: null,
+    relatedClientReportId: null,
+    read: false,
+    createdAt: "2026-07-20T09:05:00.000Z",
+  },
+  // Dana Osei self-added task-9 -> notify Marcus + Jordan
+  {
+    id: "notif-5",
+    recipientId: "user-supervisor-2",
+    type: "self-added-task",
+    message: "Dana Osei added a new task: \"Reactivation outreach call\"",
+    relatedTaskId: "task-9",
+    relatedReportId: null,
+    relatedClientReportId: null,
+    read: false,
+    createdAt: "2026-07-08T09:05:00.000Z",
+  },
+  {
+    id: "notif-6",
+    recipientId: "user-superadmin-1",
+    type: "self-added-task",
+    message: "Dana Osei added a new task: \"Reactivation outreach call\"",
+    relatedTaskId: "task-9",
+    relatedReportId: null,
+    relatedClientReportId: null,
+    read: false,
+    createdAt: "2026-07-08T09:05:00.000Z",
+  },
+];

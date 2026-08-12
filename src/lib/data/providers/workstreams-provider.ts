@@ -1,0 +1,53 @@
+import type { Brand, Company, RecurrenceFrequency, Workstream, WorkstreamStatus, ServiceLine, User } from "../types";
+import type { TimeBudget } from "../time-budget";
+import type { WorkstreamRecurrenceInfo } from "../recurrence";
+
+/** Workstream joined with the read-shape screens actually need — not a raw schema row. */
+export interface WorkstreamWithRelations extends Workstream {
+  company: Company;
+  serviceLine: ServiceLine | null;
+  brand: Brand;
+  lead: User;
+  team: User[];
+  taskCount: number;
+  doneTaskCount: number;
+  /** Rounded 0-100, done tasks / total tasks. 0 when the workstream has no tasks yet. */
+  progressPercent: number;
+  /** Computed on every read from this workstream's own time entries — never stored. */
+  budget: TimeBudget;
+  /** Null when not recurring. Computed on every read — never stored. See src/lib/data/recurrence.ts. */
+  recurrence: WorkstreamRecurrenceInfo | null;
+}
+
+export interface WorkstreamInput {
+  name: string;
+  description: string | null;
+  companyId: string;
+  serviceLineId: string | null;
+  leadUserId: string;
+  teamUserIds: string[];
+  status: WorkstreamStatus;
+  startDate: string | null;
+  endDate: string | null;
+  recurrenceFrequency: RecurrenceFrequency | null;
+  recurrenceAnchorDate: string | null;
+  recurrenceCustomIntervalDays: number | null;
+  /**
+   * Only used by "Generate next occurrence" — records which workstream this one continues from.
+   * Ignored on update (a workstream's place in its recurrence chain never changes after creation).
+   */
+  previousOccurrenceWorkstreamId?: string | null;
+}
+
+/**
+ * Contract every provider (mock, Supabase, future AWS) must implement.
+ * Every method takes the requesting `viewer` and enforces the workstream
+ * visibility gate (src/lib/data/permissions.ts) itself, so screens never
+ * need to re-derive who's allowed to see or manage what.
+ */
+export interface WorkstreamsProvider {
+  listWorkstreams(viewer: User, filters?: { companyId?: string }): Promise<WorkstreamWithRelations[]>;
+  getWorkstream(viewer: User, id: string): Promise<WorkstreamWithRelations | null>;
+  createWorkstream(viewer: User, input: WorkstreamInput): Promise<WorkstreamWithRelations>;
+  updateWorkstream(viewer: User, id: string, input: WorkstreamInput): Promise<WorkstreamWithRelations>;
+}

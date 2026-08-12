@@ -1,5 +1,6 @@
 import type { AuthProvider } from "../auth-provider";
-import { seedUsers } from "./seed-users";
+import { canEditOwnProfile } from "../../permissions";
+import { db } from "./mock-db";
 
 const SESSION_KEY = "corebridge-mock-session-user-id";
 
@@ -19,14 +20,14 @@ export const mockAuthProvider: AuthProvider = {
   async getCurrentUser() {
     const id = readSessionUserId();
     if (!id) return null;
-    return seedUsers.find((u) => u.id === id) ?? null;
+    return db.users.find((u) => u.id === id) ?? null;
   },
 
   async login(email, password) {
     if (!password) {
       throw new Error("Password is required.");
     }
-    const user = seedUsers.find(
+    const user = db.users.find(
       (u) => u.email.toLowerCase() === email.trim().toLowerCase()
     );
     if (!user) {
@@ -42,5 +43,23 @@ export const mockAuthProvider: AuthProvider = {
   async logout() {
     if (typeof window === "undefined") return;
     window.localStorage.removeItem(SESSION_KEY);
+  },
+
+  async updateProfile(viewer, input) {
+    if (!canEditOwnProfile(viewer)) {
+      throw new Error("Only a superadmin can edit profile details.");
+    }
+    const fullName = input.fullName.trim();
+    const email = input.email.trim();
+    if (!fullName) throw new Error("Name can't be empty.");
+    if (!email) throw new Error("Email can't be empty.");
+    const emailTaken = db.users.some(
+      (u) => u.id !== viewer.id && u.email.toLowerCase() === email.toLowerCase()
+    );
+    if (emailTaken) throw new Error("Another account already uses that email.");
+
+    const updated = { ...viewer, fullName, email };
+    db.users = db.users.map((u) => (u.id === viewer.id ? updated : u));
+    return updated;
   },
 };

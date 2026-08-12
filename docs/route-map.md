@@ -1,0 +1,29 @@
+# Route Map
+
+Planned routes across all phases, so a fresh session knows the intended structure without guessing. `✅ built` / `🚧 planned`. All authenticated routes live under `/dashboard` because `src/app/dashboard/layout.tsx` is the auth-guarded shell (sidebar + topbar) — anything nested under it inherits that guard for free.
+
+| Route | Status | Notes |
+|---|---|---|
+| `/login` | ✅ built | Invite-only sign-in. Redirects to `/dashboard` on success. |
+| `/dashboard` | ✅ built | Role-conditional: renders `EmployeeDashboard` / `SupervisorDashboard` / `SuperadminDashboard` based on the signed-in user's role. |
+| `/dashboard/companies` | ✅ built (Phase 1a) | Companies list — searchable, filter by status/brand. Scoped by the company visibility gate. |
+| `/dashboard/companies/[id]` | ✅ built (Phase 1a) | Company detail: status, brand, service lines, primary contact, contract/renewal dates, assigned staff, client contacts. |
+| `/dashboard/companies/[id]` (edit) | ✅ built (Phase 1a) | Edit is a modal opened from the detail page, not a separate route. Create is a modal opened from the list page. Supervisor + superadmin only. |
+| `/dashboard/tasks` | ✅ built (Phase 1b) | Org/team task list (supervisor+). Searchable, filter by company/status/priority/assignee. |
+| `/dashboard/my-day` | ✅ built (Phase 1d) | Every role's own assigned tasks, grouped (Overdue/Due Today/etc.), searchable/filterable, time logged today, running timer (Pause/Resume added Phase 3.32). |
+| `/dashboard/companies/[id]` (tasks section) | ✅ built (Phase 1b) | Tasks tied to a company, surfaced on the company detail page. |
+| `/dashboard/workstreams/[id]` | ✅ built (Phase 2.0) | Workstream detail: company/service line/brand, status, dates, expected hours, derived progress, lead + team, its own task list, time-vs-budget (Phase 3.18), recurrence cadence + "Generate next occurrence" (Phase 3.19). Reached via the company detail page's Workstreams card, or the Workstream column on the tasks list. |
+| `/dashboard/notifications` | ✅ built (Phase 1d) | Ended up as the "Recent notifications" card on My Day plus a topbar bell, not its own route — full read/unread with mark-one/mark-all-read. |
+| `/dashboard/templates` | 🚧 Phase 2 | No standalone route yet. Phase 2.1 shipped a seeded template library + "Apply template" action (modal, opened from a company detail page) — an in-app template management/create/edit page is still Phase 2. |
+| `/dashboard/reports` | ✅ built (Phase 2.3) | Accomplishments Report list + "Generate report" dialog (person/client, Today/This week/Custom range). Full attribution — this is the "internal reports" concept from the original plan, built as a specific auto-drafted checklist rather than a generic report. |
+| `/dashboard/reports/[id]` | ✅ built (Phase 2.3) | The editable department→activity checklist for one report — brand sections mirroring the Sparing form's structure, tick/detail editing while draft, Finalize, CSV + print/PDF export. |
+| `/dashboard/reports/client` | ✅ built (Phase 3.25) | Client Reports list (role-scoped My/Team's/All sections, "Generate client report" dialog: client + Today/This week/Custom range). Name-free, client-facing — a separate `ClientReport` type/provider, not blended with the Accomplishments Report above. Supervisor/superadmin only. Reached via an "Accomplishments / Client Reports" tab pair at the top of both report pages, not a new sidebar item. |
+| `/dashboard/reports/client/[id]` | ✅ built (Phase 3.25) | The editable department→activity→line-item view — ACAS-styled KPI band + rail + department tables, "+ Add section," Save/Finalize/Reopen/Delete, CSV + print/PDF export. Reviewer comments and the integrity history log are staff-only and explicitly excluded from print. |
+| `/dashboard/reports/client/trash` | ✅ built (Phase 3.25) | Soft-deleted client reports — Restore / confirmed permanent delete, same 30-day display estimate as the internal report's trash. |
+| `/dashboard/team-updates` | ✅ built (Phase 3.24) | Read-only, browsable-by-person-and-date view of a team's Daily Updates — a roster (avatar/name/role/status chip) plus a date stepper drive a detail pane showing the selected person's entries for that date. Supervisor sees their direct reports plus themselves; superadmin sees everyone plus themselves; employees have no access (their own update lives on My Day only). Gated by `canViewTeamUpdatesPage`, sidebar entry sits right after Reports. |
+| `/dashboard/team-time` | ✅ built (Phase 3.32) | Structural twin of Team Updates for logged time: a roster (avatar/name/role, that day's total + running/paused status dot) plus a date stepper drive a detail pane listing the selected person's time entries (task, Running…/Paused badge, billable badge, time range, notes) for that date. Same visibility as Team Updates — supervisor sees direct reports + self, superadmin sees everyone, employees have no access. Gated by `canViewTeamTimePage`, sidebar entry sits right after Team Updates. |
+| `/dashboard/settings` | ✅ built (Phase 3.20) | Profile (name/email, real; change-password UI, inert pending real auth), Appearance (Light/Dark/System), Notifications (per-type feed preferences, localStorage), Workspace (superadmin only — real brand/service-line/staff counts, no dead links), About. Side-nav sections, local component state, reached from the sidebar's Home/Help/Settings bottom section on every page. |
+| `/dashboard/admin/users` | 🚧 Phase 2/3 | Superadmin: manage/invite accounts. Referenced (not linked) from Settings → Workspace today. |
+| `/dashboard/admin/org` | 🚧 Phase 3 | Cross-client dashboard, capacity/workload view, stalled-client alerts, multi-brand reporting. |
+
+Not planned: any client-facing or public route. Client Contacts never log in, so there is no portal, no magic-link, no client-visible URL of any kind.

@@ -10,6 +10,7 @@ import {
 } from "react";
 import type { ReactNode } from "react";
 import { authProvider } from "@/lib/data/providers";
+import type { ProfileInput } from "@/lib/data/providers/auth-provider";
 import type { User } from "@/lib/data/types";
 
 interface AuthContextValue {
@@ -18,6 +19,7 @@ interface AuthContextValue {
   isLoading: boolean;
   login: (email: string, password: string) => Promise<User>;
   logout: () => Promise<void>;
+  updateProfile: (input: ProfileInput) => Promise<User>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -44,9 +46,19 @@ export function AuthProviderRoot({ children }: { children: ReactNode }) {
     setUser(null);
   }, []);
 
+  const updateProfile = useCallback(
+    async (input: ProfileInput) => {
+      if (!user) throw new Error("Not signed in.");
+      const updated = await authProvider.updateProfile(user, input);
+      setUser(updated);
+      return updated;
+    },
+    [user]
+  );
+
   const value = useMemo(
-    () => ({ user, isLoading, login, logout }),
-    [user, isLoading, login, logout]
+    () => ({ user, isLoading, login, logout, updateProfile }),
+    [user, isLoading, login, logout, updateProfile]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

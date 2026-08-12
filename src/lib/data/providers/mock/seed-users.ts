@@ -18,7 +18,7 @@ export const seedUsers: User[] = [
     role: "supervisor",
     active: true,
     supervisorId: null,
-    assignedCompanyIds: [],
+    assignedCompanyIds: ["company-1", "company-3"],
     createdAt: "2025-01-13T09:00:00.000Z",
   },
   {
@@ -28,7 +28,7 @@ export const seedUsers: User[] = [
     role: "supervisor",
     active: true,
     supervisorId: null,
-    assignedCompanyIds: [],
+    assignedCompanyIds: ["company-5", "company-7"],
     createdAt: "2025-01-13T09:00:00.000Z",
   },
   {
@@ -38,7 +38,7 @@ export const seedUsers: User[] = [
     role: "employee",
     active: true,
     supervisorId: "user-supervisor-1",
-    assignedCompanyIds: [],
+    assignedCompanyIds: ["company-1", "company-2"],
     createdAt: "2025-02-03T09:00:00.000Z",
   },
   {
@@ -48,7 +48,7 @@ export const seedUsers: User[] = [
     role: "employee",
     active: true,
     supervisorId: "user-supervisor-1",
-    assignedCompanyIds: [],
+    assignedCompanyIds: ["company-3", "company-4"],
     createdAt: "2025-02-10T09:00:00.000Z",
   },
   {
@@ -58,7 +58,7 @@ export const seedUsers: User[] = [
     role: "employee",
     active: true,
     supervisorId: "user-supervisor-2",
-    assignedCompanyIds: [],
+    assignedCompanyIds: ["company-5", "company-6"],
     createdAt: "2025-02-10T09:00:00.000Z",
   },
   {
@@ -68,7 +68,7 @@ export const seedUsers: User[] = [
     role: "employee",
     active: true,
     supervisorId: "user-supervisor-2",
-    assignedCompanyIds: [],
+    assignedCompanyIds: ["company-7", "company-8"],
     createdAt: "2025-03-01T09:00:00.000Z",
   },
 ];

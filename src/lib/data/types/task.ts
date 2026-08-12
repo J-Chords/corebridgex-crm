@@ -7,19 +7,28 @@ export type TaskStatus =
 
 export type TaskPriority = "low" | "medium" | "high" | "urgent";
 
+/** How the tasks list view clusters an already-filtered list — orthogonal to filtering, never narrows which tasks show. */
+export type TaskGroupBy = "none" | "company" | "activity" | "workstream" | "status" | "assignee";
+
 export interface Task {
   id: string;
   title: string;
   description: string;
   companyId: string;
+  /** Every task belongs to a workstream; companyId above is a denormalized copy of workstream.companyId, synced by the provider — never independently editable. */
+  workstreamId: string;
   status: TaskStatus;
   priority: TaskPriority;
   dueDate: string | null;
+  /** Normalized to minutes regardless of which unit (minutes/hours/days) it was entered in — see `src/lib/data/expected-time.ts`. For later profitability reporting. Set automatically from the template when created via "Apply template"; editable directly otherwise. */
+  expectedMinutes: number | null;
   createdById: string;
   /** True if created via employee self-add (goes live immediately, no approval). */
   selfAdded: boolean;
   templateId: string | null;
   relatedContactId: string | null;
+  /** Optional tag into the brand's Activity Catalog — never required, work is never blocked for lack of one. */
+  activityId: string | null;
   recurrenceRule: string | null;
   /** Who last changed `status`, and when — feeds the "who did what, by whom" report (Phase 2). */
   statusChangedById: string | null;

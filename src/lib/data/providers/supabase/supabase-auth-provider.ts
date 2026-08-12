@@ -16,4 +16,7 @@ export const supabaseAuthProvider: AuthProvider = {
   async logout() {
     throw new Error("supabaseAuthProvider is not implemented yet — use the mock provider.");
   },
+  async updateProfile() {
+    throw new Error("supabaseAuthProvider is not implemented yet — use the mock provider.");
+  },
 };
