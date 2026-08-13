@@ -20,7 +20,7 @@ import { seedDepartments } from "./seed-departments";
 import { seedActivities } from "./seed-activities";
 import { seedAccomplishmentsReports } from "./seed-accomplishments-reports";
 import { seedSavedViews } from "./seed-saved-views";
-import type { ClientReport, DailyUpdate } from "../../types";
+import type { ClientReport, DailyUpdate, TimeEntryCorrection } from "../../types";
 
 /**
  * Single in-memory mock "database", shared by every mock provider so a
@@ -43,6 +43,8 @@ export const db = {
   checklistItems: [...seedChecklistItems],
   notifications: [...seedNotifications],
   timeEntries: [...seedTimeEntries],
+  // No seed rows — corrections only ever come from a real Supervisor/Superadmin action taken in-app.
+  timeEntryCorrections: [] as TimeEntryCorrection[],
   notes: [...seedNotes],
   templates: [...seedTemplates],
   templateTasks: [...seedTemplateTasks],

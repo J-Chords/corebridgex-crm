@@ -17,6 +17,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
 import { BudgetBar } from "@/components/ui/budget-bar";
 import { ManualTimeEntryDialog } from "@/components/tasks/manual-time-entry-dialog";
+import { TimeEntryCorrectionInfo } from "@/components/time-entries/time-entry-correction-info";
 
 function initials(fullName: string) {
   return fullName
@@ -232,6 +233,7 @@ export function TaskTimeTracking({ taskId, companyId, assigneeIds, expectedMinut
                     {formatEntryWhen(entry.startTime, entry.endTime)}
                   </span>
                   {entry.notes && <p className="mt-1 text-sm text-foreground">{entry.notes}</p>}
+                  <TimeEntryCorrectionInfo timeEntryId={entry.id} correctionCount={entry.correctionCount} />
                 </div>
               </div>
             </li>

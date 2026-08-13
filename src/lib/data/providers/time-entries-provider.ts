@@ -1,16 +1,31 @@
-import type { TimeEntry, User } from "../types";
+import type { TimeEntry, TimeEntryCorrection, User } from "../types";
+
+/** The task context a time entry belongs to, enriched with enough of the task's own numbers for a
+ * review signal — `expectedMinutes` is the task's own estimate (not the entry's), `actualMinutes` is
+ * the task's cumulative completed-entry total across every assignee, both computed on read. */
+interface TimeEntryTaskContext {
+  id: string;
+  title: string;
+  companyId: string;
+  expectedMinutes: number | null;
+  actualMinutes: number;
+}
 
 export interface TimeEntryWithUser extends TimeEntry {
   user: User;
+  /** How many correction records exist for this entry — 0 means never corrected. Computed on read; fetch `listCorrectionsForTimeEntry` for the full chronological detail once this is > 0. */
+  correctionCount: number;
 }
 
 export interface TimeEntryWithTask extends TimeEntry {
-  task: { id: string; title: string; companyId: string };
+  correctionCount: number;
+  task: TimeEntryTaskContext;
 }
 
 export interface TimeEntryWithUserAndTask extends TimeEntry {
   user: User;
-  task: { id: string; title: string; companyId: string };
+  correctionCount: number;
+  task: TimeEntryTaskContext;
 }
 
 export interface ManualTimeEntryInput {
@@ -50,4 +65,18 @@ export interface TimeEntriesProvider {
     taskId: string,
     input: ManualTimeEntryInput
   ): Promise<TimeEntryWithUser>;
+  /**
+   * Supervisor/Superadmin-only correction of another person's *completed* entry — never their own,
+   * never a still-running one (see `canCorrectTimeEntry`). Appends an immutable `TimeEntryCorrection`
+   * record, then updates the entry's own `durationMinutes` to the corrected value in place, so every
+   * existing total/rollup that already reads `durationMinutes` reflects the correction automatically.
+   */
+  correctTimeEntry(
+    viewer: User,
+    timeEntryId: string,
+    correctedDurationMinutes: number,
+    reason: string
+  ): Promise<TimeEntryWithUser>;
+  /** Full correction history for one entry, oldest first — visible to anyone who can already view the entry itself (see `canViewTimeForUser`), not gated by who could have *made* the correction. */
+  listCorrectionsForTimeEntry(viewer: User, timeEntryId: string): Promise<TimeEntryCorrection[]>;
 }

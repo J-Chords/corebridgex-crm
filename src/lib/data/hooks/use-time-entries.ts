@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth/auth-context";
 import { timeEntriesProvider } from "@/lib/data/providers";
 import type { TimeEntryWithTask, TimeEntryWithUser, TimeEntryWithUserAndTask } from "@/lib/data/providers/time-entries-provider";
+import type { TimeEntryCorrection } from "@/lib/data/types";
 
 export function useTaskTimeEntries(taskId: string) {
   const { user } = useAuth();
@@ -112,4 +113,29 @@ export function useTimeEntriesForDate(date: string) {
   }, [refresh]);
 
   return { entries, isLoading, refresh };
+}
+
+/** One entry's full correction history, oldest first — pass `null` (e.g. while a "Corrected" disclosure is still collapsed) to skip the fetch entirely. */
+export function useTimeEntryCorrections(timeEntryId: string | null) {
+  const { user } = useAuth();
+  const [corrections, setCorrections] = useState<TimeEntryCorrection[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+
+  const refresh = useCallback(async () => {
+    if (!user || !timeEntryId) {
+      setCorrections([]);
+      return;
+    }
+    setIsLoading(true);
+    const result = await timeEntriesProvider.listCorrectionsForTimeEntry(user, timeEntryId);
+    setCorrections(result);
+    setIsLoading(false);
+  }, [user, timeEntryId]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    refresh();
+  }, [refresh]);
+
+  return { corrections, isLoading, refresh };
 }

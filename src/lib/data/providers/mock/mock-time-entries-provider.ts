@@ -5,8 +5,8 @@ import type {
   TimeEntryWithUser,
   TimeEntryWithUserAndTask,
 } from "../time-entries-provider";
-import type { TimeEntry, User } from "../../types";
-import { canAccessTask, canLogTime, canViewTimeForUser } from "../../permissions";
+import type { TimeEntry, TimeEntryCorrection, User } from "../../types";
+import { canAccessTask, canCorrectTimeEntry, canLogTime, canViewTimeForUser } from "../../permissions";
 import { INTERNAL_COMPANY_ID } from "../../constants";
 import { db } from "./mock-db";
 
@@ -14,12 +14,24 @@ function taskAssigneeIds(taskId: string): string[] {
   return db.taskAssignees.filter((ta) => ta.taskId === taskId).map((ta) => ta.userId);
 }
 
+/** How many correction records exist for one entry — the cheap "should I show a Corrected badge" signal; the full chain is fetched separately, on demand, via `listCorrectionsForTimeEntry`. */
+function correctionCountFor(timeEntryId: string): number {
+  return db.timeEntryCorrections.filter((c) => c.timeEntryId === timeEntryId).length;
+}
+
+/** A task's own cumulative logged total — every completed entry across every assignee, already reflecting any corrections since those mutate `durationMinutes` in place. Mirrors `workstreamHours`'s "only completed entries count" rule in `mock-workstreams-provider.ts`. */
+function taskActualMinutes(taskId: string): number {
+  return db.timeEntries
+    .filter((te) => te.taskId === taskId && te.durationMinutes !== null)
+    .reduce((sum, te) => sum + (te.durationMinutes ?? 0), 0);
+}
+
 function toTimeEntryWithUser(entry: TimeEntry): TimeEntryWithUser {
   const user = db.users.find((u) => u.id === entry.userId);
   if (!user) {
     throw new Error(`Time entry ${entry.id} references unknown user ${entry.userId}`);
   }
-  return { ...entry, user };
+  return { ...entry, user, correctionCount: correctionCountFor(entry.id) };
 }
 
 function toTimeEntryWithTask(entry: TimeEntry): TimeEntryWithTask {
@@ -27,7 +39,17 @@ function toTimeEntryWithTask(entry: TimeEntry): TimeEntryWithTask {
   if (!task) {
     throw new Error(`Time entry ${entry.id} references unknown task ${entry.taskId}`);
   }
-  return { ...entry, task: { id: task.id, title: task.title, companyId: task.companyId } };
+  return {
+    ...entry,
+    correctionCount: correctionCountFor(entry.id),
+    task: {
+      id: task.id,
+      title: task.title,
+      companyId: task.companyId,
+      expectedMinutes: task.expectedMinutes,
+      actualMinutes: taskActualMinutes(task.id),
+    },
+  };
 }
 
 function toTimeEntryWithUserAndTask(entry: TimeEntry): TimeEntryWithUserAndTask {
@@ -200,5 +222,57 @@ export const mockTimeEntriesProvider: TimeEntriesProvider = {
     };
     db.timeEntries = [...db.timeEntries, entry];
     return toTimeEntryWithUser(entry);
+  },
+
+  async correctTimeEntry(viewer, timeEntryId, correctedDurationMinutes, reason) {
+    const entry = db.timeEntries.find((te) => te.id === timeEntryId);
+    if (!entry) throw new Error("Time entry not found.");
+    // Permission is checked before the running-timer check (rather than after) so an unauthorized
+    // caller learns nothing about the entry's state — just that they can't touch it.
+    if (!canCorrectTimeEntry(viewer, entry.userId, db.users)) {
+      throw new Error("You don't have permission to correct this time entry.");
+    }
+    if (entry.durationMinutes === null) {
+      throw new Error("A running time entry can't be corrected — stop or pause it first.");
+    }
+    const roundedCorrection = Math.round(correctedDurationMinutes);
+    if (!Number.isFinite(roundedCorrection) || roundedCorrection <= 0) {
+      throw new Error("Corrected duration must be greater than zero.");
+    }
+    const trimmedReason = reason.trim();
+    if (trimmedReason.length === 0) {
+      throw new Error("A reason is required.");
+    }
+
+    // previousDurationMinutes is the entry's *current* value, not necessarily its original one — a
+    // second correction of an already-corrected entry chains from here, so the full sequence
+    // reconstructs correctly even though the entry itself only ever holds the latest value.
+    const correction: TimeEntryCorrection = {
+      id: crypto.randomUUID(),
+      timeEntryId,
+      employeeUserId: entry.userId,
+      previousDurationMinutes: entry.durationMinutes,
+      correctedDurationMinutes: roundedCorrection,
+      reason: trimmedReason,
+      correctedById: viewer.id,
+      correctedByName: viewer.fullName,
+      correctedAt: new Date().toISOString(),
+    };
+    db.timeEntryCorrections = [...db.timeEntryCorrections, correction];
+
+    const updated: TimeEntry = { ...entry, durationMinutes: roundedCorrection };
+    db.timeEntries = db.timeEntries.map((te) => (te.id === timeEntryId ? updated : te));
+
+    return toTimeEntryWithUser(updated);
+  },
+
+  async listCorrectionsForTimeEntry(viewer, timeEntryId) {
+    const entry = db.timeEntries.find((te) => te.id === timeEntryId);
+    if (!entry) return [];
+    if (!canViewTimeForUser(viewer, entry.userId, db.users)) return [];
+
+    return db.timeEntryCorrections
+      .filter((c) => c.timeEntryId === timeEntryId)
+      .sort((a, b) => (a.correctedAt < b.correctedAt ? -1 : 1));
   },
 };

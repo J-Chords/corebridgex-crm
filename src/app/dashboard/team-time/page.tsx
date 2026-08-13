@@ -19,7 +19,7 @@ export default function TeamTimePage() {
   const { assignableStaff, isLoading: staffLoading } = useCompanyLookups();
   const [date, setDate] = useState(todayDateString());
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
-  const { entries, isLoading: entriesLoading } = useTimeEntriesForDate(date);
+  const { entries, isLoading: entriesLoading, refresh: refreshEntries } = useTimeEntriesForDate(date);
 
   if (!user) return null;
 
@@ -92,6 +92,8 @@ export default function TeamTimePage() {
           key={activeUserId}
           person={activePerson}
           entries={activeEntries}
+          viewerId={user.id}
+          onChanged={refreshEntries}
           className={STAGGER_ITEM_CLASS}
           style={staggerDelay(1)}
         />

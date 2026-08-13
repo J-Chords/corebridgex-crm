@@ -15,3 +15,26 @@ export interface TimeEntry {
   /** Set only on an entry created by Resume — points at the task's own last paused entry, chaining a "working session" across pause boundaries so elapsed time displays continuously. Null for a fresh Start or a manual entry. */
   continuesFromEntryId: string | null;
 }
+
+/**
+ * One append-only record of a Supervisor/Superadmin correcting another person's completed
+ * `TimeEntry` — never edited or deleted, so a second correction of the same entry adds a new row
+ * rather than overwriting this one. `previousDurationMinutes` is whatever the entry's own
+ * `durationMinutes` was at the moment of *this* correction, not necessarily the entry's original
+ * value — chaining several corrections in order reconstructs the full history even though the
+ * entry itself only ever holds the current, corrected duration. Naming mirrors
+ * `AccomplishmentsReportHistoryEvent`'s `actorId`/`actorName`/`createdAt` snapshot convention.
+ */
+export interface TimeEntryCorrection {
+  id: string;
+  timeEntryId: string;
+  /** Snapshotted from the entry's own `userId` — makes a correction record self-describing without a join. */
+  employeeUserId: string;
+  previousDurationMinutes: number;
+  correctedDurationMinutes: number;
+  reason: string;
+  correctedById: string;
+  /** Snapshotted display name. */
+  correctedByName: string;
+  correctedAt: string;
+}

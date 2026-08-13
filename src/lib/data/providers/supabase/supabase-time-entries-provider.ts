@@ -16,4 +16,6 @@ export const supabaseTimeEntriesProvider: TimeEntriesProvider = {
   pauseTimer: notImplemented,
   resumeTimer: notImplemented,
   createManualEntry: notImplemented,
+  correctTimeEntry: notImplemented,
+  listCorrectionsForTimeEntry: notImplemented,
 };

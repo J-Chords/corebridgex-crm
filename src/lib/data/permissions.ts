@@ -128,9 +128,17 @@ export function canProgressTask(viewer: User, task: { assigneeIds: string[] }): 
   return canManageTasks(viewer) || task.assigneeIds.includes(viewer.id);
 }
 
-/** Logging time against a task — same rule as progressing it, named for readability at time-entry call sites. */
+/**
+ * Logging your OWN time (start/pause/resume/stop a timer, add a manual entry) — deliberately
+ * narrower than `canProgressTask`, and no longer an alias of it. Being able to manage/progress a
+ * task (status changes, checklist ticks, correcting *someone else's* completed time) never by
+ * itself grants permission to log personal time against it — a Supervisor or Superadmin who isn't
+ * an explicit assignee has no time of their own to log there; add them as an assignee if they
+ * genuinely do the work. Applies identically to every role, including Employee (who this rule
+ * doesn't change, since an employee's own tasks always include them as an assignee already).
+ */
 export function canLogTime(viewer: User, task: { assigneeIds: string[] }): boolean {
-  return canProgressTask(viewer, task);
+  return task.assigneeIds.includes(viewer.id);
 }
 
 /** Creating a handoff — same rule as viewing the task itself, named for readability at handoff call sites. */
@@ -346,6 +354,22 @@ export function canViewTimeForUser(viewer: User, targetUserId: string, allUsers:
 /** Gates the "Team Time" nav item/page itself — same reasoning as `canViewTeamUpdatesPage`: nothing for an employee to browse (no one "below" them), and their own time already lives on My Day. */
 export function canViewTeamTimePage(user: User): boolean {
   return isSupervisor(user) || isSuperadmin(user);
+}
+
+/**
+ * Correcting a completed time entry — deliberately narrower than `canViewTimeForUser`: viewing your
+ * own time is always fine, but *correcting* is a second-party check, never self-service, for anyone,
+ * including a superadmin. An employee can never correct a time entry, including their own, in this
+ * phase — a correction is Supervisor/Superadmin oversight of someone else's record, not a
+ * self-service edit. Deliberately built from `managesUser` rather than `canManageTasks` so a
+ * supervisor is scoped to their own direct reports only, never every supervisor's team.
+ */
+export function canCorrectTimeEntry(viewer: User, targetUserId: string, allUsers: User[]): boolean {
+  if (isEmployee(viewer)) return false;
+  if (viewer.id === targetUserId) return false;
+  if (isSuperadmin(viewer)) return true;
+  const target = allUsers.find((u) => u.id === targetUserId);
+  return !!target && managesUser(viewer, target);
 }
 
 /** Workstream create/edit is restricted to supervisor + superadmin — same as companies, no employee self-service. */
