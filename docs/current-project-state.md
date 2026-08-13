@@ -182,6 +182,12 @@ Approved as the Supabase equivalent of the mock's `INTERNAL_COMPANY_ID` string s
 
 **Supabase Foundation B — Hosted Seed + First Auth/Profile Verification: COMPLETE.** Remote schema/seed verified, `handle_new_user()` verified, first-superadmin bootstrap verified (see above). One development Superadmin exists on the hosted project; no Supervisor/Employee test users yet. The app still runs entirely on mock — `NEXT_PUBLIC_DATA_PROVIDER=mock`, no provider talks to Supabase yet.
 
+**Supabase Foundation C — Explicit Grants + Function Execution Hardening: COMPLETE.** An audit of the hosted project found that Supabase's platform-level default ACLs (`pg_default_acl`, for role `postgres` in schema `public`) had been auto-granting every new table/function/sequence full privileges to `anon`/`authenticated`/`service_role` — broader than any migration's own `GRANT` statements intended (GRANT is additive, it never replaces a pre-existing broader default). One new migration (`20260813162744_harden_public_grants.sql`, applied on top of the existing Foundation A set — none of those four files were modified) now establishes an explicit least-privilege model:
+- Table privileges are now exact per the real provider contracts: `anon` has zero privileges on any of the 7 public tables; `authenticated` gets only what current providers actually use (e.g. `profiles` is SELECT + column-scoped UPDATE on `full_name`/`email` only — `role`/`supervisor_id`/`active` stay unreachable by ordinary UPDATE; `companies`/`client_contacts` get no DELETE, since neither provider has a delete path; `company_service_lines`/`user_companies` get no UPDATE, since both are always fully replaced rather than row-edited); `service_role` gets ordinary CRUD only. No role retains TRUNCATE/REFERENCES/TRIGGER on any table.
+- Function EXECUTE is now explicit: `PUBLIC`/`anon` have none of the 9 application functions; `authenticated`/`service_role` can call the 5 RLS helpers + 3 admin RPCs only (the admin RPCs keep their own internal `is_superadmin()` check — EXECUTE privilege was never the authorization boundary); `handle_new_user()` is not directly callable by any role and remains attached to the `on_auth_user_created` trigger on `auth.users` unchanged (trigger firing doesn't require the triggering role to hold EXECUTE on the trigger function).
+- `ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public` now excludes `anon`/`authenticated`/`service_role` from future tables/functions/sequences — a future migration must GRANT explicitly rather than inheriting broad access automatically. (Supabase's own `supabase_admin` role default ACL is untouched — out of scope, platform-managed.)
+- No data was touched, no RLS policy was changed (all 13 pre-existing policies remain, same names/commands), RLS remains enabled on all 7 tables. Provider remains mock throughout; not committed to git as of this writing — pending user review.
+
 **Next: Supabase Auth + Companies — first real vertical slice** (implementing `supabaseAuthProvider`/`supabaseCompaniesProvider` for real) — not started, do not begin without explicit instruction.
 
 ## Next roadmap
@@ -190,13 +196,14 @@ Approved as the Supabase equivalent of the mock's `INTERNAL_COMPANY_ID` string s
 2. ~~Supabase Foundation A (local scaffolding + Auth/Companies migration set)~~ — done, reviewed, checkpointed.
 3. ~~Connect to the hosted `corebridgex-crm` project, apply the migration set + test seed~~ — done, verified.
 4. ~~Create the first development Auth user, verify `handle_new_user()`, run the first-superadmin bootstrap SQL~~ — done, verified. One development Superadmin exists.
-5. **Supabase Auth + Companies — first real vertical slice** (implement `supabaseAuthProvider`/`supabaseCompaniesProvider` for real) — next, not started. Supervisor/Employee test users get created through this real path once it exists, not more Dashboard SQL.
-6. Continue with Workstreams/Activity Catalog, then Tasks/Time, then Notes/Notifications/Handoffs, then Reports/Daily Updates/Templates/Saved Views — see the audit for the full dependency-ordered plan.
-7. Real Auth/Postgres/RLS migration completes in controlled slices — not a single big-bang cutover.
-8. Sub-tasks — one nesting level (real child Task: own status/assignee/time/checklist). `tasks.parent_task_id` will be reserved (nullable, unused) in the Tasks migration when reached.
-9. Client long-lived/forever note + Client activity/history/reporting.
-10. Batch Task creation from multiple Activities at once (workflow improvement, not a data-model change).
-11. Attendance/clock-in/geolocation — future only, not scoped now.
+5. ~~Supabase Foundation C — explicit least-privilege table/function grants + safer default privileges for future objects~~ — done, verified read-only against the actual effective privileges (not just the migration text).
+6. **Supabase Auth + Companies — first real vertical slice** (implement `supabaseAuthProvider`/`supabaseCompaniesProvider` for real) — next, not started. Supervisor/Employee test users get created through this real path once it exists, not more Dashboard SQL.
+7. Continue with Workstreams/Activity Catalog, then Tasks/Time, then Notes/Notifications/Handoffs, then Reports/Daily Updates/Templates/Saved Views — see the audit for the full dependency-ordered plan.
+8. Real Auth/Postgres/RLS migration completes in controlled slices — not a single big-bang cutover.
+9. Sub-tasks — one nesting level (real child Task: own status/assignee/time/checklist). `tasks.parent_task_id` will be reserved (nullable, unused) in the Tasks migration when reached.
+10. Client long-lived/forever note + Client activity/history/reporting.
+11. Batch Task creation from multiple Activities at once (workflow improvement, not a data-model change).
+12. Attendance/clock-in/geolocation — future only, not scoped now.
 
 ## Known deferred / do not build now
 
@@ -256,6 +263,6 @@ Read the Current phase and Next roadmap sections before proposing changes.
 ## Last updated
 
 - Date: 2026-08-13
-- Current verified checkpoint: this document is being committed alongside the rest of Foundation B (commit message: "checkpoint: hosted Supabase seed and first superadmin bootstrap") — see `git log -1` for the exact hash; the previous checkpoint was `f1bd0adf58e5cdb319e82660a65852287577ab4d`.
-- Current phase: Supabase Foundation B — Hosted Seed + First Auth/Profile Verification — **COMPLETE**. One development Superadmin verified on hosted `corebridgex-crm`; app still runs entirely on mock.
+- Current verified checkpoint: Foundation C is **not yet committed** — pending user review. The most recent commit remains `244dba8595d3f88e79beb44163105beb03cb5aa1` ("checkpoint: hosted Supabase seed and first superadmin bootstrap"); the previous checkpoint was `f1bd0adf58e5cdb319e82660a65852287577ab4d`.
+- Current phase: Supabase Foundation C — Explicit Grants + Function Execution Hardening — **COMPLETE, awaiting review/commit**. Hosted table/function privileges are now explicit least-privilege, verified read-only post-migration; RLS/policies unchanged; app still runs entirely on mock.
 - Next phase: Supabase Auth + Companies — first real vertical slice (`supabaseAuthProvider`/`supabaseCompaniesProvider`) — not started.
