@@ -79,6 +79,79 @@ function resolveAssigneeIds(viewer: User, requested: string[]): string[] {
   return resolved.length > 0 ? resolved : [viewer.id];
 }
 
+/** Same short labels the task-status UI already uses (`task-status-badge.tsx`'s `STATUS_META`) — duplicated here rather than imported, since a data-layer provider shouldn't reach into a "use client" component file just for five words. */
+const TASK_STATUS_LABELS: Record<TaskStatus, string> = {
+  todo: "To do",
+  "in-progress": "In progress",
+  blocked: "Blocked",
+  "waiting-on-client": "Waiting on client",
+  done: "Done",
+};
+
+/** Notified recipients must actually be able to open the task the notification links to — otherwise the click-through dead-ends on an access-denied page (can happen, e.g., when an assignee's own `assignedCompanyIds` doesn't cover the task's company). */
+function notifiableRecipients(candidateIds: string[], task: Task, currentAssigneeIds: string[]): string[] {
+  return candidateIds.filter((id) => {
+    const recipientUser = db.users.find((u) => u.id === id);
+    return (
+      recipientUser != null &&
+      canAccessTask(recipientUser, { assigneeIds: currentAssigneeIds, companyId: task.companyId }, db.users)
+    );
+  });
+}
+
+/** Only the newly-added assignees get notified — never someone who was already on the task, and never the actor about their own action (mirrors `notifyOfSelfAddedTask` never notifying the self-adder). Called with an empty/no-op diff on every edit that doesn't touch assignees, so it's always safe to call unconditionally. */
+function notifyOfAssignment(task: Task, newlyAssignedIds: string[], actor: User) {
+  const recipients = notifiableRecipients(
+    newlyAssignedIds.filter((id) => id !== actor.id),
+    task,
+    taskAssigneeIds(task.id)
+  );
+  if (recipients.length === 0) return;
+
+  const createdAt = new Date().toISOString();
+  const newNotifications = recipients.map((recipientId) => ({
+    id: crypto.randomUUID(),
+    recipientId,
+    type: "task-assigned" as const,
+    message: `${actor.fullName} assigned you to "${task.title}"`,
+    relatedTaskId: task.id,
+    relatedReportId: null,
+    relatedClientReportId: null,
+    read: false,
+    createdAt,
+  }));
+  db.notifications = [...db.notifications, ...newNotifications];
+}
+
+/**
+ * Kept deliberately restrained, per the product rule: other current assignees (never the actor
+ * about their own change), plus — only when the actor is an employee — their own supervisor, so the
+ * one person actually responsible for that employee's work hears about it. Superadmins are never
+ * added automatically; nothing here turns the notification feed into an audit log. A `Set` naturally
+ * dedupes the rare case where the supervisor is also an assignee.
+ */
+function notifyOfStatusChange(task: Task, newStatus: TaskStatus, actor: User, currentAssigneeIds: string[]) {
+  const candidates = new Set(currentAssigneeIds.filter((id) => id !== actor.id));
+  if (isEmployee(actor) && actor.supervisorId) candidates.add(actor.supervisorId);
+  candidates.delete(actor.id);
+  const recipients = notifiableRecipients(Array.from(candidates), task, currentAssigneeIds);
+  if (recipients.length === 0) return;
+
+  const createdAt = new Date().toISOString();
+  const newNotifications = recipients.map((recipientId) => ({
+    id: crypto.randomUUID(),
+    recipientId,
+    type: "task-status-changed" as const,
+    message: `${actor.fullName} changed "${task.title}" to ${TASK_STATUS_LABELS[newStatus]}`,
+    relatedTaskId: task.id,
+    relatedReportId: null,
+    relatedClientReportId: null,
+    read: false,
+    createdAt,
+  }));
+  db.notifications = [...db.notifications, ...newNotifications];
+}
+
 function notifyOfSelfAddedTask(task: Task, author: User) {
   const recipients = new Set<string>();
   if (author.supervisorId) recipients.add(author.supervisorId);
@@ -182,6 +255,10 @@ export const mockTasksProvider: TasksProvider = {
     ];
     syncChecklistItems(id, input.checklistItems);
 
+    // Every initial assignee is "newly assigned" on create — the actor-exclusion inside
+    // notifyOfAssignment already makes this a no-op for a self-added task, since its sole assignee
+    // is always the creator themselves.
+    notifyOfAssignment(task, assigneeIds, viewer);
     if (selfAdded) notifyOfSelfAddedTask(task, viewer);
 
     return toTaskWithRelations(task);
@@ -197,6 +274,9 @@ export const mockTasksProvider: TasksProvider = {
     if (!workstream) throw new Error("Workstream not found.");
     requireWorkstreamAccess(viewer, workstream);
 
+    // Captured before db.taskAssignees is overwritten below — this is the "before" set the new one
+    // gets diffed against, so already-assigned people never get a redundant notification.
+    const previousAssigneeIds = taskAssigneeIds(id);
     const assigneeIds = resolveAssigneeIds(viewer, input.assigneeIds);
     const statusChanged = input.status !== existing.status;
 
@@ -223,6 +303,10 @@ export const mockTasksProvider: TasksProvider = {
     ];
     syncChecklistItems(id, input.checklistItems);
 
+    const newlyAssignedIds = assigneeIds.filter((uid) => !previousAssigneeIds.includes(uid));
+    notifyOfAssignment(updated, newlyAssignedIds, viewer);
+    if (statusChanged) notifyOfStatusChange(updated, updated.status, viewer, assigneeIds);
+
     return toTaskWithRelations(updated);
   },
 
@@ -243,6 +327,7 @@ export const mockTasksProvider: TasksProvider = {
       updatedAt: new Date().toISOString(),
     };
     db.tasks = db.tasks.map((t) => (t.id === id ? updated : t));
+    if (statusChanged) notifyOfStatusChange(updated, status, viewer, taskAssigneeIds(id));
     return toTaskWithRelations(updated);
   },
 
@@ -294,6 +379,10 @@ export const mockTasksProvider: TasksProvider = {
     }
     if (updatedTask !== task) {
       db.tasks = db.tasks.map((t) => (t.id === taskId ? updatedTask : t));
+      // One call site, gated by the same "did it actually change" check as the two branches above —
+      // this is the only place a checklist toggle can trigger a status change, so there's no second
+      // code path that could double-fire this for the same toggle.
+      notifyOfStatusChange(updatedTask, updatedTask.status, viewer, taskAssigneeIds(taskId));
     }
     return toTaskWithRelations(updatedTask);
   },
