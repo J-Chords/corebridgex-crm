@@ -138,7 +138,7 @@ Correction rules, all provider-enforced:
 - Every `src/lib/data/providers/supabase/*` file exists only as a `notImplemented`/stubbed contract — **none of them have real behavior yet**, including auth.
 - **Current RBAC is enforced in the mock provider layer only.** It is a correct behavioral specification for what real security must do, but it is **not** itself production security — real security requires the equivalent enforcement in Supabase RLS once that backend exists. Do not represent current RBAC as production-ready.
 
-**Existing Supabase project**: the user already has a Supabase free-plan project named **Codebridgex**. Do **not** create another Supabase project when the Supabase phase begins. No credentials, keys, or URLs for it are recorded in this document or should ever be committed to this repository.
+**Existing Supabase project**: the user already has a Supabase organization named **Corebridgex**, containing a project named **corebridgex-crm**. This is the intended remote target — do **not** create another organization or project when the Supabase phase begins. No credentials, keys, or URLs for it are recorded in this document or should ever be committed to this repository.
 
 A prior `initial_workops_schema.sql` reportedly exists from earlier planning and **predates the current role/hierarchy architecture** (Company → Workstream → Task, the flat `supervisorId` model, the current permission functions). It was not found in this repository during this audit — if it's supplied later (e.g. from the Supabase project's own migration history), treat it as historical input to be reconciled against the *current* code, not applied as-is.
 
@@ -151,7 +151,7 @@ A prior `initial_workops_schema.sql` reportedly exists from earlier planning and
 ## Next roadmap
 
 1. Supabase ground-truth/schema reconciliation — map current provider contracts + permission rules to an intended Postgres schema.
-2. Connect provider contracts to the existing **Codebridgex** Supabase project (no new project).
+2. Connect provider contracts to the existing **Corebridgex** organization's **corebridgex-crm** Supabase project (no new organization or project).
 3. Real Auth/Postgres/RLS migration, in controlled slices — not a single big-bang cutover.
 4. Sub-tasks — one nesting level (real child Task: own status/assignee/time/checklist).
 5. Client long-lived/forever note + Client activity/history/reporting.
@@ -178,7 +178,7 @@ A prior `initial_workops_schema.sql` reportedly exists from earlier planning and
 - Do not silently overwrite a corrected time value without preserving audit history.
 - Do not compare one individual TimeEntry against a whole Task's `expectedMinutes` — always cumulative Task actual vs. Task estimate.
 - Do not introduce multiple Workstream/Activity IDs on a single Task (`workstreamIds[]`/`activityIds[]`).
-- Do not create a second Supabase project — reuse **Codebridgex**.
+- Do not create a second Supabase organization or project — reuse the **Corebridgex** organization's **corebridgex-crm** project.
 
 ## Standard development workflow
 
