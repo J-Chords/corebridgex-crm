@@ -134,29 +134,62 @@ Correction rules, all provider-enforced:
 
 ## Current backend status
 
-- The **active** provider today is **mock** (`NEXT_PUBLIC_DATA_PROVIDER=mock` in `.env.local`) — an in-memory dataset, reset to seed data on every full page reload.
-- Every `src/lib/data/providers/supabase/*` file exists only as a `notImplemented`/stubbed contract — **none of them have real behavior yet**, including auth.
+- The **active** provider today is still **mock** (`NEXT_PUBLIC_DATA_PROVIDER=mock` in `.env.local`) — an in-memory dataset, reset to seed data on every full page reload. This has not changed.
+- There are **14 provider groups** in `src/lib/data/providers/` (Auth, Companies, Workstreams, Tasks, TimeEntries, Notes, Notifications, Templates, TaskHandoffs, ActivityCatalog, AccomplishmentsReport, SavedViews, DailyUpdates, ClientReport). Every `src/lib/data/providers/supabase/*` file is still a `notImplemented`/stubbed contract — **none have real behavior yet**. The global switch in `providers/index.ts` (`NEXT_PUBLIC_DATA_PROVIDER === "supabase"`) is unchanged and still gates all 14 at once — no per-provider switching was introduced.
 - **Current RBAC is enforced in the mock provider layer only.** It is a correct behavioral specification for what real security must do, but it is **not** itself production security — real security requires the equivalent enforcement in Supabase RLS once that backend exists. Do not represent current RBAC as production-ready.
 
-**Existing Supabase project**: the user already has a Supabase organization named **Corebridgex**, containing a project named **corebridgex-crm**. This is the intended remote target — do **not** create another organization or project when the Supabase phase begins. No credentials, keys, or URLs for it are recorded in this document or should ever be committed to this repository.
+**Existing Supabase target**: **Corebridgex** organization → **corebridgex-crm** project. This is the intended remote target — do **not** create another organization or project. No credentials, keys, or URLs for it are recorded in this document or should ever be committed to this repository. The remote project has **not been touched** — no `supabase link`, no `db push`, no SQL run against it.
 
-A prior `initial_workops_schema.sql` reportedly exists from earlier planning and **predates the current role/hierarchy architecture** (Company → Workstream → Task, the flat `supervisorId` model, the current permission functions). It was not found in this repository during this audit — if it's supplied later (e.g. from the Supabase project's own migration history), treat it as historical input to be reconciled against the *current* code, not applied as-is.
+**Supabase Foundation A (local scaffolding) is complete** — local-only, nothing remote:
+- `@supabase/supabase-js`, `@supabase/ssr` installed; `supabase` CLI pinned as a devDependency (no global install).
+- `supabase/` initialized locally (`supabase init`) — config only, no remote link.
+- `src/lib/supabase/client.ts` (browser) and `server.ts` (server) — the sole Supabase-client construction points; not yet called from any provider.
+- `src/proxy.ts` — **Next.js 16 uses this file, not `middleware.ts`** (Middleware was renamed to Proxy in Next 16; same runtime behavior). Scoped to session-cookie refresh only, never an authorization decision. No-ops cleanly when the Supabase env vars are absent (today's normal state) — verified the mock app still starts and serves pages correctly with this file present.
+- First migration set written under `supabase/migrations/` (local files only, never run against the hosted project): `profiles` (+ `handle_new_user` trigger, `is_superadmin`/`is_supervisor`/`is_employee`/`manages_user` helpers, `admin_set_user_role`/`admin_set_supervisor`/`admin_set_active` RPCs), `brands`/`service_lines`, `companies`/`client_contacts`/`company_service_lines`/`user_companies` (+ `can_access_company` helper). RLS enabled and policies written for every table in this set, mirroring current provider behavior exactly (including the discovered `is_internal` company flag needed because the mock's `"company-internal"` string id can't be a `uuid` PK — see the migration file's own header comment).
+- `supabase/seed.sql` — reference/company data only (brands, service lines, a handful of companies including the internal one, contacts). No `auth.users`/plaintext passwords. Real dev Auth users (one Superadmin/Supervisor/Employee) must be created through Supabase Auth itself once this repo is actually connected to `corebridgex-crm` — not attempted yet.
+- `.env.example` added (git-ignore has an explicit `!.env.example` exception) — variable **names** only (`NEXT_PUBLIC_DATA_PROVIDER`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`), no values. `.env.local` remains ignored and untouched.
+- `src/proxy.ts` uses `supabase.auth.getClaims()` (not `getUser()`) — the current-recommended call: it refreshes the session first if the token is close to expiring, then verifies the JWT, typically locally via a cached JWKS endpoint rather than always round-tripping to the Auth server.
+
+**Development strategy correction**: the local Docker-based Supabase stack is **not** being used. The user is new to Supabase; the hosted **corebridgex-crm** project itself is the development/test backend. Docker/`supabase start`/`supabase db reset --linked` are not part of the plan. The migration files remain valuable and stay tracked in Git regardless — they'll be applied to the hosted project directly (via `supabase link` + `supabase db push`), only once the user is present for that step.
+
+Tables intentionally **not yet created**: workstreams, tasks, task_assignees, checklist_items, time_entries, time_entry_corrections, notes, notifications, task_handoffs, reports (either kind), daily_updates, templates, saved_views, documents. These are later migrations, once this slice is applied and re-tested.
+
+A prior `initial_workops_schema.sql` reportedly exists from earlier planning and **predates the current role/hierarchy architecture** (Company → Workstream → Task, the flat `supervisorId` model, the current permission functions). It was not found in this repository — if it's supplied later, treat it as historical input to be reconciled against the *current* code, not applied as-is.
+
+### First-superadmin bootstrap (documented, not yet performed)
+
+Every new Supabase Auth user gets a `profiles` row defaulted to `role = 'employee'` via `handle_new_user()` — there is no signup path that can pick a different role (deliberate: role is never signup-controlled). This creates a one-time chicken-and-egg problem: someone has to become the first Superadmin before the superadmin-only `admin_set_user_role` RPC can be used on anyone, including that very first user. Planned resolution, to be performed interactively (not yet done):
+1. Create the first real dev Auth user through the Supabase Dashboard's Authentication UI (email, in the `corebridgex-crm` project).
+2. `handle_new_user()` fires automatically and creates their `profiles` row as `role = 'employee'`.
+3. The **project owner**, using the Dashboard's SQL Editor (a privileged, human-in-the-loop context — not an app code path, not a migration file, not a public endpoint), runs a single one-time `update public.profiles set role = 'superadmin' where id = '<that user's id>';` for that specific row only.
+4. From that point on, every further role/supervisor/active change goes through the normal `admin_set_*` RPCs, exercised by that first Superadmin — no further manual SQL needed.
+
+Explicitly not done, and not planned: no signup-metadata role selection, no public "promote to superadmin" endpoint, no user IDs/emails/passwords ever placed in a migration file. This bootstrap step itself has not been performed yet — it happens after this migration set is applied to the hosted project, with the user present.
+
+### Internal Company representation (`companies.is_internal`)
+
+Approved as the Supabase equivalent of the mock's `INTERNAL_COMPANY_ID` string sentinel. Rules preserved: at most one company may ever be flagged `is_internal` (enforced by a partial unique index, not just convention); it's visible to every authenticated staff member regardless of their own `user_companies` rows (via `can_access_company()`'s explicit `is_internal` check); being the internal company grants **no** access to any other, unrelated company — the check is scoped to that one row's id, never a blanket bypass. Any future real Supabase provider implementation should resolve "the" internal company by querying `is_internal = true`, never by matching a hardcoded id string.
 
 ## Current phase status
 
 **Phase 3.36 — Supervisor Time Review & Correction: COMPLETE and manually verified.**
 
-**Next major phase: Supabase Foundation / Schema Reconciliation** — not started. Do not begin it without explicit instruction.
+**Supabase Foundation A — Local Scaffolding + First Migration Set: reviewed, hardened, and checkpointed.** The app still runs entirely on mock; the hosted **corebridgex-crm** project has **not** been touched — no link, no push, no SQL run remotely.
+
+**Next intended step: connect the repository to the hosted corebridgex-crm project** (CLI login + `supabase link`, both requiring the user's own interactive input — see the implementation report for exact commands), then apply this migration set via `supabase db push`, then perform the first-superadmin bootstrap above. None of that happens without the user present. Do not begin it without explicit instruction.
 
 ## Next roadmap
 
-1. Supabase ground-truth/schema reconciliation — map current provider contracts + permission rules to an intended Postgres schema.
-2. Connect provider contracts to the existing **Corebridgex** organization's **corebridgex-crm** Supabase project (no new organization or project).
-3. Real Auth/Postgres/RLS migration, in controlled slices — not a single big-bang cutover.
-4. Sub-tasks — one nesting level (real child Task: own status/assignee/time/checklist).
-5. Client long-lived/forever note + Client activity/history/reporting.
-6. Batch Task creation from multiple Activities at once (workflow improvement, not a data-model change).
-7. Attendance/clock-in/geolocation — future only, not scoped now.
+1. ~~Supabase ground-truth/schema reconciliation~~ — done (audit approved).
+2. ~~Supabase Foundation A (local scaffolding + Auth/Companies migration set)~~ — done, reviewed, checkpointed.
+3. **Connect to the hosted `corebridgex-crm` project and apply this migration set there** (no local Docker stack — see "First-superadmin bootstrap" above) — requires the user present for CLI login/link.
+4. First-superadmin bootstrap (one-time, interactive, Dashboard SQL Editor — see above).
+5. Continue with Workstreams/Activity Catalog, then Tasks/Time, then Notes/Notifications/Handoffs, then Reports/Daily Updates/Templates/Saved Views — see the audit for the full dependency-ordered plan.
+6. Real Auth/Postgres/RLS migration completes in controlled slices — not a single big-bang cutover.
+7. Sub-tasks — one nesting level (real child Task: own status/assignee/time/checklist). `tasks.parent_task_id` will be reserved (nullable, unused) in the Tasks migration when reached.
+8. Client long-lived/forever note + Client activity/history/reporting.
+9. Batch Task creation from multiple Activities at once (workflow improvement, not a data-model change).
+10. Attendance/clock-in/geolocation — future only, not scoped now.
 
 ## Known deferred / do not build now
 
@@ -179,6 +212,8 @@ A prior `initial_workops_schema.sql` reportedly exists from earlier planning and
 - Do not compare one individual TimeEntry against a whole Task's `expectedMinutes` — always cumulative Task actual vs. Task estimate.
 - Do not introduce multiple Workstream/Activity IDs on a single Task (`workstreamIds[]`/`activityIds[]`).
 - Do not create a second Supabase organization or project — reuse the **Corebridgex** organization's **corebridgex-crm** project.
+- Do not expose `role`/`supervisor_id`/`active` as ordinary client-editable profile columns (in RLS or in the UI) — they're authorization-sensitive and, in the schema, reachable only through superadmin-gated RPCs (`admin_set_user_role`/`admin_set_supervisor`/`admin_set_active`).
+- Do not treat `src/proxy.ts` (Next.js 16's renamed `middleware.ts`) as an authorization layer — it only refreshes the session cookie; RLS is the real access control.
 
 ## Standard development workflow
 
@@ -214,6 +249,6 @@ Read the Current phase and Next roadmap sections before proposing changes.
 ## Last updated
 
 - Date: 2026-08-13
-- Current verified checkpoint: `ddc6d4c250b0d83434cfb045854133e28725b7a8` — "checkpoint: supervisor time review and correction"
-- Current phase: Phase 3.36 — Supervisor Time Review & Correction (complete, manually verified)
-- Next phase: Supabase Foundation / Schema Reconciliation (not started)
+- Current verified checkpoint: this document is being committed alongside Foundation A itself (commit message: "checkpoint: Supabase foundation and initial schema migrations") — see `git log -1` for the exact hash; the previous checkpoint was `ddc6d4c250b0d83434cfb045854133e28725b7a8`.
+- Current phase: Supabase Foundation A — Local Scaffolding + First Migration Set (reviewed, hardened — `proxy.ts` now uses `getClaims()`, admin RPCs raise on a not-found target id — and checkpointed; app still on mock; hosted `corebridgex-crm` untouched)
+- Next phase: connect the repository to the hosted `corebridgex-crm` project (user present for CLI login/`supabase link`), apply this migration set there, then perform the first-superadmin bootstrap
