@@ -131,6 +131,9 @@ export function ApplyTemplateDialog({ open, onOpenChange, company, onApplied }: 
         description: template.description,
         companyId: company.id,
         serviceLineId: template.serviceLineId,
+        // Templates have no Activity concept of their own — the new workstream starts with no
+        // activities configured; a supervisor/superadmin can select them afterward via Edit.
+        activityIds: [],
         leadUserId: form.leadUserId,
         teamUserIds: form.teamUserIds,
         status: "active",

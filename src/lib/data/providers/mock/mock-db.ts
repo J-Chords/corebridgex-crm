@@ -6,6 +6,7 @@ import { seedCompanyServiceLines } from "./seed-company-service-lines";
 import { seedClientContacts } from "./seed-client-contacts";
 import { seedWorkstreams } from "./seed-workstreams";
 import { seedWorkstreamMembers } from "./seed-workstream-members";
+import { seedWorkstreamActivities } from "./seed-workstream-activities";
 import { seedTasks } from "./seed-tasks";
 import { seedTaskAssignees } from "./seed-task-assignees";
 import { seedChecklistItems } from "./seed-checklist-items";
@@ -38,6 +39,7 @@ export const db = {
   contacts: [...seedClientContacts],
   workstreams: [...seedWorkstreams],
   workstreamMembers: [...seedWorkstreamMembers],
+  workstreamActivities: [...seedWorkstreamActivities],
   tasks: [...seedTasks],
   taskAssignees: [...seedTaskAssignees],
   checklistItems: [...seedChecklistItems],

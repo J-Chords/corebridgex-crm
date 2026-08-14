@@ -7,7 +7,9 @@ import { useAuth } from "@/lib/auth/auth-context";
 import { useWorkstream } from "@/lib/data/hooks/use-workstreams";
 import { useCompany } from "@/lib/data/hooks/use-companies";
 import { useTasks } from "@/lib/data/hooks/use-tasks";
+import { useWorkstreamActivities } from "@/lib/data/hooks/use-workstream-activities";
 import { canManageWorkstreams } from "@/lib/data/permissions";
+import { workstreamDisplayHeading, splitWorkstreamQualifier } from "@/lib/data/workstream-name";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -19,7 +21,7 @@ import { RecurrenceIndicator } from "@/components/workstreams/recurrence-indicat
 import { GenerateOccurrenceDialog } from "@/components/workstreams/generate-occurrence-dialog";
 import { QuickAddFromActivityDialog } from "@/components/workstreams/quick-add-from-activity-dialog";
 import { ChecklistProgress } from "@/components/ui/checklist-progress";
-import { TaskRowList } from "@/components/tasks/task-row";
+import { WorkstreamActivityTasks } from "@/components/workstreams/workstream-activity-tasks";
 import { TaskFormDialog } from "@/components/tasks/task-form-dialog";
 
 function formatDate(value: string | null) {
@@ -42,11 +44,18 @@ export default function WorkstreamDetailPage({ params }: { params: Promise<{ id:
   const { workstream, isLoading, notFound, refresh } = useWorkstream(id);
   const { company } = useCompany(workstream?.companyId ?? "");
   const { tasks, isLoading: tasksLoading, refresh: refreshTasks } = useTasks({ workstreamId: id });
+  const { departments: activityDepartments, isLoading: activitiesLoading } = useWorkstreamActivities(workstream ?? undefined);
 
   const [editOpen, setEditOpen] = useState(false);
   const [taskDialogOpen, setTaskDialogOpen] = useState(false);
+  const [taskDialogActivityId, setTaskDialogActivityId] = useState<string | undefined>(undefined);
   const [generateOpen, setGenerateOpen] = useState(false);
   const [quickAddOpen, setQuickAddOpen] = useState(false);
+
+  function openAddTask(activityId?: string) {
+    setTaskDialogActivityId(activityId);
+    setTaskDialogOpen(true);
+  }
 
   if (!user) return null;
 
@@ -69,6 +78,7 @@ export default function WorkstreamDetailPage({ params }: { params: Promise<{ id:
   }
 
   const canManage = canManageWorkstreams(user);
+  const hasConfiguredActivities = activityDepartments.flatMap((d) => d.activities).length > 0;
 
   return (
     <div className="flex flex-col gap-6">
@@ -82,7 +92,9 @@ export default function WorkstreamDetailPage({ params }: { params: Promise<{ id:
         </Link>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-3">
-            <h1 className="font-heading text-2xl font-semibold">{workstream.name}</h1>
+            <h1 className="font-heading text-2xl font-semibold">
+              {workstreamDisplayHeading(workstream.name, workstream.serviceLine?.name ?? null)}
+            </h1>
             <WorkstreamStatusBadge status={workstream.status} />
             <Badge variant="neutral">{workstream.brand.name}</Badge>
           </div>
@@ -99,6 +111,10 @@ export default function WorkstreamDetailPage({ params }: { params: Promise<{ id:
             </div>
           )}
         </div>
+        {(() => {
+          const qualifier = splitWorkstreamQualifier(workstream.name, workstream.serviceLine?.name ?? null);
+          return qualifier ? <p className="text-sm text-muted-foreground">{qualifier}</p> : null;
+        })()}
         {workstream.description && <p className="text-sm text-muted-foreground">{workstream.description}</p>}
         {workstream.recurrence && <RecurrenceIndicator recurrence={workstream.recurrence} />}
       </div>
@@ -118,7 +134,7 @@ export default function WorkstreamDetailPage({ params }: { params: Promise<{ id:
               </p>
             </div>
             <div>
-              <span className="font-mono text-xs tracking-wide text-muted-foreground uppercase">Service line</span>
+              <span className="font-mono text-xs tracking-wide text-muted-foreground uppercase">Service</span>
               <p className="mt-1.5 text-sm">{workstream.serviceLine?.name ?? "None"}</p>
             </div>
             <div>
@@ -136,6 +152,7 @@ export default function WorkstreamDetailPage({ params }: { params: Promise<{ id:
                   label="Tasks"
                   done={workstream.doneTaskCount}
                   total={workstream.taskCount}
+                  emptyLabel="No tasks yet"
                 />
               </div>
             </div>
@@ -182,20 +199,32 @@ export default function WorkstreamDetailPage({ params }: { params: Promise<{ id:
 
       <Card>
         <CardHeader className="flex items-center justify-between">
-          <CardTitle className="text-base">Tasks</CardTitle>
+          <CardTitle className="text-base">Activities</CardTitle>
           <div className="flex items-center gap-2">
             {canManage && (
               <Button size="sm" variant="outline" onClick={() => setQuickAddOpen(true)}>
                 <Sparkles /> Add from activity
               </Button>
             )}
-            <Button size="sm" variant="outline" onClick={() => setTaskDialogOpen(true)} data-shortcut="new-task">
-              <Plus /> Add task
-            </Button>
+            {/* Every configured Activity already has its own "+ Add Task" — that's now the primary
+                creation path. This generic fallback only remains for a workstream with genuinely
+                zero configured activities (no service, no catalog, or nothing curated yet), so
+                task creation is never blocked. */}
+            {!hasConfiguredActivities && (
+              <Button size="sm" variant="outline" onClick={() => openAddTask()} data-shortcut="new-task">
+                <Plus /> Add task
+              </Button>
+            )}
           </div>
         </CardHeader>
         <CardContent>
-          <TaskRowList tasks={tasks} isLoading={tasksLoading} emptyMessage="No tasks on this workstream yet." />
+          <WorkstreamActivityTasks
+            departments={activityDepartments}
+            catalogLoading={activitiesLoading}
+            tasks={tasks}
+            isLoading={tasksLoading}
+            onAddTask={openAddTask}
+          />
         </CardContent>
       </Card>
 
@@ -214,6 +243,7 @@ export default function WorkstreamDetailPage({ params }: { params: Promise<{ id:
         onOpenChange={setTaskDialogOpen}
         mode="create"
         defaultWorkstreamId={workstream.id}
+        defaultActivityId={taskDialogActivityId}
         onSaved={refreshTasks}
       />
       {canManage && (

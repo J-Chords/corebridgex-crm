@@ -36,3 +36,14 @@ export interface WorkstreamMember {
   workstreamId: string;
   userId: string;
 }
+
+/**
+ * Join row: an Activity Catalog entry enabled for this specific client Workstream — "this Workstream
+ * uses this Activity," never "create every one of its default tasks." Empty for a workstream with no
+ * persisted associations yet (legacy data, or a brand-new workstream whose service has no catalog) —
+ * see `useWorkstreamActivities` for the read-side fallback that covers that case.
+ */
+export interface WorkstreamActivity {
+  workstreamId: string;
+  activityId: string;
+}

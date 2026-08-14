@@ -1,4 +1,4 @@
-import type { Brand, Company, RecurrenceFrequency, Workstream, WorkstreamStatus, ServiceLine, User } from "../types";
+import type { Activity, Brand, Company, RecurrenceFrequency, Workstream, WorkstreamStatus, ServiceLine, User } from "../types";
 import type { TimeBudget } from "../time-budget";
 import type { WorkstreamRecurrenceInfo } from "../recurrence";
 
@@ -9,6 +9,14 @@ export interface WorkstreamWithRelations extends Workstream {
   brand: Brand;
   lead: User;
   team: User[];
+  /**
+   * The Activity Catalog entries explicitly enabled for this workstream (via the `WorkstreamActivity`
+   * join, resolved here the same way `team` resolves `WorkstreamMember`) — empty for a workstream with
+   * no persisted associations yet. Empty does NOT mean "no activities apply" — see
+   * `useWorkstreamActivities` for the legacy/no-catalog fallback every screen reading this should go
+   * through instead of reading this field directly.
+   */
+  activities: Activity[];
   taskCount: number;
   doneTaskCount: number;
   /** Rounded 0-100, done tasks / total tasks. 0 when the workstream has no tasks yet. */
@@ -32,6 +40,13 @@ export interface WorkstreamInput {
   recurrenceFrequency: RecurrenceFrequency | null;
   recurrenceAnchorDate: string | null;
   recurrenceCustomIntervalDays: number | null;
+  /**
+   * Which of the selected service's Activity Catalog entries apply to this specific client
+   * workstream — always an explicit list (matches `teamUserIds`'s "always an array" shape), never
+   * omitted. Each id must belong to a department whose `serviceLineId` matches `serviceLineId`
+   * above; the provider validates this rather than trusting the caller.
+   */
+  activityIds: string[];
   /**
    * Only used by "Generate next occurrence" — records which workstream this one continues from.
    * Ignored on update (a workstream's place in its recurrence chain never changes after creation).

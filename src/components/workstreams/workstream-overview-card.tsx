@@ -1,6 +1,7 @@
 import type { CSSProperties } from "react";
 import Link from "next/link";
 import type { WorkstreamWithRelations } from "@/lib/data/providers/workstreams-provider";
+import { workstreamDisplayHeading } from "@/lib/data/workstream-name";
 import { ChecklistProgress } from "@/components/ui/checklist-progress";
 import { BudgetBarCompact } from "@/components/ui/budget-bar";
 import { RecurrenceIndicatorCompact } from "@/components/workstreams/recurrence-indicator";
@@ -58,7 +59,9 @@ export function WorkstreamOverviewCard({ workstream, className, style }: Workstr
           {brandInitials(workstream.brand.name)}
         </div>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium">{workstream.name}</p>
+          <p className="truncate text-sm font-medium">
+            {workstreamDisplayHeading(workstream.name, workstream.serviceLine?.name ?? null)}
+          </p>
           <p className="truncate text-xs text-muted-foreground">{workstream.company.name}</p>
         </div>
       </div>

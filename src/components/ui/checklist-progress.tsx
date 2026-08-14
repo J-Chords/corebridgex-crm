@@ -5,10 +5,12 @@ export interface ChecklistProgressProps {
   total: number;
   className?: string;
   label?: string;
+  /** Shown when total === 0 — defaults to "No checklist" (a Task's own checklist state). Override when this same bar is reused for a different rollup, e.g. a Workstream's task count, where "No checklist" would be a confusing thing to say about zero *tasks*. */
+  emptyLabel?: string;
 }
 
 /** Progress bar from the reference's `.progress-track`/`.progress-fill` pattern, with real ARIA semantics. */
-export function ChecklistProgress({ done, total, className, label }: ChecklistProgressProps) {
+export function ChecklistProgress({ done, total, className, label, emptyLabel = "No checklist" }: ChecklistProgressProps) {
   const percent = total === 0 ? 0 : Math.round((done / total) * 100);
   return (
     <div className={cn("flex flex-col gap-1", className)}>
@@ -16,7 +18,7 @@ export function ChecklistProgress({ done, total, className, label }: ChecklistPr
         <div className="flex items-center justify-between text-xs">
           <span className="font-medium text-foreground">{label}</span>
           <span className="font-mono text-muted-foreground">
-            {total === 0 ? "No checklist" : `${done}/${total} · ${percent}%`}
+            {total === 0 ? emptyLabel : `${done}/${total} · ${percent}%`}
           </span>
         </div>
       )}

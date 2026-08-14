@@ -1,15 +1,17 @@
 "use client";
 
 import { useEffect, useState, type ReactNode } from "react";
-import { AlertCircle } from "lucide-react";
 import { useAuth } from "@/lib/auth/auth-context";
 import { useCompanyLookups } from "@/lib/data/hooks/use-companies";
+import { useActivityCatalog } from "@/lib/data/hooks/use-activity-catalog";
 import { isSupervisor } from "@/lib/data/permissions";
+import { INTERNAL_COMPANY_ID } from "@/lib/data/constants";
 import { workstreamsProvider } from "@/lib/data/providers";
 import type { WorkstreamWithRelations } from "@/lib/data/providers/workstreams-provider";
 import type { CompanyWithRelations } from "@/lib/data/providers/companies-provider";
 import type { RecurrenceFrequency, WorkstreamStatus } from "@/lib/data/types";
 import { FREQUENCY_LABEL } from "@/lib/data/recurrence";
+import { deriveWorkstreamName, splitWorkstreamQualifier } from "@/lib/data/workstream-name";
 import { WorkstreamStatusPicker } from "@/components/workstreams/workstream-status-picker";
 import { TaskAssigneeChips } from "@/components/tasks/task-assignee-chips";
 import { Sheet, SheetContent, SheetFooter, SheetTitle, SheetDescription } from "@/components/ui/sheet";
@@ -18,8 +20,10 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertTitle } from "@/components/ui/alert";
+import { AlertCircle } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -45,9 +49,10 @@ interface WorkstreamFormDialogProps {
 
 function emptyForm(defaultLeadId: string) {
   return {
-    name: "",
+    qualifier: "",
     description: "",
     serviceLineId: NO_SERVICE_LINE,
+    activityIds: [] as string[],
     leadUserId: defaultLeadId,
     teamUserIds: [] as string[],
     status: "active" as WorkstreamStatus,
@@ -86,15 +91,25 @@ export function WorkstreamFormDialog({
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const selectedServiceLine = serviceLines.find((sl) => sl.id === form.serviceLineId) ?? null;
+  // Only fetch a real, service-scoped catalog once a service is actually picked — while "None" is
+  // selected the Activities section below is hidden entirely, so an unscoped fetch here would never
+  // be shown, just wasted.
+  const { departments: activityDepartments } = useActivityCatalog(
+    selectedServiceLine ? company.brand.id : undefined,
+    selectedServiceLine ? selectedServiceLine.id : undefined
+  );
+
   useEffect(() => {
     if (!open || !user) return;
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setError(null);
     if (workstream) {
       setForm({
-        name: workstream.name,
+        qualifier: splitWorkstreamQualifier(workstream.name, workstream.serviceLine?.name ?? null),
         description: workstream.description ?? "",
         serviceLineId: workstream.serviceLineId ?? NO_SERVICE_LINE,
+        activityIds: workstream.activities.map((a) => a.id),
         leadUserId: workstream.leadUserId,
         teamUserIds: workstream.team.map((u) => u.id),
         status: workstream.status,
@@ -113,7 +128,22 @@ export function WorkstreamFormDialog({
     }
   }, [open, workstream, user]);
 
-  const canSubmit = !isSubmitting && form.name.trim().length > 0 && form.leadUserId.length > 0;
+  // The Internal/Non-billable company is the one canonical exception (same INTERNAL_COMPANY_ID
+  // sentinel every other visibility/access check in this app already keys off) — every other,
+  // normal client company must have a real Service. Editing an already-existing legacy workstream
+  // that predates this requirement (serviceLineId already null) is also allowed to keep "None," so
+  // opening Edit and saving without touching Service never destroys it; a brand-new workstream, or
+  // one that already has a real service, never gets that option.
+  const isInternalCompany = company.id === INTERNAL_COMPANY_ID;
+  const allowNoService = isInternalCompany || (mode === "edit" && (workstream?.serviceLineId ?? null) === null);
+  const serviceSatisfied = allowNoService || form.serviceLineId !== NO_SERVICE_LINE;
+
+  // A service with real catalog activities requires at least one selected — a service with none
+  // configured yet (or "no service" in the allowed cases above) never blocks saving on this.
+  const activityRequired = form.serviceLineId !== NO_SERVICE_LINE && activityDepartments.length > 0;
+  const activitiesSatisfied = !activityRequired || form.activityIds.length > 0;
+
+  const canSubmit = !isSubmitting && form.leadUserId.length > 0 && serviceSatisfied && activitiesSatisfied;
 
   // Cmd/Ctrl+Enter submits from anywhere in the panel, guarded by the same validity check the submit
   // button itself uses — same document-level-listener pattern the Task form panel uses, since a
@@ -148,16 +178,30 @@ export function WorkstreamFormDialog({
     }));
   }
 
+  function toggleActivity(id: string, checked: boolean) {
+    setForm((prev) => ({
+      ...prev,
+      activityIds: checked ? [...prev.activityIds, id] : prev.activityIds.filter((aid) => aid !== id),
+    }));
+  }
+
+  /** Picking a different service starts activity selection fresh — the old service's activities never carry over as a stale, invisible selection. */
+  function handleServiceLineChange(next: string) {
+    setForm((prev) => (prev.serviceLineId === next ? prev : { ...prev, serviceLineId: next, activityIds: [] }));
+  }
+
   async function submitForm() {
     if (!user) return;
     setError(null);
     setIsSubmitting(true);
     try {
+      const serviceLineId = form.serviceLineId === NO_SERVICE_LINE ? null : form.serviceLineId;
       const input = {
-        name: form.name.trim(),
+        name: deriveWorkstreamName(selectedServiceLine?.name ?? null, form.qualifier),
         description: form.description.trim() || null,
         companyId: company.id,
-        serviceLineId: form.serviceLineId === NO_SERVICE_LINE ? null : form.serviceLineId,
+        serviceLineId,
+        activityIds: form.activityIds,
         leadUserId: form.leadUserId,
         teamUserIds: form.teamUserIds,
         status: form.status,
@@ -206,14 +250,44 @@ export function WorkstreamFormDialog({
                   ? `Add a new service workstream for ${company.name}.`
                   : `Editing "${workstream?.name ?? "this workstream"}".`}
               </SheetDescription>
+
+              <Select
+                items={{
+                  ...(allowNoService ? { [NO_SERVICE_LINE]: "Select a service…" } : {}),
+                  ...Object.fromEntries(serviceLines.map((sl) => [sl.id, sl.name])),
+                }}
+                value={form.serviceLineId}
+                onValueChange={(v) => handleServiceLineChange(v ?? NO_SERVICE_LINE)}
+              >
+                <SelectTrigger
+                  autoFocus
+                  id="workstream-service-line"
+                  aria-label="Service / Workstream"
+                  className="h-auto w-full justify-start gap-2 rounded-none border-0 bg-transparent p-0 font-heading text-2xl font-semibold tracking-tight shadow-none focus-visible:ring-0"
+                >
+                  <SelectValue placeholder="Select a service…" />
+                </SelectTrigger>
+                <SelectContent>
+                  {allowNoService && <SelectItem value={NO_SERVICE_LINE}>None</SelectItem>}
+                  {serviceLines.map((sl) => (
+                    <SelectItem key={sl.id} value={sl.id}>
+                      {sl.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {!serviceSatisfied && (
+                <p className="text-xs text-warning">Required — every client workstream represents one service.</p>
+              )}
+
               <Input
-                autoFocus
-                value={form.name}
-                onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
-                placeholder="Workstream name"
-                aria-label="Workstream name"
-                className="h-auto rounded-none border-0 bg-transparent p-0 font-heading text-2xl font-semibold tracking-tight shadow-none focus-visible:ring-0"
+                value={form.qualifier}
+                onChange={(e) => setForm((p) => ({ ...p, qualifier: e.target.value }))}
+                placeholder="Reference / qualifier (optional) — e.g. UK Payroll, Monthly Payroll, 2026"
+                aria-label="Reference or qualifier (optional)"
+                className="h-auto rounded-none border-0 bg-transparent p-0 text-sm text-muted-foreground shadow-none focus-visible:ring-0"
               />
+
               <Textarea
                 value={form.description}
                 onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))}
@@ -224,7 +298,7 @@ export function WorkstreamFormDialog({
             </div>
 
             <div className="flex flex-col gap-4 px-6 py-4">
-              <FormSection label="Client & service">
+              <FormSection label="Client">
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex flex-col gap-1.5">
                     <span className="font-mono text-xs tracking-wide text-muted-foreground uppercase">Company</span>
@@ -237,30 +311,40 @@ export function WorkstreamFormDialog({
                     <Badge variant="neutral">{company.brand.name}</Badge>
                   </div>
                 </div>
+              </FormSection>
 
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="workstream-service-line">Service line</Label>
-                  <Select
-                    items={{
-                      [NO_SERVICE_LINE]: "None",
-                      ...Object.fromEntries(serviceLines.map((sl) => [sl.id, sl.name])),
-                    }}
-                    value={form.serviceLineId}
-                    onValueChange={(v) => setForm((p) => ({ ...p, serviceLineId: v ?? NO_SERVICE_LINE }))}
-                  >
-                    <SelectTrigger id="workstream-service-line" className="w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={NO_SERVICE_LINE}>None</SelectItem>
-                      {serviceLines.map((sl) => (
-                        <SelectItem key={sl.id} value={sl.id}>
-                          {sl.name}
-                        </SelectItem>
+              <FormSection label="Activities">
+                {form.serviceLineId === NO_SERVICE_LINE ? (
+                  <p className="text-sm text-muted-foreground">Select a service to configure its activities.</p>
+                ) : activityDepartments.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No activities set up for this service yet.</p>
+                ) : (
+                  <>
+                    <div className="flex flex-col gap-3">
+                      {activityDepartments.map((dept) => (
+                        <div key={dept.id} className="flex flex-col gap-1.5">
+                          {activityDepartments.length > 1 && (
+                            <span className="text-xs font-medium text-muted-foreground">{dept.name}</span>
+                          )}
+                          <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+                            {dept.activities.map((activity) => (
+                              <label key={activity.id} className="flex items-center gap-2 text-sm">
+                                <Checkbox
+                                  checked={form.activityIds.includes(activity.id)}
+                                  onCheckedChange={(checked) => toggleActivity(activity.id, checked === true)}
+                                />
+                                {activity.name}
+                              </label>
+                            ))}
+                          </div>
+                        </div>
                       ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+                    </div>
+                    {!activitiesSatisfied && (
+                      <p className="text-xs text-warning">Select at least one activity to continue.</p>
+                    )}
+                  </>
+                )}
               </FormSection>
 
               <FormSection label="Details">

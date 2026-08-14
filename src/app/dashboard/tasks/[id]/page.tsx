@@ -261,6 +261,7 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
             companyId={task.companyId}
             assigneeIds={assigneeIds}
             expectedMinutes={task.expectedMinutes}
+            onTaskChanged={refresh}
           />
         </CardContent>
       </Card>

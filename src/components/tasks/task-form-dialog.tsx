@@ -6,7 +6,7 @@ import { AlertCircle, History, Plus, X } from "lucide-react";
 import { useAuth } from "@/lib/auth/auth-context";
 import { useCompanies, useCompanyLookups } from "@/lib/data/hooks/use-companies";
 import { useWorkstreams } from "@/lib/data/hooks/use-workstreams";
-import { useActivityCatalog } from "@/lib/data/hooks/use-activity-catalog";
+import { useWorkstreamActivities } from "@/lib/data/hooks/use-workstream-activities";
 import { tasksProvider } from "@/lib/data/providers";
 import type { TaskReuseCandidate, TaskWithRelations } from "@/lib/data/providers/tasks-provider";
 import type { DepartmentWithActivities } from "@/lib/data/providers/activity-catalog-provider";
@@ -78,18 +78,20 @@ interface TaskFormDialogProps {
   mode: "create" | "edit";
   task?: TaskWithRelations;
   defaultWorkstreamId?: string;
+  /** Pre-selects an Activity tag — used by the workstream detail page's per-Activity "+ Add Task". */
+  defaultActivityId?: string;
   onSaved: () => void;
 }
 
 const ALL_COMPANIES = "all";
 
-function emptyForm(userId: string, defaultWorkstreamId?: string) {
+function emptyForm(userId: string, defaultWorkstreamId?: string, defaultActivityId?: string) {
   return {
     title: "",
     description: "",
     companyId: ALL_COMPANIES,
     workstreamId: defaultWorkstreamId ?? "",
-    activityId: NO_ACTIVITY,
+    activityId: defaultActivityId ?? NO_ACTIVITY,
     assigneeIds: [userId],
     status: "todo" as TaskStatus,
     priority: "medium" as TaskPriority,
@@ -109,10 +111,18 @@ function FormSection({ label, children, className }: { label: string; children: 
   );
 }
 
-export function TaskFormDialog({ open, onOpenChange, mode, task, defaultWorkstreamId, onSaved }: TaskFormDialogProps) {
+export function TaskFormDialog({
+  open,
+  onOpenChange,
+  mode,
+  task,
+  defaultWorkstreamId,
+  defaultActivityId,
+  onSaved,
+}: TaskFormDialogProps) {
   const { user } = useAuth();
   const { companies } = useCompanies();
-  const [form, setForm] = useState(() => emptyForm(user?.id ?? "", defaultWorkstreamId));
+  const [form, setForm] = useState(() => emptyForm(user?.id ?? "", defaultWorkstreamId, defaultActivityId));
   const { workstreams, refresh: refreshWorkstreams } = useWorkstreams({
     companyId: form.companyId === ALL_COMPANIES ? undefined : form.companyId,
   });
@@ -126,7 +136,9 @@ export function TaskFormDialog({ open, onOpenChange, mode, task, defaultWorkstre
   const [newWorkstreamOpen, setNewWorkstreamOpen] = useState(false);
 
   const selectedWorkstream = workstreams.find((w) => w.id === form.workstreamId);
-  const { departments } = useActivityCatalog(selectedWorkstream?.brand.id, selectedWorkstream?.serviceLineId ?? undefined);
+  // Scoped to what THIS workstream actually enabled — falls back to the full service catalog for a
+  // legacy workstream with no persisted Activity selections yet (see the hook's own doc comment).
+  const { departments } = useWorkstreamActivities(selectedWorkstream);
   // "+ New workstream" needs a concrete client to create into — same constraint WorkstreamFormDialog
   // already has everywhere else it's used (it only ever opens from within a specific company's page).
   const companyForNewWorkstream = form.companyId === ALL_COMPANIES ? null : companies.find((c) => c.id === form.companyId);
@@ -205,11 +217,26 @@ export function TaskFormDialog({ open, onOpenChange, mode, task, defaultWorkstre
         checklist: task.checklistItems.map((ci) => ({ id: ci.id, description: ci.description, key: ci.id })),
       });
     } else {
-      setForm(emptyForm(user.id, defaultWorkstreamId));
+      setForm(emptyForm(user.id, defaultWorkstreamId, defaultActivityId));
     }
-  }, [open, task, user, defaultWorkstreamId]);
+  }, [open, task, user, defaultWorkstreamId, defaultActivityId]);
 
-  const canSubmit = !isSubmitting && form.title.trim().length > 0 && form.workstreamId.length > 0;
+  // A brand-new task on a workstream that actually has activities to choose from must be tagged to
+  // one — "Workstream → Activity → Task" is the real hierarchy for normal client service work now.
+  // Editing an existing task never forces this (a legacy untagged task stays untagged unless someone
+  // deliberately retags it), and a workstream with nothing configured (legacy data, or a service with
+  // no catalog, e.g. Internal Operations) never blocks task creation either — same as before.
+  const activityRequired = mode === "create" && departments.length > 0;
+  // Arriving from a specific Activity's own "+ Add Task" (the primary creation path now) means the
+  // person already decided where this task belongs — re-presenting an editable picker would invite
+  // second-guessing a choice they already made by clicking there. Locked to create-mode only: editing
+  // an existing task should always allow retagging/removing its activity.
+  const activityLocked = mode === "create" && Boolean(defaultActivityId);
+  const canSubmit =
+    !isSubmitting &&
+    form.title.trim().length > 0 &&
+    form.workstreamId.length > 0 &&
+    (!activityRequired || form.activityId !== NO_ACTIVITY);
 
   // Cmd/Ctrl+Enter submits from anywhere in the panel, guarded by the same validity check the submit
   // button itself uses. A document-level listener (not a form onKeyDown) because focus can end up on
@@ -405,40 +432,53 @@ export function TaskFormDialog({ open, onOpenChange, mode, task, defaultWorkstre
                 </div>
 
                 <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="task-activity">Activity (optional)</Label>
-                  <Select
-                    items={{
-                      [NO_ACTIVITY]: "No tag",
-                      ...Object.fromEntries(
-                        departments.flatMap((d) => d.activities.map((a) => [a.id, `${d.name}: ${a.name}`]))
-                      ),
-                    }}
-                    value={form.activityId}
-                    onValueChange={(v) => setForm((p) => ({ ...p, activityId: v ?? NO_ACTIVITY }))}
-                    disabled={!form.workstreamId || departments.length === 0}
-                  >
-                    <SelectTrigger id="task-activity" className="w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={NO_ACTIVITY}>No tag</SelectItem>
-                      {departments.map((d) => (
-                        <div key={d.id}>
-                          {d.activities.map((a) => (
-                            <SelectItem key={a.id} value={a.id}>
-                              {d.name}: {a.name}
-                            </SelectItem>
-                          ))}
-                        </div>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {form.workstreamId && departments.length === 0 && (
-                    <p className="text-xs text-muted-foreground">
-                      {selectedWorkstream?.serviceLineId
-                        ? "No activities set up for this service yet."
-                        : "No activities set up for this brand yet."}
+                  <Label htmlFor="task-activity">{activityRequired ? "Activity" : "Activity (optional)"}</Label>
+                  {activityLocked ? (
+                    <p className="rounded-md border bg-muted/40 px-3 py-2 text-sm">
+                      {selectedActivityLabel ?? "Activity"}
                     </p>
+                  ) : (
+                    <>
+                      <Select
+                        items={{
+                          [NO_ACTIVITY]: "No tag",
+                          ...Object.fromEntries(
+                            departments.flatMap((d) => d.activities.map((a) => [a.id, `${d.name}: ${a.name}`]))
+                          ),
+                        }}
+                        value={form.activityId}
+                        onValueChange={(v) => setForm((p) => ({ ...p, activityId: v ?? NO_ACTIVITY }))}
+                        disabled={!form.workstreamId || departments.length === 0}
+                      >
+                        <SelectTrigger id="task-activity" className="w-full">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value={NO_ACTIVITY}>No tag</SelectItem>
+                          {departments.map((d) => (
+                            <div key={d.id}>
+                              {d.activities.map((a) => (
+                                <SelectItem key={a.id} value={a.id}>
+                                  {d.name}: {a.name}
+                                </SelectItem>
+                              ))}
+                            </div>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {form.workstreamId && departments.length === 0 && (
+                        <p className="text-xs text-muted-foreground">
+                          {selectedWorkstream?.serviceLineId
+                            ? "No activities set up for this service yet."
+                            : "No activities set up for this brand yet."}
+                        </p>
+                      )}
+                      {activityRequired && form.activityId === NO_ACTIVITY && (
+                        <p className="text-xs text-warning">
+                          Required — pick which activity this task belongs to.
+                        </p>
+                      )}
+                    </>
                   )}
                   {showSuggestion && suggestion && (
                     <div className="flex items-center justify-between gap-2 rounded-lg border bg-muted/40 p-2.5 text-sm">

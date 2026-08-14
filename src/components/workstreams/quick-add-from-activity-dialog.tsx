@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { CheckCircle2, Plus } from "lucide-react";
 import { useAuth } from "@/lib/auth/auth-context";
-import { useActivityCatalog } from "@/lib/data/hooks/use-activity-catalog";
+import { useWorkstreamActivities } from "@/lib/data/hooks/use-workstream-activities";
 import { tasksProvider } from "@/lib/data/providers";
 import type { WorkstreamWithRelations } from "@/lib/data/providers/workstreams-provider";
 import {
@@ -36,7 +36,7 @@ interface QuickAddFromActivityDialogProps {
  */
 export function QuickAddFromActivityDialog({ open, onOpenChange, workstream, onAdded }: QuickAddFromActivityDialogProps) {
   const { user } = useAuth();
-  const { departments } = useActivityCatalog(workstream.brandId, workstream.serviceLineId ?? undefined);
+  const { departments } = useWorkstreamActivities(workstream);
   const [activityId, setActivityId] = useState(NO_ACTIVITY);
   const [addedTitles, setAddedTitles] = useState<Set<string>>(new Set());
   const [pendingTitle, setPendingTitle] = useState<string | null>(null);

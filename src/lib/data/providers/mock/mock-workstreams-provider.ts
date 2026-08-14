@@ -13,6 +13,10 @@ function workstreamTeamIds(workstreamId: string): string[] {
   return db.workstreamMembers.filter((m) => m.workstreamId === workstreamId).map((m) => m.userId);
 }
 
+function workstreamActivityIds(workstreamId: string): string[] {
+  return db.workstreamActivities.filter((wa) => wa.workstreamId === workstreamId).map((wa) => wa.activityId);
+}
+
 /**
  * The workstream itself carries no estimate of its own — "expected" is a roll-up, summed from its
  * own tasks' `expectedMinutes` (null if literally none of them has one set, matching the identical
@@ -60,6 +64,10 @@ function toWorkstreamWithRelations(workstream: Workstream): WorkstreamWithRelati
     throw new Error(`Workstream ${workstream.id} references unknown lead ${workstream.leadUserId}`);
   }
   const team = db.users.filter((u) => workstreamTeamIds(workstream.id).includes(u.id));
+  const activityIds = workstreamActivityIds(workstream.id);
+  const activities = db.activities
+    .filter((a) => activityIds.includes(a.id))
+    .sort((a, b) => a.position - b.position);
 
   const tasks = db.tasks.filter((t) => t.workstreamId === workstream.id);
   const taskCount = tasks.length;
@@ -88,6 +96,7 @@ function toWorkstreamWithRelations(workstream: Workstream): WorkstreamWithRelati
     brand,
     lead,
     team,
+    activities,
     taskCount,
     doneTaskCount,
     progressPercent,
@@ -117,6 +126,32 @@ function syncTeam(workstreamId: string, userIds: string[]) {
     ...db.workstreamMembers.filter((m) => m.workstreamId !== workstreamId),
     ...userIds.map((userId) => ({ workstreamId, userId })),
   ];
+}
+
+function syncWorkstreamActivities(workstreamId: string, activityIds: string[]) {
+  db.workstreamActivities = [
+    ...db.workstreamActivities.filter((wa) => wa.workstreamId !== workstreamId),
+    ...activityIds.map((activityId) => ({ workstreamId, activityId })),
+  ];
+}
+
+/**
+ * Every selected activity must belong to a department mapped to the workstream's own service line —
+ * the same invariant the picker itself only ever offers, enforced here rather than trusted from the
+ * caller. A workstream with no service line selected can't have any activities either.
+ */
+function requireActivitiesBelongToService(activityIds: string[], serviceLineId: string | null) {
+  if (activityIds.length === 0) return;
+  if (!serviceLineId) {
+    throw new Error("Activities can only be selected once a service is chosen.");
+  }
+  for (const activityId of activityIds) {
+    const activity = db.activities.find((a) => a.id === activityId);
+    const department = activity ? db.departments.find((d) => d.id === activity.departmentId) : undefined;
+    if (!department || department.serviceLineId !== serviceLineId) {
+      throw new Error("One of the selected activities doesn't belong to this workstream's service.");
+    }
+  }
 }
 
 export const mockWorkstreamsProvider: WorkstreamsProvider = {
@@ -153,6 +188,7 @@ export const mockWorkstreamsProvider: WorkstreamsProvider = {
     }
     const company = db.companies.find((c) => c.id === input.companyId);
     if (!company) throw new Error("Company not found.");
+    requireActivitiesBelongToService(input.activityIds, input.serviceLineId);
 
     const id = crypto.randomUUID();
     const now = new Date().toISOString();
@@ -178,6 +214,7 @@ export const mockWorkstreamsProvider: WorkstreamsProvider = {
 
     db.workstreams = [...db.workstreams, workstream];
     syncTeam(id, input.teamUserIds);
+    syncWorkstreamActivities(id, input.activityIds);
 
     return toWorkstreamWithRelations(workstream);
   },
@@ -189,6 +226,7 @@ export const mockWorkstreamsProvider: WorkstreamsProvider = {
     if (!canAccessCompany(viewer, input.companyId, db.users)) {
       throw new Error("You don't have access to that company.");
     }
+    requireActivitiesBelongToService(input.activityIds, input.serviceLineId);
 
     const updated: Workstream = {
       ...existing,
@@ -207,6 +245,7 @@ export const mockWorkstreamsProvider: WorkstreamsProvider = {
 
     db.workstreams = db.workstreams.map((e) => (e.id === id ? updated : e));
     syncTeam(id, input.teamUserIds);
+    syncWorkstreamActivities(id, input.activityIds);
 
     return toWorkstreamWithRelations(updated);
   },

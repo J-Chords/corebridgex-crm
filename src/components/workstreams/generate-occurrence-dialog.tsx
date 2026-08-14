@@ -125,11 +125,23 @@ export function GenerateOccurrenceDialog({
     setError(null);
     setIsSubmitting(true);
     try {
+      // Carry forward exactly the source workstream's configured activity scope — never silently
+      // expand to the whole service's catalog. The cloned tasks' own activityIds are unioned in too,
+      // as a safety net for a legacy source workstream with no persisted associations of its own
+      // (its tasks' activities came from the old brand/service-wide fallback, not an explicit list).
+      const carriedActivityIds = Array.from(
+        new Set([
+          ...workstream.activities.map((a) => a.id),
+          ...sourceTasks.map((t) => t.activityId).filter((id): id is string => id != null),
+        ])
+      );
+
       const created = await workstreamsProvider.createWorkstream(user, {
         name: form.name.trim(),
         description: workstream.description,
         companyId: workstream.companyId,
         serviceLineId: workstream.serviceLineId,
+        activityIds: carriedActivityIds,
         leadUserId: form.leadUserId,
         teamUserIds: form.teamUserIds,
         status: "active",

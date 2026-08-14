@@ -55,9 +55,11 @@ interface TaskTimeTrackingProps {
   assigneeIds: string[];
   /** Normalized to minutes — see `src/lib/data/expected-time.ts`. Null when this task has no estimate set, in which case a plain total (no budget bar) still shows. */
   expectedMinutes: number | null;
+  /** Starting a timer can flip a Todo task to In Progress server-side — call this afterward so the parent page's own copy of the task (its status badge) doesn't go stale until the next full reload. Optional since not every embedding context needs it. */
+  onTaskChanged?: () => void;
 }
 
-export function TaskTimeTracking({ taskId, companyId, assigneeIds, expectedMinutes }: TaskTimeTrackingProps) {
+export function TaskTimeTracking({ taskId, companyId, assigneeIds, expectedMinutes, onTaskChanged }: TaskTimeTrackingProps) {
   const { user } = useAuth();
   const { entries, isLoading, refresh } = useTaskTimeEntries(taskId);
   const { runningTimer, refresh: refreshRunningTimer } = useRunningTimer();
@@ -87,6 +89,7 @@ export function TaskTimeTracking({ taskId, companyId, assigneeIds, expectedMinut
     try {
       await timeEntriesProvider.startTimer(user, taskId);
       await refreshAll();
+      onTaskChanged?.();
     } finally {
       setIsBusy(false);
     }

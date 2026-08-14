@@ -28,7 +28,41 @@ function requireWorkstreamAccess(viewer: User, workstream: Workstream) {
   if (!accessible) throw new Error("You don't have access to that workstream.");
 }
 
-function toTaskWithRelations(task: Task): TaskWithRelations {
+/**
+ * A tagged activity must be one the workstream actually enabled — never silently attached outside
+ * that set. A workstream with NO persisted associations yet (legacy data, or a service/brand with no
+ * catalog) has nothing to check against, so anything goes there — same permissive behavior every
+ * task already had before per-workstream Activity selection existed.
+ */
+function requireActivityEnabledOnWorkstream(workstreamId: string, activityId: string | null | undefined) {
+  if (!activityId) return;
+  const enabledIds = db.workstreamActivities
+    .filter((wa) => wa.workstreamId === workstreamId)
+    .map((wa) => wa.activityId);
+  if (enabledIds.length === 0) return;
+  if (!enabledIds.includes(activityId)) {
+    throw new Error("That activity isn't enabled for this workstream.");
+  }
+}
+
+/**
+ * Resolves a stored actor reference (createdById/statusChangedById) to a real User. In
+ * `supabase-auth` transitional mode, the CURRENT authenticated viewer may be a real Supabase
+ * identity that was never seeded into mock `db.users` — if the id being resolved is the current
+ * viewer's own id, the already-known real viewer object is returned directly rather than searched
+ * for in the mock roster (which would never find it); any other id resolves from `db.users`
+ * exactly as before. This is narrow, temporary compatibility for this transitional mode only — it
+ * does not add the real viewer to any mock roster or assignable-staff list, and it never changes
+ * who a Task can be assigned to; it only lets audit-trail fields on a Task the current viewer
+ * actually created or last changed the status of resolve back to them correctly, instead of
+ * throwing (createdBy) or silently going blank (statusChangedBy).
+ */
+function resolveTaskActor(id: string, viewer: User): User | null {
+  if (id === viewer.id) return viewer;
+  return db.users.find((u) => u.id === id) ?? null;
+}
+
+function toTaskWithRelations(task: Task, viewer: User): TaskWithRelations {
   const company = db.companies.find((c) => c.id === task.companyId);
   if (!company) {
     throw new Error(`Task ${task.id} references unknown company ${task.companyId}`);
@@ -50,13 +84,11 @@ function toTaskWithRelations(task: Task): TaskWithRelations {
   const checklistItems = db.checklistItems
     .filter((ci) => ci.taskId === task.id)
     .sort((a, b) => a.position - b.position);
-  const createdBy = db.users.find((u) => u.id === task.createdById);
+  const createdBy = resolveTaskActor(task.createdById, viewer);
   if (!createdBy) {
     throw new Error(`Task ${task.id} references unknown creator ${task.createdById}`);
   }
-  const statusChangedBy = task.statusChangedById
-    ? (db.users.find((u) => u.id === task.statusChangedById) ?? null)
-    : null;
+  const statusChangedBy = task.statusChangedById ? resolveTaskActor(task.statusChangedById, viewer) : null;
 
   const total = checklistItems.length;
   const done = checklistItems.filter((ci) => ci.isDone).length;
@@ -201,7 +233,7 @@ export const mockTasksProvider: TasksProvider = {
     const tasks = db.tasks.filter((t) =>
       canAccessTask(viewer, { assigneeIds: taskAssigneeIds(t.id), companyId: t.companyId }, db.users)
     );
-    return tasks.map(toTaskWithRelations);
+    return tasks.map((t) => toTaskWithRelations(t, viewer));
   },
 
   async getTask(viewer, id) {
@@ -210,13 +242,14 @@ export const mockTasksProvider: TasksProvider = {
     if (!canAccessTask(viewer, { assigneeIds: taskAssigneeIds(id), companyId: task.companyId }, db.users)) {
       return null;
     }
-    return toTaskWithRelations(task);
+    return toTaskWithRelations(task, viewer);
   },
 
   async createTask(viewer, input) {
     const workstream = db.workstreams.find((e) => e.id === input.workstreamId);
     if (!workstream) throw new Error("Workstream not found.");
     requireWorkstreamAccess(viewer, workstream);
+    requireActivityEnabledOnWorkstream(workstream.id, input.activityId);
 
     const assigneeIds =
       input.allowUnassigned && input.assigneeIds.length === 0
@@ -261,7 +294,7 @@ export const mockTasksProvider: TasksProvider = {
     notifyOfAssignment(task, assigneeIds, viewer);
     if (selfAdded) notifyOfSelfAddedTask(task, viewer);
 
-    return toTaskWithRelations(task);
+    return toTaskWithRelations(task, viewer);
   },
 
   async updateTask(viewer, id, input) {
@@ -273,6 +306,7 @@ export const mockTasksProvider: TasksProvider = {
     const workstream = db.workstreams.find((e) => e.id === input.workstreamId);
     if (!workstream) throw new Error("Workstream not found.");
     requireWorkstreamAccess(viewer, workstream);
+    requireActivityEnabledOnWorkstream(workstream.id, input.activityId);
 
     // Captured before db.taskAssignees is overwritten below — this is the "before" set the new one
     // gets diffed against, so already-assigned people never get a redundant notification.
@@ -307,7 +341,7 @@ export const mockTasksProvider: TasksProvider = {
     notifyOfAssignment(updated, newlyAssignedIds, viewer);
     if (statusChanged) notifyOfStatusChange(updated, updated.status, viewer, assigneeIds);
 
-    return toTaskWithRelations(updated);
+    return toTaskWithRelations(updated, viewer);
   },
 
   async updateTaskStatus(viewer, id, status: TaskStatus) {
@@ -328,7 +362,7 @@ export const mockTasksProvider: TasksProvider = {
     };
     db.tasks = db.tasks.map((t) => (t.id === id ? updated : t));
     if (statusChanged) notifyOfStatusChange(updated, status, viewer, taskAssigneeIds(id));
-    return toTaskWithRelations(updated);
+    return toTaskWithRelations(updated, viewer);
   },
 
   async toggleChecklistItem(viewer, taskId, itemId, isDone) {
@@ -384,7 +418,7 @@ export const mockTasksProvider: TasksProvider = {
       // code path that could double-fire this for the same toggle.
       notifyOfStatusChange(updatedTask, updatedTask.status, viewer, taskAssigneeIds(taskId));
     }
-    return toTaskWithRelations(updatedTask);
+    return toTaskWithRelations(updatedTask, viewer);
   },
 
   async listPastTasksForActivity(viewer, activityId, excludeTaskId) {

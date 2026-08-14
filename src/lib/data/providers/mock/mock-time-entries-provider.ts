@@ -9,6 +9,7 @@ import type { TimeEntry, TimeEntryCorrection, User } from "../../types";
 import { canAccessTask, canCorrectTimeEntry, canLogTime, canViewTimeForUser } from "../../permissions";
 import { INTERNAL_COMPANY_ID } from "../../constants";
 import { db } from "./mock-db";
+import { mockTasksProvider } from "./mock-tasks-provider";
 
 function taskAssigneeIds(taskId: string): string[] {
   return db.taskAssignees.filter((ta) => ta.taskId === taskId).map((ta) => ta.userId);
@@ -143,6 +144,23 @@ export const mockTimeEntriesProvider: TimeEntriesProvider = {
       continuesFromEntryId: null,
     };
     db.timeEntries = [...db.timeEntries, entry];
+
+    // Work actually starting is the missing lifecycle event between Todo and In Progress — only
+    // that one transition is automatic; Blocked/Waiting on client/Done are never overridden here.
+    // Routed through the real Task status-update path (not a raw db.tasks mutation) so
+    // statusChangedAt/statusChangedById are set correctly and resolve through the same
+    // current-viewer-aware actor resolution Task hydration already uses. The timer itself has
+    // already been committed above, so if this unexpectedly failed it must never roll the timer
+    // back or fail the Start Timer action the person actually asked for — starting a timer must
+    // never end in "nothing happened."
+    if (task.status === "todo") {
+      try {
+        await mockTasksProvider.updateTaskStatus(viewer, taskId, "in-progress");
+      } catch {
+        // Timer already started successfully; the status transition is a best-effort side effect.
+      }
+    }
+
     return toTimeEntryWithUser(entry);
   },
 
