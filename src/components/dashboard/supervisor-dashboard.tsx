@@ -1,18 +1,28 @@
 "use client";
 
+import { useState } from "react";
+import Link from "next/link";
+import { ListChecks, Plus, Square } from "lucide-react";
 import type { User } from "@/lib/data/types";
-import { useTasks } from "@/lib/data/hooks/use-tasks";
+import { useTasks, useMyTasks } from "@/lib/data/hooks/use-tasks";
 import { useCompanies, useCompanyLookups } from "@/lib/data/hooks/use-companies";
 import { useWorkstreams } from "@/lib/data/hooks/use-workstreams";
+import { useMyTimeEntries } from "@/lib/data/hooks/use-time-entries";
+import { useElapsedSeconds } from "@/lib/data/hooks/use-elapsed-seconds";
 import { useAccomplishmentsReports } from "@/lib/data/hooks/use-accomplishments-reports";
 import { useRecentHandoffs } from "@/lib/data/hooks/use-task-handoffs";
 import { isAccomplishmentsReportOwner } from "@/lib/data/permissions";
+import { timeEntriesProvider } from "@/lib/data/providers";
+import { formatMinutes } from "@/lib/format-minutes";
 import { GreetingText } from "@/components/dashboard/greeting-heading";
 import { SearchTriggerBar } from "@/components/dashboard/search-trigger-bar";
 import { KpiPreviewList } from "@/components/dashboard/kpi-preview-list";
 import { StatCard } from "@/components/ui/stat-card";
 import { SectionBreak } from "@/components/ui/section-break";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { TaskRowList } from "@/components/tasks/task-row";
+import { TaskFormDialog } from "@/components/tasks/task-form-dialog";
 import { TaskStatusDonut } from "@/components/tasks/task-status-donut";
 import { TeamWorkloadCard } from "@/components/dashboard/team-workload-card";
 import { ClientHealthOverviewCard } from "@/components/dashboard/client-health-overview-card";
@@ -27,6 +37,12 @@ function todayDateString() {
   return new Date().toISOString().slice(0, 10);
 }
 
+function formatElapsed(seconds: number) {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+
 /** Matches `ClientHealthBadge`'s own label text, for the "Clients needing attention" KPI's preview subtitle. */
 const HEALTH_LABEL: Record<string, string> = {
   "needs-attention": "Needs Attention",
@@ -35,11 +51,15 @@ const HEALTH_LABEL: Record<string, string> = {
 
 export function SupervisorDashboard({ user }: { user: User }) {
   const { tasks } = useTasks();
+  const { tasks: myTasks, isLoading: myTasksLoading, refresh: refreshMyTasks } = useMyTasks();
+  const { entries: myEntries, refresh: refreshMyEntries } = useMyTimeEntries();
   const { companies } = useCompanies();
   const { workstreams } = useWorkstreams();
   const { assignableStaff } = useCompanyLookups();
   const { reports } = useAccomplishmentsReports();
   const { handoffs } = useRecentHandoffs();
+  const [taskDialogOpen, setTaskDialogOpen] = useState(false);
+  const [isStopping, setIsStopping] = useState(false);
 
   const teamMembers = assignableStaff.filter((u) => u.id !== user.id);
   const teamReports = reports.filter((r) => !isAccomplishmentsReportOwner(user, r));
@@ -57,13 +77,30 @@ export function SupervisorDashboard({ user }: { user: User }) {
   const clientsNeedingAttention = companies.filter((c) => c.health.status !== "on-track");
   const clientsNeedingAttentionCount = clientsNeedingAttention.length;
 
+  const myOpenTasks = myTasks.filter((t) => t.status !== "done");
+  const weekEntries = myEntries.filter((e) => e.durationMinutes !== null && e.startTime >= sevenDaysAgoIso);
+  const weekMinutes = weekEntries.reduce((sum, e) => sum + (e.durationMinutes ?? 0), 0);
+  const runningEntry = myEntries.find((e) => e.durationMinutes === null) ?? null;
+  const elapsedSeconds = useElapsedSeconds(runningEntry?.startTime ?? null);
+
+  async function handleStopTimer() {
+    if (!runningEntry) return;
+    setIsStopping(true);
+    try {
+      await timeEntriesProvider.stopTimer(user, runningEntry.id);
+      await refreshMyEntries();
+    } finally {
+      setIsStopping(false);
+    }
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <div>
         <h1 className="font-heading text-3xl font-semibold tracking-tight sm:text-4xl">
           <GreetingText fullName={user.fullName} />
         </h1>
-        <p className="mt-1 text-sm text-muted-foreground">Here&apos;s how your team is doing.</p>
+        <p className="mt-1 text-sm text-muted-foreground">Your own work, plus how your team is doing.</p>
         <SearchTriggerBar
           variant="hero"
           placeholder="Search clients, tasks, actions…"
@@ -147,7 +184,73 @@ export function SupervisorDashboard({ user }: { user: User }) {
         />
       </div>
 
-      <SectionBreak num="01" label="Team" />
+      {/* A Supervisor is also an operational Employee — this section is the same "my own work
+          today" content the Employee dashboard leads with, so managing a team never comes at the
+          cost of losing sight of their own assignments. */}
+      <SectionBreak num="01" label="My Work" />
+
+      <div className="grid gap-4 lg:grid-cols-3">
+        <Card className={cn("lg:col-span-2", STAGGER_ITEM_CLASS)} style={staggerDelay(0)}>
+          <CardHeader className="flex items-center justify-between">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <ListChecks className="size-4 text-muted-foreground" aria-hidden="true" />
+              My Tasks
+            </CardTitle>
+            <Button size="sm" variant="outline" onClick={() => setTaskDialogOpen(true)}>
+              <Plus /> Add task
+            </Button>
+          </CardHeader>
+          <CardContent>
+            <TaskRowList
+              tasks={myOpenTasks}
+              isLoading={myTasksLoading}
+              emptyMessage="Nothing assigned to you right now — add your own task to get started."
+              subtitleFor={(task) =>
+                `${task.company.name} · ${task.workstream.name}${task.activity ? ` · ${task.activity.name}` : ""}`
+              }
+            />
+          </CardContent>
+        </Card>
+
+        <Card className={cn(STAGGER_ITEM_CLASS)} style={staggerDelay(1)}>
+          <CardHeader>
+            <CardTitle className="text-base">My time this week</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4">
+            <div>
+              <span className="font-heading text-2xl font-semibold tracking-tight text-primary">
+                {formatMinutes(weekMinutes)}
+              </span>
+              <p className="mt-1 text-xs text-muted-foreground">Logged across the last 7 days.</p>
+            </div>
+            <div className="border-t pt-3">
+              <span className="mb-2 block font-mono text-xs tracking-wider text-muted-foreground uppercase">
+                Running timer
+              </span>
+              {runningEntry ? (
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex flex-col gap-1">
+                    <Link
+                      href={`/dashboard/tasks/${runningEntry.task.id}`}
+                      className="text-sm font-medium hover:underline"
+                    >
+                      {runningEntry.task.title}
+                    </Link>
+                    <span className="font-mono text-lg text-primary">{formatElapsed(elapsedSeconds)}</span>
+                  </div>
+                  <Button variant="destructive" size="sm" onClick={handleStopTimer} disabled={isStopping}>
+                    <Square /> Stop
+                  </Button>
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">No timer running — start one from any task.</p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <SectionBreak num="02" label="Team Attention" />
 
       <div className="grid gap-4 lg:grid-cols-3">
         <div className={cn("lg:col-span-2", STAGGER_ITEM_CLASS)} style={staggerDelay(0)}>
@@ -166,7 +269,7 @@ export function SupervisorDashboard({ user }: { user: User }) {
         </div>
       </div>
 
-      <SectionBreak num="02" label="Review & Activity" />
+      <SectionBreak num="03" label="Review & Activity" />
 
       <div className="grid gap-4 lg:grid-cols-3">
         <div className={cn("lg:col-span-2", STAGGER_ITEM_CLASS)} style={staggerDelay(0)}>
@@ -178,6 +281,8 @@ export function SupervisorDashboard({ user }: { user: User }) {
           <UpcomingDeadlinesCard tasks={tasks} />
         </div>
       </div>
+
+      <TaskFormDialog open={taskDialogOpen} onOpenChange={setTaskDialogOpen} mode="create" onSaved={refreshMyTasks} />
     </div>
   );
 }

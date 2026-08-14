@@ -232,7 +232,9 @@ export function EmployeeDashboard({ user }: { user: User }) {
                   ? "Nothing assigned to you yet — add your own task to get started."
                   : "No tasks match your filters."
               }
-              subtitleFor={(task) => `${task.company.name} · ${task.workstream.name}`}
+              subtitleFor={(task) =>
+                `${task.company.name} · ${task.workstream.name}${task.activity ? ` · ${task.activity.name}` : ""}`
+              }
             />
           </CardContent>
         </Card>

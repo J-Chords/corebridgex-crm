@@ -110,6 +110,11 @@ export function TaskGridCard({ task, className, style, isFocusTask, onMarkDone, 
         <TaskPriorityBadge priority={task.priority} />
       </div>
 
+      <p className="truncate text-xs text-muted-foreground">
+        {task.company.name} · {task.workstream.name}
+        {task.activity && <> · {task.activity.name}</>}
+      </p>
+
       <ChecklistProgress
         done={task.checklistItems.filter((c) => c.isDone).length}
         total={task.checklistItems.length}
