@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { AlertCircle } from "lucide-react";
 import { useAuth } from "@/lib/auth/auth-context";
+import { providerMode } from "@/lib/data/provider-mode";
 import { Button } from "@/components/ui/button";
 import { FloatingLabelInput } from "@/components/ui/floating-label-input";
 import { Separator } from "@/components/ui/separator";
@@ -90,33 +91,35 @@ export function LoginForm() {
             {isSubmitting ? "Signing in…" : "Sign in"}
           </Button>
 
-          <div className="w-full">
-            <div className="flex items-center gap-2">
-              <Separator className="flex-1" />
-              <span className="text-xs text-muted-foreground">
-                mock data · quick demo login
-              </span>
-              <Separator className="flex-1" />
+          {providerMode === "mock" && (
+            <div className="w-full">
+              <div className="flex items-center gap-2">
+                <Separator className="flex-1" />
+                <span className="text-xs text-muted-foreground">
+                  mock data · quick demo login
+                </span>
+                <Separator className="flex-1" />
+              </div>
+              <div className="mt-3 grid grid-cols-3 gap-2">
+                {QUICK_LOGIN_ACCOUNTS.map((account) => (
+                  <Button
+                    key={account.email}
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-auto flex-col gap-0.5 py-2"
+                    disabled={isSubmitting}
+                    onClick={() => handleLogin(account.email, "demo")}
+                  >
+                    <span className="text-xs font-medium">{account.label}</span>
+                    <span className="text-[10px] text-muted-foreground">
+                      {account.name}
+                    </span>
+                  </Button>
+                ))}
+              </div>
             </div>
-            <div className="mt-3 grid grid-cols-3 gap-2">
-              {QUICK_LOGIN_ACCOUNTS.map((account) => (
-                <Button
-                  key={account.email}
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="h-auto flex-col gap-0.5 py-2"
-                  disabled={isSubmitting}
-                  onClick={() => handleLogin(account.email, "demo")}
-                >
-                  <span className="text-xs font-medium">{account.label}</span>
-                  <span className="text-[10px] text-muted-foreground">
-                    {account.name}
-                  </span>
-                </Button>
-              ))}
-            </div>
-          </div>
+          )}
         </CardFooter>
       </form>
     </Card>

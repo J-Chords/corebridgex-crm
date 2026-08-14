@@ -134,9 +134,10 @@ Correction rules, all provider-enforced:
 
 ## Current backend status
 
-- The **active** provider today is still **mock** (`NEXT_PUBLIC_DATA_PROVIDER=mock` in `.env.local`) — an in-memory dataset, reset to seed data on every full page reload. This has not changed.
-- There are **14 provider groups** in `src/lib/data/providers/` (Auth, Companies, Workstreams, Tasks, TimeEntries, Notes, Notifications, Templates, TaskHandoffs, ActivityCatalog, AccomplishmentsReport, SavedViews, DailyUpdates, ClientReport). Every `src/lib/data/providers/supabase/*` file is still a `notImplemented`/stubbed contract — **none have real behavior yet**. The global switch in `providers/index.ts` (`NEXT_PUBLIC_DATA_PROVIDER === "supabase"`) is unchanged and still gates all 14 at once — no per-provider switching was introduced.
-- **Current RBAC is enforced in the mock provider layer only.** It is a correct behavioral specification for what real security must do, but it is **not** itself production security — real security requires the equivalent enforcement in Supabase RLS once that backend exists. Do not represent current RBAC as production-ready.
+- The user's local `.env.local` still reads **mock** (`NEXT_PUBLIC_DATA_PROVIDER=mock`) as of this writing — an in-memory dataset, reset to seed data on every full page reload.
+- There are **14 provider groups** in `src/lib/data/providers/` (Auth, Companies, Workstreams, Tasks, TimeEntries, Notes, Notifications, Templates, TaskHandoffs, ActivityCatalog, AccomplishmentsReport, SavedViews, DailyUpdates, ClientReport).
+- **`NEXT_PUBLIC_DATA_PROVIDER` now has three valid values**, centralized in `src/lib/data/provider-mode.ts` (`providerMode`/`usesSupabaseAuth`/`usesSupabaseData` — everything else compares against these instead of raw strings): `mock` (every provider mock — the default and an unrecognized/invalid value both fail safe to this), `supabase-auth` (Auth is real Supabase, **every other provider stays mock**), `supabase` (every provider real Supabase — same behavior `providers/index.ts` always had, just renamed/centralized). `supabaseAuthProvider` (`src/lib/data/providers/supabase/supabase-auth-provider.ts`) is now a real implementation; every other `src/lib/data/providers/supabase/*` file is still a `notImplemented`/stubbed contract — **no business-data provider has real behavior yet**.
+- **Current RBAC is enforced in the mock provider layer only** for every provider except Auth. It is a correct behavioral specification for what real security must do, but it is **not** itself production security for the still-mock providers — real security requires the equivalent enforcement in Supabase RLS once each backend is real. Auth is the first exception: `supabaseAuthProvider` reads role/active/supervisorId/assignedCompanyIds from `public.profiles`/`public.user_companies` through the signed-in user's own session, with Postgres RLS (hardened in Foundation C) as the real access-control boundary — never from JWT/`user_metadata`, never through a service-role client.
 
 **Existing Supabase target**: **Corebridgex** organization → **corebridgex-crm** project (ref `qxqxzuoaivyddwxqqoog` — not a secret, safe to record). No credentials, keys, or URLs for it are recorded in this document or should ever be committed to this repository.
 
@@ -186,9 +187,15 @@ Approved as the Supabase equivalent of the mock's `INTERNAL_COMPANY_ID` string s
 - Table privileges are now exact per the real provider contracts: `anon` has zero privileges on any of the 7 public tables; `authenticated` gets only what current providers actually use (e.g. `profiles` is SELECT + column-scoped UPDATE on `full_name`/`email` only — `role`/`supervisor_id`/`active` stay unreachable by ordinary UPDATE; `companies`/`client_contacts` get no DELETE, since neither provider has a delete path; `company_service_lines`/`user_companies` get no UPDATE, since both are always fully replaced rather than row-edited); `service_role` gets ordinary CRUD only. No role retains TRUNCATE/REFERENCES/TRIGGER on any table.
 - Function EXECUTE is now explicit: `PUBLIC`/`anon` have none of the 9 application functions; `authenticated`/`service_role` can call the 5 RLS helpers + 3 admin RPCs only (the admin RPCs keep their own internal `is_superadmin()` check — EXECUTE privilege was never the authorization boundary); `handle_new_user()` is not directly callable by any role and remains attached to the `on_auth_user_created` trigger on `auth.users` unchanged (trigger firing doesn't require the triggering role to hold EXECUTE on the trigger function).
 - `ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public` now excludes `anon`/`authenticated`/`service_role` from future tables/functions/sequences — a future migration must GRANT explicitly rather than inheriting broad access automatically. (Supabase's own `supabase_admin` role default ACL is untouched — out of scope, platform-managed.)
-- No data was touched, no RLS policy was changed (all 13 pre-existing policies remain, same names/commands), RLS remains enabled on all 7 tables. Provider remains mock throughout; not committed to git as of this writing — pending user review.
+- No data was touched, no RLS policy was changed (all 13 pre-existing policies remain, same names/commands), RLS remains enabled on all 7 tables. Committed as `628021e0f8b254490241bf4fbac274823dd24d72` ("checkpoint: harden Supabase public privileges").
 
-**Next: Supabase Auth + Companies — first real vertical slice** (implementing `supabaseAuthProvider`/`supabaseCompaniesProvider` for real) — not started, do not begin without explicit instruction.
+**Supabase Auth — Controlled Transitional Mode: COMPLETE and manually verified.** `NEXT_PUBLIC_DATA_PROVIDER` gained a third value, `supabase-auth` (real Auth, every other provider stays mock — see "Current backend status" above for the full three-mode model). `supabaseAuthProvider` is a real implementation of the existing `AuthProvider` contract (`getCurrentUser`/`login`/`logout`/`updateProfile`), mapping the signed-in session to the app's `User` type from `public.profiles` (role/active/supervisorId/email/fullName/createdAt) and `public.user_companies` (assignedCompanyIds) — never from JWT/`user_metadata`, never through a service-role key (none exists in this app). An Auth identity with no matching `profiles` row, or with `active = false`, is denied app access (signed out, not fabricated as a default Employee). Editing a profile's email to a different value is explicitly rejected for now (`"Changing your sign-in email isn't supported yet"`) rather than letting `public.profiles.email` diverge from the real Supabase Auth sign-in email — fullName-only edits still work, gated the same `canEditOwnProfile` (superadmin-only) way as mock. The login page's quick-demo account buttons only render in `mock` mode.
+
+**Manually verified by the user in the running app** (real hosted `corebridgex-crm` project, real Superadmin credentials — no email/UUID/password recorded here): real Supabase Superadmin login succeeds; mock quick-login controls are hidden in `supabase-auth` mode; the authenticated dashboard loads with the Superadmin identity/role recognized correctly; a page refresh preserves the authenticated session (`getCurrentUser` restores it, no re-login needed); logout correctly clears the session and returns to `/login`; a wrong password produces a clear authentication error without creating a session, and a subsequent correct login still succeeds afterward; existing mock business-data pages (Companies, Tasks, etc.) remain fully usable while signed in as the real Auth user. **All Auth acceptance criteria passed — no regressions found.**
+
+**Known transitional limitation (expected and accepted)**: the real Superadmin's Supabase UUID doesn't exist anywhere in the mock's own task/time/notification seed data, so in `supabase-auth` mode some self-specific mock views (My Day's own assignments, personal notifications/time history) can legitimately look empty for that user — organization-wide Superadmin visibility (where permission logic already short-circuits for the role) still works. This is expected and temporary; do not "fix" it by injecting the real UUID into mock seed data. Email-change support also remains intentionally deferred (see above) until a real confirmation flow is built.
+
+**Next: Companies + minimum Workstream compatibility — AUDIT/DESIGN ONLY**, not started, do not begin without explicit instruction. The previous audit proved real Companies can't yet coexist with mock Workstreams (`mockWorkstreamsProvider.createWorkstream` looks up company ids in the mock's own array) — that compatibility gap needs its own audit before any `supabaseCompaniesProvider` implementation begins.
 
 ## Next roadmap
 
@@ -196,14 +203,15 @@ Approved as the Supabase equivalent of the mock's `INTERNAL_COMPANY_ID` string s
 2. ~~Supabase Foundation A (local scaffolding + Auth/Companies migration set)~~ — done, reviewed, checkpointed.
 3. ~~Connect to the hosted `corebridgex-crm` project, apply the migration set + test seed~~ — done, verified.
 4. ~~Create the first development Auth user, verify `handle_new_user()`, run the first-superadmin bootstrap SQL~~ — done, verified. One development Superadmin exists.
-5. ~~Supabase Foundation C — explicit least-privilege table/function grants + safer default privileges for future objects~~ — done, verified read-only against the actual effective privileges (not just the migration text).
-6. **Supabase Auth + Companies — first real vertical slice** (implement `supabaseAuthProvider`/`supabaseCompaniesProvider` for real) — next, not started. Supervisor/Employee test users get created through this real path once it exists, not more Dashboard SQL.
-7. Continue with Workstreams/Activity Catalog, then Tasks/Time, then Notes/Notifications/Handoffs, then Reports/Daily Updates/Templates/Saved Views — see the audit for the full dependency-ordered plan.
-8. Real Auth/Postgres/RLS migration completes in controlled slices — not a single big-bang cutover.
-9. Sub-tasks — one nesting level (real child Task: own status/assignee/time/checklist). `tasks.parent_task_id` will be reserved (nullable, unused) in the Tasks migration when reached.
-10. Client long-lived/forever note + Client activity/history/reporting.
-11. Batch Task creation from multiple Activities at once (workflow improvement, not a data-model change).
-12. Attendance/clock-in/geolocation — future only, not scoped now.
+5. ~~Supabase Foundation C — explicit least-privilege table/function grants + safer default privileges for future objects~~ — done, verified read-only against the actual effective privileges, committed `628021e`.
+6. ~~Supabase Auth — Controlled Transitional Mode (real `supabaseAuthProvider`, `supabase-auth` provider mode)~~ — done, manually verified end-to-end by the user (real login, refresh, logout, wrong-password handling, mock pages still usable).
+7. **Companies + minimum Workstream compatibility — audit/design only** — next, not started. Must resolve the mock-Workstream/`createWorkstream` company-id lookup gap before any `supabaseCompaniesProvider` implementation. Supervisor/Employee test users get created through the now-real Auth path once needed, not more Dashboard SQL.
+8. Continue with Workstreams/Activity Catalog, then Tasks/Time, then Notes/Notifications/Handoffs, then Reports/Daily Updates/Templates/Saved Views — see the audit for the full dependency-ordered plan.
+9. Real Auth/Postgres/RLS migration completes in controlled slices — not a single big-bang cutover.
+10. Sub-tasks — one nesting level (real child Task: own status/assignee/time/checklist). `tasks.parent_task_id` will be reserved (nullable, unused) in the Tasks migration when reached.
+11. Client long-lived/forever note + Client activity/history/reporting.
+12. Batch Task creation from multiple Activities at once (workflow improvement, not a data-model change).
+13. Attendance/clock-in/geolocation — future only, not scoped now.
 
 ## Known deferred / do not build now
 
@@ -228,6 +236,9 @@ Approved as the Supabase equivalent of the mock's `INTERNAL_COMPANY_ID` string s
 - Do not create a second Supabase organization or project — reuse the **Corebridgex** organization's **corebridgex-crm** project.
 - Do not expose `role`/`supervisor_id`/`active` as ordinary client-editable profile columns (in RLS or in the UI) — they're authorization-sensitive and, in the schema, reachable only through superadmin-gated RPCs (`admin_set_user_role`/`admin_set_supervisor`/`admin_set_active`).
 - Do not treat `src/proxy.ts` (Next.js 16's renamed `middleware.ts`) as an authorization layer — it only refreshes the session cookie; RLS is the real access control.
+- Do not add per-provider environment variables (`NEXT_PUBLIC_AUTH_PROVIDER`, etc.) — there is exactly one source of truth, `NEXT_PUBLIC_DATA_PROVIDER`, with exactly three valid values (`mock`/`supabase-auth`/`supabase`) centralized in `src/lib/data/provider-mode.ts`.
+- Do not derive a real user's role/active/supervisorId/assignedCompanyIds from JWT claims or `user_metadata` — always from `public.profiles`/`public.user_companies`, read through the signed-in user's own session (never a service-role client).
+- Do not let `public.profiles.email` diverge from the real Supabase Auth sign-in email — an email-change request must be rejected until a real confirmation flow exists, never applied to one side only.
 
 ## Standard development workflow
 
@@ -263,6 +274,7 @@ Read the Current phase and Next roadmap sections before proposing changes.
 ## Last updated
 
 - Date: 2026-08-13
-- Current verified checkpoint: Foundation C is **not yet committed** — pending user review. The most recent commit remains `244dba8595d3f88e79beb44163105beb03cb5aa1` ("checkpoint: hosted Supabase seed and first superadmin bootstrap"); the previous checkpoint was `f1bd0adf58e5cdb319e82660a65852287577ab4d`.
-- Current phase: Supabase Foundation C — Explicit Grants + Function Execution Hardening — **COMPLETE, awaiting review/commit**. Hosted table/function privileges are now explicit least-privilege, verified read-only post-migration; RLS/policies unchanged; app still runs entirely on mock.
-- Next phase: Supabase Auth + Companies — first real vertical slice (`supabaseAuthProvider`/`supabaseCompaniesProvider`) — not started.
+- Foundation C checkpoint: `628021e0f8b254490241bf4fbac274823dd24d72` ("checkpoint: harden Supabase public privileges"). Previous checkpoint: `244dba8595d3f88e79beb44163105beb03cb5aa1`.
+- Current verified checkpoint: this document is being committed alongside the Supabase Auth transitional-mode implementation (commit message: "checkpoint: real Supabase auth transitional mode") — see `git log -1` for the exact hash.
+- Current phase: **Supabase Auth — Controlled Transitional Mode — COMPLETE, manually verified by the user, checkpointed.** `supabaseAuthProvider` is real; `NEXT_PUBLIC_DATA_PROVIDER=supabase-auth` is a valid mode where Auth is real Supabase and every other provider stays mock. Real login/refresh/logout/wrong-password flows all manually verified against the hosted project; mock business-data pages remain usable.
+- Next phase: Companies + minimum Workstream compatibility — **audit/design only** — not started.

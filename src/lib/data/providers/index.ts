@@ -1,3 +1,4 @@
+import { usesSupabaseAuth, usesSupabaseData } from "../provider-mode";
 import { mockAuthProvider } from "./mock/mock-auth-provider";
 import { supabaseAuthProvider } from "./supabase/supabase-auth-provider";
 import { mockCompaniesProvider } from "./mock/mock-companies-provider";
@@ -28,26 +29,32 @@ import { mockClientReportProvider } from "./mock/mock-client-report-provider";
 import { supabaseClientReportProvider } from "./supabase/supabase-client-report-provider";
 
 /**
- * Single switch for the whole app's backend. Set NEXT_PUBLIC_DATA_PROVIDER
- * to "supabase" once the real backend is ready — every screen already talks
- * to `authProvider`/`companiesProvider` (and, in later phases, the other
- * providers exported from here), so nothing else needs to change.
+ * Single switch for the whole app's backend, driven by `NEXT_PUBLIC_DATA_PROVIDER` (see
+ * `../provider-mode`). Every screen already talks to `authProvider`/`companiesProvider`
+ * (and, in later phases, the other providers exported from here), so nothing else needs
+ * to change as modes advance.
+ *
+ * - "mock": every provider below is mock.
+ * - "supabase-auth": ONLY `authProvider` becomes real Supabase — a deliberate transitional
+ *   mode, since most Supabase business-data providers aren't implemented yet. Every other
+ *   provider stays mock.
+ * - "supabase": every provider below is real Supabase, same as this file's prior behavior.
  */
-const useSupabase = process.env.NEXT_PUBLIC_DATA_PROVIDER === "supabase";
-
-export const authProvider = useSupabase ? supabaseAuthProvider : mockAuthProvider;
-export const companiesProvider = useSupabase ? supabaseCompaniesProvider : mockCompaniesProvider;
-export const workstreamsProvider = useSupabase ? supabaseWorkstreamsProvider : mockWorkstreamsProvider;
-export const tasksProvider = useSupabase ? supabaseTasksProvider : mockTasksProvider;
-export const timeEntriesProvider = useSupabase ? supabaseTimeEntriesProvider : mockTimeEntriesProvider;
-export const notesProvider = useSupabase ? supabaseNotesProvider : mockNotesProvider;
-export const notificationsProvider = useSupabase ? supabaseNotificationsProvider : mockNotificationsProvider;
-export const templatesProvider = useSupabase ? supabaseTemplatesProvider : mockTemplatesProvider;
-export const taskHandoffsProvider = useSupabase ? supabaseTaskHandoffsProvider : mockTaskHandoffsProvider;
-export const activityCatalogProvider = useSupabase ? supabaseActivityCatalogProvider : mockActivityCatalogProvider;
-export const accomplishmentsReportProvider = useSupabase
+export const authProvider = usesSupabaseAuth ? supabaseAuthProvider : mockAuthProvider;
+export const companiesProvider = usesSupabaseData ? supabaseCompaniesProvider : mockCompaniesProvider;
+export const workstreamsProvider = usesSupabaseData ? supabaseWorkstreamsProvider : mockWorkstreamsProvider;
+export const tasksProvider = usesSupabaseData ? supabaseTasksProvider : mockTasksProvider;
+export const timeEntriesProvider = usesSupabaseData ? supabaseTimeEntriesProvider : mockTimeEntriesProvider;
+export const notesProvider = usesSupabaseData ? supabaseNotesProvider : mockNotesProvider;
+export const notificationsProvider = usesSupabaseData ? supabaseNotificationsProvider : mockNotificationsProvider;
+export const templatesProvider = usesSupabaseData ? supabaseTemplatesProvider : mockTemplatesProvider;
+export const taskHandoffsProvider = usesSupabaseData ? supabaseTaskHandoffsProvider : mockTaskHandoffsProvider;
+export const activityCatalogProvider = usesSupabaseData
+  ? supabaseActivityCatalogProvider
+  : mockActivityCatalogProvider;
+export const accomplishmentsReportProvider = usesSupabaseData
   ? supabaseAccomplishmentsReportProvider
   : mockAccomplishmentsReportProvider;
-export const savedViewsProvider = useSupabase ? supabaseSavedViewsProvider : mockSavedViewsProvider;
-export const dailyUpdatesProvider = useSupabase ? supabaseDailyUpdatesProvider : mockDailyUpdatesProvider;
-export const clientReportProvider = useSupabase ? supabaseClientReportProvider : mockClientReportProvider;
+export const savedViewsProvider = usesSupabaseData ? supabaseSavedViewsProvider : mockSavedViewsProvider;
+export const dailyUpdatesProvider = usesSupabaseData ? supabaseDailyUpdatesProvider : mockDailyUpdatesProvider;
+export const clientReportProvider = usesSupabaseData ? supabaseClientReportProvider : mockClientReportProvider;
