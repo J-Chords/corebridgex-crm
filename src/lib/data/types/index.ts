@@ -6,6 +6,7 @@ export * from "./activity-catalog";
 export * from "./company";
 export * from "./recurrence";
 export * from "./workstream";
+export * from "./project";
 export * from "./client-contact";
 export * from "./checklist-item";
 export * from "./task";

@@ -21,6 +21,8 @@ import { seedDepartments } from "./seed-departments";
 import { seedActivities } from "./seed-activities";
 import { seedAccomplishmentsReports } from "./seed-accomplishments-reports";
 import { seedSavedViews } from "./seed-saved-views";
+import { seedProjects } from "./seed-projects";
+import { seedProjectMembers } from "./seed-project-members";
 import type { ClientReport, DailyUpdate, TimeEntryCorrection } from "../../types";
 
 /**
@@ -56,6 +58,8 @@ export const db = {
   activities: [...seedActivities],
   accomplishmentsReports: [...seedAccomplishmentsReports],
   savedViews: [...seedSavedViews],
+  projects: [...seedProjects],
+  projectMembers: [...seedProjectMembers],
   // No seed rows here on purpose — every row is dated "today" at creation time, and seed data is
   // all fixed past dates. Populated at runtime as people open My Day.
   dailyUpdates: [] as DailyUpdate[],

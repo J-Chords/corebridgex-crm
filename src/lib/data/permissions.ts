@@ -410,3 +410,26 @@ export function canAccessWorkstream(
   }
   return workstream.leadUserId === viewer.id || workstream.teamUserIds.includes(viewer.id);
 }
+
+/**
+ * Project visibility gate — mirrors canAccessWorkstream's exact shape (superadmin sees all; the
+ * Internal/Non-billable Company's Project is always visible; otherwise owner/member, scoped
+ * through managesUser so Supervisor gets exactly "Projects they personally belong to + Projects
+ * containing their own team's legitimate scope," never organization-wide). Deliberately not
+ * extended with a Task-assignee-implies-access branch the way canAccessWorkstream was — Project
+ * membership is meant to be the real, explicit operational relationship, seeded at backfill time
+ * from every current legitimate access path. See docs/current-project-state.md's Phase 8A notes.
+ */
+export function canAccessProject(
+  viewer: User,
+  project: { companyId: string; ownerId: string; memberUserIds: string[] },
+  allUsers: User[]
+): boolean {
+  if (isSuperadmin(viewer)) return true;
+  if (project.companyId === INTERNAL_COMPANY_ID) return true;
+  if (isSupervisor(viewer)) {
+    const teamIds = new Set(allUsers.filter((u) => managesUser(viewer, u)).map((u) => u.id));
+    return teamIds.has(project.ownerId) || project.memberUserIds.some((id) => teamIds.has(id));
+  }
+  return project.ownerId === viewer.id || project.memberUserIds.includes(viewer.id);
+}

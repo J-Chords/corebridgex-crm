@@ -10,3 +10,6 @@ export const INTERNAL_WORKSTREAM_ID = "workstream-internal";
 
 /** The pseudo-brand Internal/Non-billable work belongs to — not a real partner brand, excluded from per-brand breakdowns. */
 export const INTERNAL_BRAND_ID = "brand-internal";
+
+/** The Project every Internal/Non-billable Workstream eventually belongs to — always accessible, mirroring INTERNAL_COMPANY_ID. Has null contract dates: internal work is not a one-year client contract. */
+export const INTERNAL_PROJECT_ID = "project-internal";
