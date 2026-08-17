@@ -1,6 +1,6 @@
 import type { WorkstreamsProvider, WorkstreamWithRelations } from "../workstreams-provider";
 import type { Workstream, User } from "../../types";
-import { canAccessCompany, canAccessWorkstream, canManageWorkstreams } from "../../permissions";
+import { canAccessCompany, canAccessWorkstream, canCreateWorkstream, canManageWorkstreams, isEmployee } from "../../permissions";
 import { computeWorkstreamBudget } from "../../time-budget";
 import { computeWorkstreamRecurrence } from "../../recurrence";
 import { db } from "./mock-db";
@@ -182,9 +182,15 @@ export const mockWorkstreamsProvider: WorkstreamsProvider = {
   },
 
   async createWorkstream(viewer, input) {
-    requireManage(viewer);
-    if (!canAccessCompany(viewer, input.companyId, db.users)) {
-      throw new Error("You don't have access to that company.");
+    if (!canCreateWorkstream(viewer, input.companyId, db.users)) {
+      throw new Error("You don't have access to create a workstream for that company.");
+    }
+    if (isEmployee(viewer) && input.leadUserId !== viewer.id) {
+      // Mirrors the real workstreams_insert RLS check exactly — an Employee may only ever create
+      // a workstream they themselves lead, never one assigned to someone else. This is what makes
+      // the new workstream visible to them afterward (canAccessWorkstream's own lead/self check),
+      // without granting any broader staff-assignment power.
+      throw new Error("You can only create a workstream you lead yourself.");
     }
     const company = db.companies.find((c) => c.id === input.companyId);
     if (!company) throw new Error("Company not found.");

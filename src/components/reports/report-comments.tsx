@@ -9,14 +9,7 @@ import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 
-function initials(fullName: string) {
-  return fullName
-    .split(" ")
-    .map((part) => part[0])
-    .join("")
-    .slice(0, 2)
-    .toUpperCase();
-}
+import { getInitials as initials } from "@/lib/initials";
 
 function formatDateTime(iso: string) {
   return new Date(iso).toLocaleString("en-US", {

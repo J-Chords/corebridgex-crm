@@ -10,14 +10,7 @@ import { ContainedIcon } from "@/components/ui/contained-icon";
 import { DailyUpdateEntries } from "@/components/daily-updates/daily-update-entries";
 import { DailyUpdateStatusBadge } from "@/components/daily-updates/daily-update-status-badge";
 
-function initials(fullName: string) {
-  return fullName
-    .split(" ")
-    .map((part) => part[0])
-    .join("")
-    .slice(0, 2)
-    .toUpperCase();
-}
+import { getInitials as initials } from "@/lib/initials";
 
 function formatTime(iso: string) {
   return new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });

@@ -29,14 +29,7 @@ function formatDate(value: string | null) {
   return new Date(value).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
 }
 
-function initials(fullName: string) {
-  return fullName
-    .split(" ")
-    .map((part) => part[0])
-    .join("")
-    .slice(0, 2)
-    .toUpperCase();
-}
+import { getInitials as initials } from "@/lib/initials";
 
 export default function WorkstreamDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);

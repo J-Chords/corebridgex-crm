@@ -8,14 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { STAGGER_ITEM_CLASS, staggerDelay } from "@/lib/stagger";
 import { cn } from "@/lib/utils";
 
-function initials(fullName: string) {
-  return fullName
-    .split(" ")
-    .map((part) => part[0])
-    .join("")
-    .slice(0, 2)
-    .toUpperCase();
-}
+import { getInitials as initials } from "@/lib/initials";
 
 const LEVEL_BADGE_VARIANT: Record<WorkloadLevel, "success" | "warning" | "destructive"> = {
   available: "success",

@@ -7,7 +7,7 @@ import { useAuth } from "@/lib/auth/auth-context";
 import { useTemplates } from "@/lib/data/hooks/use-templates";
 import { useCompanyLookups } from "@/lib/data/hooks/use-companies";
 import { isSupervisor } from "@/lib/data/permissions";
-import { workstreamsProvider, tasksProvider } from "@/lib/data/providers";
+import { templatesProvider } from "@/lib/data/providers";
 import type { TemplateWithTasks } from "@/lib/data/providers/templates-provider";
 import type { CompanyWithRelations } from "@/lib/data/providers/companies-provider";
 import { addDaysToDateString, formatPeriodLabel } from "@/lib/data/recurrence";
@@ -126,47 +126,20 @@ export function ApplyTemplateDialog({ open, onOpenChange, company, onApplied }: 
     setError(null);
     setIsSubmitting(true);
     try {
-      const workstream = await workstreamsProvider.createWorkstream(user, {
-        name: form.name.trim(),
-        description: template.description,
+      // A single atomic call — the workstream, its team, every template task, and each task's
+      // checklist items either all commit or none do (see TemplatesProvider.applyTemplate).
+      const { workstreamId } = await templatesProvider.applyTemplate(user, {
+        templateId: template.id,
         companyId: company.id,
-        serviceLineId: template.serviceLineId,
-        // Templates have no Activity concept of their own — the new workstream starts with no
-        // activities configured; a supervisor/superadmin can select them afterward via Edit.
-        activityIds: [],
+        name: form.name.trim(),
         leadUserId: form.leadUserId,
         teamUserIds: form.teamUserIds,
-        status: "active",
         startDate: form.startDate,
-        endDate: null,
-        recurrenceFrequency: template.recurrenceFrequency,
-        recurrenceAnchorDate: template.recurrenceFrequency ? form.startDate : null,
-        recurrenceCustomIntervalDays: template.recurrenceCustomIntervalDays,
       });
-
-      for (const templateTask of template.tasks) {
-        const dueDate =
-          templateTask.dueDaysAfterStart != null
-            ? addDaysToDateString(form.startDate, templateTask.dueDaysAfterStart)
-            : null;
-        await tasksProvider.createTask(user, {
-          title: templateTask.title,
-          description: templateTask.description,
-          workstreamId: workstream.id,
-          assigneeIds: [],
-          allowUnassigned: true,
-          status: "todo",
-          priority: "medium",
-          dueDate,
-          expectedMinutes: templateTask.expectedMinutes,
-          checklistItems: templateTask.checklistItems.map((ci) => ({ description: ci.description })),
-          templateId: templateTask.id,
-        });
-      }
 
       onApplied();
       onOpenChange(false);
-      router.push(`/dashboard/workstreams/${workstream.id}`);
+      router.push(`/dashboard/workstreams/${workstreamId}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to apply template.");
     } finally {

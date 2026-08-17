@@ -18,14 +18,7 @@ import {
 } from "@/components/ui/select";
 import { NoteTypeBadge, NOTE_TYPE_SELECT_ITEMS } from "@/components/notes/note-type-badge";
 
-function initials(fullName: string) {
-  return fullName
-    .split(" ")
-    .map((part) => part[0])
-    .join("")
-    .slice(0, 2)
-    .toUpperCase();
-}
+import { getInitials as initials } from "@/lib/initials";
 
 function formatDateTime(iso: string) {
   return new Date(iso).toLocaleString("en-US", {
@@ -49,15 +42,19 @@ export function NotesSection({ title, description, notes, emptyMessage, onAddNot
   const [body, setBody] = useState("");
   const [type, setType] = useState<NoteType>("internal");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!body.trim()) return;
     setIsSubmitting(true);
+    setError(null);
     try {
       await onAddNote({ body: body.trim(), type });
       setBody("");
       setType("internal");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to post note.");
     } finally {
       setIsSubmitting(false);
     }
@@ -94,6 +91,11 @@ export function NotesSection({ title, description, notes, emptyMessage, onAddNot
               <Send /> {isSubmitting ? "Posting…" : "Post note"}
             </Button>
           </div>
+          {error && (
+            <p role="alert" className="text-sm text-destructive">
+              {error}
+            </p>
+          )}
         </form>
 
         <Separator />

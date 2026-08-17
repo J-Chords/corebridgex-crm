@@ -1,4 +1,4 @@
-import { usesSupabaseAuth, usesSupabaseData } from "../provider-mode";
+import { usesSupabaseAuth, usesSupabaseCoreData, usesSupabaseData } from "../provider-mode";
 import { mockAuthProvider } from "./mock/mock-auth-provider";
 import { supabaseAuthProvider } from "./supabase/supabase-auth-provider";
 import { mockCompaniesProvider } from "./mock/mock-companies-provider";
@@ -38,18 +38,26 @@ import { supabaseClientReportProvider } from "./supabase/supabase-client-report-
  * - "supabase-auth": ONLY `authProvider` becomes real Supabase — a deliberate transitional
  *   mode, since most Supabase business-data providers aren't implemented yet. Every other
  *   provider stays mock.
- * - "supabase": every provider below is real Supabase, same as this file's prior behavior.
+ * - "supabase-core": Phase 7A-C's transitional mode — Companies/Workstreams/Activity Catalog/
+ *   Tasks/Time Entries/Notifications become real Supabase (the operational core), while
+ *   Notes/Templates/Task Handoffs/Accomplishments Report/Saved Views/Daily Updates/Client
+ *   Report stay mock — kept deliberately unchanged by Phase 7D/7E.
+ * - "supabase": every provider below is real Supabase. As of Phase 7D/7E, all 7 remaining
+ *   `notImplemented` stubs have real implementations, so this mode is now a genuinely complete
+ *   real backend — no provider selected here still throws.
  */
 export const authProvider = usesSupabaseAuth ? supabaseAuthProvider : mockAuthProvider;
-export const companiesProvider = usesSupabaseData ? supabaseCompaniesProvider : mockCompaniesProvider;
-export const workstreamsProvider = usesSupabaseData ? supabaseWorkstreamsProvider : mockWorkstreamsProvider;
-export const tasksProvider = usesSupabaseData ? supabaseTasksProvider : mockTasksProvider;
-export const timeEntriesProvider = usesSupabaseData ? supabaseTimeEntriesProvider : mockTimeEntriesProvider;
+export const companiesProvider = usesSupabaseCoreData ? supabaseCompaniesProvider : mockCompaniesProvider;
+export const workstreamsProvider = usesSupabaseCoreData ? supabaseWorkstreamsProvider : mockWorkstreamsProvider;
+export const tasksProvider = usesSupabaseCoreData ? supabaseTasksProvider : mockTasksProvider;
+export const timeEntriesProvider = usesSupabaseCoreData ? supabaseTimeEntriesProvider : mockTimeEntriesProvider;
 export const notesProvider = usesSupabaseData ? supabaseNotesProvider : mockNotesProvider;
-export const notificationsProvider = usesSupabaseData ? supabaseNotificationsProvider : mockNotificationsProvider;
+export const notificationsProvider = usesSupabaseCoreData
+  ? supabaseNotificationsProvider
+  : mockNotificationsProvider;
 export const templatesProvider = usesSupabaseData ? supabaseTemplatesProvider : mockTemplatesProvider;
 export const taskHandoffsProvider = usesSupabaseData ? supabaseTaskHandoffsProvider : mockTaskHandoffsProvider;
-export const activityCatalogProvider = usesSupabaseData
+export const activityCatalogProvider = usesSupabaseCoreData
   ? supabaseActivityCatalogProvider
   : mockActivityCatalogProvider;
 export const accomplishmentsReportProvider = usesSupabaseData

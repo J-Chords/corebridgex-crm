@@ -15,14 +15,7 @@ import { cn } from "@/lib/utils";
 /** How long the checkbox's own "gentle check" pop plays before the card starts easing out — long enough to register as a distinct beat, short enough to still feel quick. */
 const MARK_DONE_POP_MS = 220;
 
-function initials(fullName: string) {
-  return fullName
-    .split(" ")
-    .map((part) => part[0])
-    .join("")
-    .slice(0, 2)
-    .toUpperCase();
-}
+import { getInitials as initials } from "@/lib/initials";
 
 function formatDueDate(value: string) {
   return new Date(value).toLocaleDateString("en-US", { month: "short", day: "numeric" });

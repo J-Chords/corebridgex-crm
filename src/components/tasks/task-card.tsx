@@ -4,14 +4,7 @@ import { TaskPriorityBadge } from "@/components/tasks/task-priority-badge";
 import { STATUS_COLOR_VAR } from "@/components/tasks/task-status-badge";
 import { ChecklistProgress } from "@/components/ui/checklist-progress";
 
-function initials(fullName: string) {
-  return fullName
-    .split(" ")
-    .map((part) => part[0])
-    .join("")
-    .slice(0, 2)
-    .toUpperCase();
-}
+import { getInitials as initials } from "@/lib/initials";
 
 /** Kanban card content — draggability/click handling is layered on by whatever renders it (see TaskBoard). The colored left accent mirrors TaskGridCard's own convention, so a status stays visibly identifiable even scrolled away from its column header. */
 export function TaskCard({ task }: { task: TaskWithRelations }) {

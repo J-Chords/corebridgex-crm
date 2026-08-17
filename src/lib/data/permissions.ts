@@ -372,9 +372,24 @@ export function canCorrectTimeEntry(viewer: User, targetUserId: string, allUsers
   return !!target && managesUser(viewer, target);
 }
 
-/** Workstream create/edit is restricted to supervisor + superadmin — same as companies, no employee self-service. */
+/** Editing an EXISTING workstream (status/dates/lead/team reassignment) stays supervisor +
+ * superadmin only — no employee self-service. Creating a new one is broader; see
+ * `canCreateWorkstream`. */
 export function canManageWorkstreams(user: User): boolean {
   return isSupervisor(user) || isSuperadmin(user);
+}
+
+/**
+ * Creating a NEW workstream: supervisor/superadmin unconditionally, or an Employee for a Company
+ * they can already access (`canAccessCompany`) — the boss-clarified rule that an Employee may set
+ * up their own operational work (Service + Activities + Tasks) without needing a
+ * supervisor/superadmin to do it for them. This does not grant broader staff-assignment powers —
+ * see the caller-side rule that an Employee-created workstream must name the Employee themselves
+ * as its own lead.
+ */
+export function canCreateWorkstream(viewer: User, companyId: string, allUsers: User[]): boolean {
+  if (isSupervisor(viewer) || isSuperadmin(viewer)) return true;
+  return isEmployee(viewer) && canAccessCompany(viewer, companyId, allUsers);
 }
 
 /**

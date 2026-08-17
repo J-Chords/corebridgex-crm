@@ -13,14 +13,7 @@ import { ROLE_LABELS } from "@/lib/data/role-labels";
 import { canEditOwnProfile } from "@/lib/data/permissions";
 import type { User } from "@/lib/data/types";
 
-function initials(fullName: string) {
-  return fullName
-    .split(" ")
-    .map((part) => part[0])
-    .join("")
-    .slice(0, 2)
-    .toUpperCase();
-}
+import { getInitials as initials } from "@/lib/initials";
 
 export function ProfileSection({ user }: { user: User }) {
   const canEdit = canEditOwnProfile(user);

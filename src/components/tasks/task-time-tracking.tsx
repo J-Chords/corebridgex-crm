@@ -19,14 +19,7 @@ import { BudgetBar } from "@/components/ui/budget-bar";
 import { ManualTimeEntryDialog } from "@/components/tasks/manual-time-entry-dialog";
 import { TimeEntryCorrectionInfo } from "@/components/time-entries/time-entry-correction-info";
 
-function initials(fullName: string) {
-  return fullName
-    .split(" ")
-    .map((part) => part[0])
-    .join("")
-    .slice(0, 2)
-    .toUpperCase();
-}
+import { getInitials as initials } from "@/lib/initials";
 
 function formatEntryWhen(startTime: string, endTime: string | null) {
   const start = new Date(startTime);

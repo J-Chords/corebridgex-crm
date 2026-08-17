@@ -44,14 +44,7 @@ import { ROLE_LABELS } from "@/lib/data/role-labels";
 import { canManageTasks, canViewTeamUpdatesPage, canViewTeamTimePage } from "@/lib/data/permissions";
 import { SearchTriggerBar } from "@/components/dashboard/search-trigger-bar";
 
-function initials(fullName: string) {
-  return fullName
-    .split(" ")
-    .map((part) => part[0])
-    .join("")
-    .slice(0, 2)
-    .toUpperCase();
-}
+import { getInitials as initials } from "@/lib/initials";
 
 export function AppSidebar() {
   const { user, logout } = useAuth();

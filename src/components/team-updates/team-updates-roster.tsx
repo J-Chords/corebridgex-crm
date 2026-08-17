@@ -12,14 +12,7 @@ import { DailyUpdateStatusBadge } from "@/components/daily-updates/daily-update-
 import { STAGGER_ITEM_CLASS, staggerDelay } from "@/lib/stagger";
 import { cn } from "@/lib/utils";
 
-function initials(fullName: string) {
-  return fullName
-    .split(" ")
-    .map((part) => part[0])
-    .join("")
-    .slice(0, 2)
-    .toUpperCase();
-}
+import { getInitials as initials } from "@/lib/initials";
 
 /** Small status dot on the avatar corner — the same fact the badge already states, just scannable from a glance down the whole roster without reading text. */
 function avatarDotClass(update: DailyUpdate | undefined): string {
