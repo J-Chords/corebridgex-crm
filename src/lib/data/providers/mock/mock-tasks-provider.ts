@@ -2,12 +2,15 @@ import type { TasksProvider, TaskWithRelations } from "../tasks-provider";
 import type { ChecklistItem, Workstream, Task, TaskStatus, User } from "../../types";
 import {
   assignableStaffFor,
+  canAccessProject,
   canAccessWorkstream,
   canAccessTask,
   canEditTask,
   canProgressTask,
   isEmployee,
   isSuperadmin,
+  isSupervisor,
+  managesUser,
 } from "../../permissions";
 import { db } from "./mock-db";
 
@@ -17,6 +20,10 @@ function taskAssigneeIds(taskId: string): string[] {
 
 function workstreamTeamIds(workstreamId: string): string[] {
   return db.workstreamMembers.filter((m) => m.workstreamId === workstreamId).map((m) => m.userId);
+}
+
+function projectMemberIds(projectId: string): string[] {
+  return db.projectMembers.filter((m) => m.projectId === projectId).map((m) => m.userId);
 }
 
 function requireWorkstreamAccess(viewer: User, workstream: Workstream) {
@@ -32,7 +39,9 @@ function requireWorkstreamAccess(viewer: User, workstream: Workstream) {
  * A tagged activity must be one the workstream actually enabled — never silently attached outside
  * that set. A workstream with NO persisted associations yet (legacy data, or a service/brand with no
  * catalog) has nothing to check against, so anything goes there — same permissive behavior every
- * task already had before per-workstream Activity selection existed.
+ * task already had before per-workstream Activity selection existed. Used by updateTask, which never
+ * offers the contextual "add another Activity" flow — see `resolveActivityForTaskCreation` below for
+ * the create-only atomic-extension variant Phase 8C adds.
  */
 function requireActivityEnabledOnWorkstream(workstreamId: string, activityId: string | null | undefined) {
   if (!activityId) return;
@@ -43,6 +52,51 @@ function requireActivityEnabledOnWorkstream(workstreamId: string, activityId: st
   if (!enabledIds.includes(activityId)) {
     throw new Error("That activity isn't enabled for this workstream.");
   }
+}
+
+/** Mirrors workstream_activities_write's hardened scope exactly (Phase 8C): Employee may extend
+ * only a Service they themselves lead; Supervisor may extend one led by self or a legitimate direct
+ * report, within their own Project scope; Superadmin is organization-wide. */
+function canExtendWorkstreamActivities(viewer: User, workstream: Workstream): boolean {
+  if (isSuperadmin(viewer)) return true;
+  if (isEmployee(viewer)) return workstream.leadUserId === viewer.id;
+  if (isSupervisor(viewer)) {
+    const lead = db.users.find((u) => u.id === workstream.leadUserId);
+    if (!lead || !managesUser(viewer, lead)) return false;
+    if (!workstream.projectId) return false;
+    const project = db.projects.find((p) => p.id === workstream.projectId);
+    if (!project) return false;
+    return canAccessProject(viewer, { companyId: project.companyId, ownerId: project.ownerId, memberUserIds: projectMemberIds(project.id) }, db.users);
+  }
+  return false;
+}
+
+/**
+ * Phase 8C — mirrors the real create_task RPC's contextual "+ Add another Activity to this
+ * Service" extension exactly: if the chosen Activity isn't yet enabled for this Workstream and the
+ * viewer is authorized to extend it (`canExtendWorkstreamActivities`), it's enabled as part of this
+ * same synchronous call — otherwise the existing strict `requireActivityEnabledOnWorkstream`
+ * behavior applies (reject). The mock has no real transaction to roll back, but mirrors the same
+ * "validate everything, mutate nothing, until the very end" discipline `createTask` below already
+ * follows for its own db.tasks/db.taskAssignees writes, so a thrown error here never leaves a
+ * dangling enabled Activity with no Task behind it.
+ */
+function resolveActivityForTaskCreation(viewer: User, workstream: Workstream, activityId: string | null | undefined): void {
+  if (!activityId) return;
+  const alreadyEnabled = db.workstreamActivities.some(
+    (wa) => wa.workstreamId === workstream.id && wa.activityId === activityId
+  );
+  if (alreadyEnabled) return;
+
+  if (!canExtendWorkstreamActivities(viewer, workstream)) {
+    throw new Error("That activity is not yet enabled for this service, and you don't have permission to add it.");
+  }
+  const activity = db.activities.find((a) => a.id === activityId);
+  const department = activity ? db.departments.find((d) => d.id === activity.departmentId) : undefined;
+  if (!department || department.serviceLineId !== workstream.serviceLineId) {
+    throw new Error("That activity doesn't belong to this service.");
+  }
+  db.workstreamActivities = [...db.workstreamActivities, { workstreamId: workstream.id, activityId }];
 }
 
 /**
@@ -71,7 +125,13 @@ function toTaskWithRelations(task: Task, viewer: User): TaskWithRelations {
   if (!workstreamRecord) {
     throw new Error(`Task ${task.id} references unknown workstream ${task.workstreamId}`);
   }
-  const workstream = { id: workstreamRecord.id, name: workstreamRecord.name };
+  const project = workstreamRecord.projectId ? db.projects.find((p) => p.id === workstreamRecord.projectId) : undefined;
+  const workstream = {
+    id: workstreamRecord.id,
+    name: workstreamRecord.name,
+    projectId: workstreamRecord.projectId,
+    projectName: project?.name ?? null,
+  };
   const activity = (() => {
     if (!task.activityId) return null;
     const activityRecord = db.activities.find((a) => a.id === task.activityId);
@@ -249,7 +309,7 @@ export const mockTasksProvider: TasksProvider = {
     const workstream = db.workstreams.find((e) => e.id === input.workstreamId);
     if (!workstream) throw new Error("Workstream not found.");
     requireWorkstreamAccess(viewer, workstream);
-    requireActivityEnabledOnWorkstream(workstream.id, input.activityId);
+    resolveActivityForTaskCreation(viewer, workstream, input.activityId);
 
     const assigneeIds =
       input.allowUnassigned && input.assigneeIds.length === 0

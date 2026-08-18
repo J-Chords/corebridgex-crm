@@ -115,7 +115,7 @@ async function hydrate(tasks: Task[]): Promise<TaskWithRelations[]> {
 
   const [companiesRes, workstreamsRes, assigneesRes, checklistRes] = await Promise.all([
     supabase.from("companies").select("id, name, status, brand_id, primary_contact_id, contract_start_date, renewal_date, active, created_at").in("id", companyIds),
-    supabase.from("workstreams").select("id, name").in("id", workstreamIds),
+    supabase.from("workstreams").select("id, name, project_id").in("id", workstreamIds),
     supabase.from("task_assignees").select("task_id, user_id").in("task_id", ids),
     supabase.from("checklist_items").select("*").in("task_id", ids),
   ]);
@@ -128,6 +128,13 @@ async function hydrate(tasks: Task[]): Promise<TaskWithRelations[]> {
     ? await supabase.from("departments").select("id, name").in("id", departmentIds)
     : { data: [] as { id: string; name: string }[] };
 
+  const workstreamRowsForProjects = (workstreamsRes.data ?? []) as { id: string; name: string; project_id: string | null }[];
+  const projectIds = Array.from(new Set(workstreamRowsForProjects.map((w) => w.project_id).filter((x): x is string => x != null)));
+  const projectsRes = projectIds.length
+    ? await supabase.from("projects").select("id, name").in("id", projectIds)
+    : { data: [] as { id: string; name: string }[] };
+  const projects = (projectsRes.data ?? []) as { id: string; name: string }[];
+
   const assigneeLinks = (assigneesRes.data ?? []) as { task_id: string; user_id: string }[];
   const allUserIds = Array.from(new Set([...creatorIds, ...statusChangerIds, ...assigneeLinks.map((a) => a.user_id)]));
   // Not a plain `profiles` select — `profiles_select` RLS only ever exposes self/your own direct
@@ -139,7 +146,7 @@ async function hydrate(tasks: Task[]): Promise<TaskWithRelations[]> {
     id: string; name: string; status: string; brand_id: string; primary_contact_id: string | null;
     contract_start_date: string | null; renewal_date: string | null; active: boolean; created_at: string;
   }[];
-  const workstreams = (workstreamsRes.data ?? []) as { id: string; name: string }[];
+  const workstreams = (workstreamsRes.data ?? []) as { id: string; name: string; project_id: string | null }[];
   const checklistRows = (checklistRes.data ?? []) as {
     id: string; task_id: string; description: string; is_done: boolean; position: number; completed_by: string | null; completed_at: string | null;
   }[];
@@ -191,7 +198,12 @@ async function hydrate(tasks: Task[]): Promise<TaskWithRelations[]> {
         active: companyRow.active,
         createdAt: companyRow.created_at,
       },
-      workstream: { id: workstreamRow.id, name: workstreamRow.name },
+      workstream: {
+        id: workstreamRow.id,
+        name: workstreamRow.name,
+        projectId: workstreamRow.project_id,
+        projectName: workstreamRow.project_id ? (projects.find((p) => p.id === workstreamRow.project_id)?.name ?? null) : null,
+      },
       activity,
       assignees,
       checklistItems,

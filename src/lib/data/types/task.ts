@@ -8,7 +8,7 @@ export type TaskStatus =
 export type TaskPriority = "low" | "medium" | "high" | "urgent";
 
 /** How the tasks list view clusters an already-filtered list — orthogonal to filtering, never narrows which tasks show. */
-export type TaskGroupBy = "none" | "company" | "activity" | "workstream" | "status" | "assignee";
+export type TaskGroupBy = "none" | "project" | "company" | "activity" | "workstream" | "status" | "assignee";
 
 export interface Task {
   id: string;

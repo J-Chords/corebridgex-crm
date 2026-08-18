@@ -10,8 +10,8 @@ import type {
 /** Task joined with the read-shape screens actually need — not a raw schema row. */
 export interface TaskWithRelations extends Task {
   company: Company;
-  /** Light reference, not the full WorkstreamWithRelations — avoids a heavy nested join on every task fetch. */
-  workstream: { id: string; name: string };
+  /** Light reference, not the full WorkstreamWithRelations — avoids a heavy nested join on every task fetch. `projectName` is null only for the rare not-yet-backfilled legacy workstream. */
+  workstream: { id: string; name: string; projectId: string | null; projectName: string | null };
   /**
    * Light reference, not the full Activity — includes departmentName because activity names
    * repeat across departments (every department ends in its own "Other"), so the bare name

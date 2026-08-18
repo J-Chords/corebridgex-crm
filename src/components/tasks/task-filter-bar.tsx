@@ -26,15 +26,17 @@ function StatusDot({ status }: { status: TaskStatus }) {
   );
 }
 
-export type TaskFilterField = "search" | "company" | "workstream" | "status" | "priority" | "assignee";
+export type TaskFilterField = "search" | "project" | "company" | "workstream" | "activity" | "status" | "priority" | "assignee";
 
 interface TaskFilterBarProps {
   filters: TaskFilters;
   onChange: (patch: Partial<TaskFilters>) => void;
-  /** Which controls to render, in order. Defaults to search + company + status + priority, plus workstream when `workstreams` is passed and assignee when `assignableStaff` is passed. */
+  /** Which controls to render, in order. Defaults to search + company + status + priority, plus project/workstream/activity/assignee when their option lists are passed. */
   fields?: TaskFilterField[];
+  projects?: { id: string; name: string }[];
   companies?: { id: string; name: string }[];
   workstreams?: { id: string; name: string }[];
+  activities?: { id: string; name: string }[];
   assignableStaff?: { id: string; fullName: string }[];
   searchPlaceholder?: string;
   className?: string;
@@ -45,17 +47,26 @@ export function TaskFilterBar({
   filters,
   onChange,
   fields,
+  projects,
   companies = [],
   workstreams,
+  activities,
   assignableStaff,
   searchPlaceholder = "Search tasks…",
   className,
 }: TaskFilterBarProps) {
   const activeFields =
     fields ??
-    (["search", "company", workstreams ? "workstream" : undefined, "status", "priority", assignableStaff ? "assignee" : undefined].filter(
-      Boolean
-    ) as TaskFilterField[]);
+    ([
+      "search",
+      projects ? "project" : undefined,
+      "company",
+      workstreams ? "workstream" : undefined,
+      activities ? "activity" : undefined,
+      "status",
+      "priority",
+      assignableStaff ? "assignee" : undefined,
+    ].filter(Boolean) as TaskFilterField[]);
 
   return (
     <div className={className ?? "flex flex-wrap items-center gap-3"}>
@@ -75,17 +86,36 @@ export function TaskFilterBar({
           />
         </div>
       )}
+      {activeFields.includes("project") && projects && (
+        <Select
+          items={{ all: "All projects", ...Object.fromEntries(projects.map((p) => [p.id, p.name])) }}
+          value={filters.projectId}
+          onValueChange={(v) => onChange({ projectId: v ?? "all" })}
+        >
+          <SelectTrigger aria-label="Filter by project">
+            <SelectValue placeholder="Project" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All projects</SelectItem>
+            {projects.map((p) => (
+              <SelectItem key={p.id} value={p.id}>
+                {p.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      )}
       {activeFields.includes("company") && (
         <Select
-          items={{ all: "All companies", ...Object.fromEntries(companies.map((c) => [c.id, c.name])) }}
+          items={{ all: "All clients", ...Object.fromEntries(companies.map((c) => [c.id, c.name])) }}
           value={filters.companyId}
           onValueChange={(v) => onChange({ companyId: v ?? "all" })}
         >
-          <SelectTrigger aria-label="Filter by company">
-            <SelectValue placeholder="Company" />
+          <SelectTrigger aria-label="Filter by client">
+            <SelectValue placeholder="Client" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All companies</SelectItem>
+            <SelectItem value="all">All clients</SelectItem>
             {companies.map((c) => (
               <SelectItem key={c.id} value={c.id}>
                 {c.name}
@@ -96,18 +126,37 @@ export function TaskFilterBar({
       )}
       {activeFields.includes("workstream") && workstreams && (
         <Select
-          items={{ all: "All workstreams", ...Object.fromEntries(workstreams.map((e) => [e.id, e.name])) }}
+          items={{ all: "All services", ...Object.fromEntries(workstreams.map((e) => [e.id, e.name])) }}
           value={filters.workstreamId}
           onValueChange={(v) => onChange({ workstreamId: v ?? "all" })}
         >
-          <SelectTrigger aria-label="Filter by workstream">
-            <SelectValue placeholder="Workstream" />
+          <SelectTrigger aria-label="Filter by service">
+            <SelectValue placeholder="Service" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All workstreams</SelectItem>
+            <SelectItem value="all">All services</SelectItem>
             {workstreams.map((e) => (
               <SelectItem key={e.id} value={e.id}>
                 {e.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      )}
+      {activeFields.includes("activity") && activities && (
+        <Select
+          items={{ all: "All activities", ...Object.fromEntries(activities.map((a) => [a.id, a.name])) }}
+          value={filters.activityId}
+          onValueChange={(v) => onChange({ activityId: v ?? "all" })}
+        >
+          <SelectTrigger aria-label="Filter by activity">
+            <SelectValue placeholder="Activity" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All activities</SelectItem>
+            {activities.map((a) => (
+              <SelectItem key={a.id} value={a.id}>
+                {a.name}
               </SelectItem>
             ))}
           </SelectContent>

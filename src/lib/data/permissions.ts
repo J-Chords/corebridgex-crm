@@ -430,6 +430,25 @@ export function canAccessWorkstream(
 }
 
 /**
+ * Phase 8C — gates the "+ Add another Activity to this Service" contextual control shown during
+ * global Task creation. Mirrors the real `create_task`/`workstream_activities_write` server-side
+ * rule exactly, using only data the Task form already has loaded (no extra fetch): an Employee may
+ * only ever extend a Service they themselves lead; Supervisor/Superadmin may extend one led by
+ * anyone in `assignableStaff` (self + direct reports for Supervisor, every active user for
+ * Superadmin — the exact same scope `assignableStaffFor` already computes for staff assignment).
+ * This is a UI-only convenience gate — the RPC re-derives and enforces this itself regardless of
+ * what the client sends, so this can never be the real security boundary.
+ */
+export function canExtendServiceActivities(
+  viewer: User,
+  workstream: { leadUserId: string },
+  assignableStaff: User[]
+): boolean {
+  if (isEmployee(viewer)) return workstream.leadUserId === viewer.id;
+  return assignableStaff.some((s) => s.id === workstream.leadUserId);
+}
+
+/**
  * Project visibility gate — mirrors canAccessWorkstream's exact shape (superadmin sees all; the
  * Internal/Non-billable Company's Project is always visible; otherwise owner/member, scoped
  * through managesUser so Supervisor gets exactly "Projects they personally belong to + Projects

@@ -7,8 +7,10 @@ import { TASK_STATUS_SELECT_ITEMS } from "@/components/tasks/task-status-badge";
 
 export interface TaskFilters {
   search: string;
+  projectId: string;
   companyId: string;
   workstreamId: string;
+  activityId: string;
   status: TaskStatus | "all";
   priority: TaskPriority | "all";
   assigneeId: string;
@@ -18,8 +20,10 @@ export interface TaskFilters {
 
 export const DEFAULT_TASK_FILTERS: TaskFilters = {
   search: "",
+  projectId: "all",
   companyId: "all",
   workstreamId: "all",
+  activityId: "all",
   status: "all",
   priority: "all",
   assigneeId: "all",
@@ -29,9 +33,19 @@ export const DEFAULT_TASK_FILTERS: TaskFilters = {
 export function filterTasks(tasks: TaskWithRelations[], filters: TaskFilters): TaskWithRelations[] {
   const query = filters.search.trim().toLowerCase();
   return tasks.filter((task) => {
-    if (query && !task.title.toLowerCase().includes(query)) return false;
+    if (
+      query &&
+      !task.title.toLowerCase().includes(query) &&
+      !task.company.name.toLowerCase().includes(query) &&
+      !task.workstream.name.toLowerCase().includes(query) &&
+      !(task.activity && task.activity.name.toLowerCase().includes(query))
+    ) {
+      return false;
+    }
+    if (filters.projectId && filters.projectId !== "all" && task.workstream.projectId !== filters.projectId) return false;
     if (filters.companyId !== "all" && task.companyId !== filters.companyId) return false;
     if (filters.workstreamId !== "all" && task.workstreamId !== filters.workstreamId) return false;
+    if (filters.activityId && filters.activityId !== "all" && task.activity?.id !== filters.activityId) return false;
     if (filters.status !== "all" && task.status !== filters.status) return false;
     if (filters.priority !== "all" && task.priority !== filters.priority) return false;
     if (filters.assigneeId !== "all" && !task.assignees.some((a) => a.id === filters.assigneeId)) return false;
@@ -60,6 +74,28 @@ export function useWorkstreamOptionsFromTasks(tasks: TaskWithRelations[]) {
   return useMemo(() => {
     const byId = new Map<string, string>();
     for (const task of tasks) byId.set(task.workstream.id, task.workstream.name);
+    return Array.from(byId, ([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
+  }, [tasks]);
+}
+
+/** Unique Projects present in a task list, sorted by name — same idea as useCompanyOptionsFromTasks, scoped through each task's own workstream.projectId (a legacy not-yet-backfilled workstream with no Project is simply absent from this list, never a broken "unknown" entry). */
+export function useProjectOptionsFromTasks(tasks: TaskWithRelations[]) {
+  return useMemo(() => {
+    const byId = new Map<string, string>();
+    for (const task of tasks) {
+      if (task.workstream.projectId) byId.set(task.workstream.projectId, task.workstream.projectName ?? "Untitled project");
+    }
+    return Array.from(byId, ([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
+  }, [tasks]);
+}
+
+/** Unique tagged Activities present in a task list, sorted by name — same idea as useCompanyOptionsFromTasks. Untagged tasks contribute nothing here (there's no "no activity" filter option; use the existing per-field filters for that). */
+export function useActivityOptionsFromTasks(tasks: TaskWithRelations[]) {
+  return useMemo(() => {
+    const byId = new Map<string, string>();
+    for (const task of tasks) {
+      if (task.activity) byId.set(task.activity.id, `${task.activity.departmentName}: ${task.activity.name}`);
+    }
     return Array.from(byId, ([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
   }, [tasks]);
 }
@@ -94,6 +130,10 @@ export function groupTasksBy(tasks: TaskWithRelations[], groupBy: TaskGroupBy): 
 
   for (const task of tasks) {
     switch (groupBy) {
+      case "project":
+        if (task.workstream.projectId) addTo(task.workstream.projectId, task.workstream.projectName ?? "Untitled project", task);
+        else addTo("none", "No project", task);
+        break;
       case "company":
         addTo(task.company.id, task.company.name, task);
         break;

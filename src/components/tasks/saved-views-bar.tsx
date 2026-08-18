@@ -6,6 +6,7 @@ import { useAuth } from "@/lib/auth/auth-context";
 import { useSavedViews } from "@/lib/data/hooks/use-saved-views";
 import { savedViewsProvider } from "@/lib/data/providers";
 import { DEFAULT_TASK_FILTERS, type TaskFilters } from "@/lib/data/hooks/use-task-filters";
+import type { SavedViewFilters } from "@/lib/data/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -15,11 +16,20 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-function filtersEqual(a: TaskFilters, b: TaskFilters): boolean {
+/** A saved view stored before Phase 8C's projectId/activityId fields existed has neither key in its
+ * stored jsonb at all — normalized here to "all" (never undefined) so it compares/applies exactly
+ * like every other filter that was never set, instead of silently mismatching or crashing. */
+function normalizeSavedFilters(filters: SavedViewFilters): TaskFilters {
+  return { ...filters, projectId: filters.projectId ?? "all", activityId: filters.activityId ?? "all" };
+}
+
+function filtersEqual(a: TaskFilters, b: SavedViewFilters): boolean {
   return (
     a.search === b.search &&
+    a.projectId === (b.projectId ?? "all") &&
     a.companyId === b.companyId &&
     a.workstreamId === b.workstreamId &&
+    a.activityId === (b.activityId ?? "all") &&
     a.status === b.status &&
     a.priority === b.priority &&
     a.assigneeId === b.assigneeId &&
@@ -100,7 +110,7 @@ export function SavedViewsBar({ filters, onApply }: SavedViewsBarProps) {
               variant={filtersEqual(filters, view.filters) ? "secondary" : "ghost"}
               size="sm"
               className="rounded-r-none"
-              onClick={() => onApply(view.filters)}
+              onClick={() => onApply(normalizeSavedFilters(view.filters))}
             >
               <Bookmark className="size-3.5" /> {view.name}
             </Button>

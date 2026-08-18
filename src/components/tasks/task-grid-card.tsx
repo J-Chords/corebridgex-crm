@@ -3,7 +3,7 @@
 import { useState } from "react";
 import type { CSSProperties } from "react";
 import Link from "next/link";
-import { CheckCircle2, Flag } from "lucide-react";
+import { CheckCircle2, Flag, Play } from "lucide-react";
 import type { TaskWithRelations } from "@/lib/data/providers/tasks-provider";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { TaskPriorityBadge } from "@/components/tasks/task-priority-badge";
@@ -33,6 +33,10 @@ interface TaskGridCardProps {
   isExiting?: boolean;
   /** Fires once the exit animation's CSS animation ends, so the caller can drop it from local state. */
   onExitEnd?: () => void;
+  /** True when this task has the current viewer's own active running timer — shows a small "Running" cue alongside the status dot. */
+  isRunning?: boolean;
+  /** When provided, the card opens this handler (e.g. the Task Center's drawer) instead of navigating to the full Task route — My Day's bucket grid omits this and keeps its original Link-navigate behavior unchanged. */
+  onOpen?: (taskId: string) => void;
 }
 
 /**
@@ -42,7 +46,7 @@ interface TaskGridCardProps {
  * due date since a grouped-by-anything grid can't rely on column/status position to imply status
  * the way a Kanban column does.
  */
-export function TaskGridCard({ task, className, style, isFocusTask, onMarkDone, isExiting, onExitEnd }: TaskGridCardProps) {
+export function TaskGridCard({ task, className, style, isFocusTask, onMarkDone, isExiting, onExitEnd, isRunning, onOpen }: TaskGridCardProps) {
   const [justChecked, setJustChecked] = useState(false);
   const isOverdue = task.status !== "done" && task.dueDate != null && task.dueDate < new Date().toISOString().slice(0, 10);
 
@@ -52,23 +56,20 @@ export function TaskGridCard({ task, className, style, isFocusTask, onMarkDone, 
     window.setTimeout(onMarkDone, MARK_DONE_POP_MS);
   }
 
-  return (
-    <Link
-      href={`/dashboard/tasks/${task.id}`}
-      style={{ ...style, borderLeftColor: STATUS_COLOR_VAR[task.status] }}
-      aria-disabled={isExiting}
-      onAnimationEnd={isExiting ? onExitEnd : undefined}
-      className={cn(
-        "group/card flex flex-col gap-3 rounded-xl border border-l-4 bg-card p-4 text-left shadow-sm transition-all duration-300 ease-spring hover:-translate-y-1 hover:border-primary/40 hover:shadow-md",
-        isExiting &&
-          "pointer-events-none animate-out fade-out-0 zoom-out-95 slide-out-to-bottom-2 fill-mode-forwards duration-300 ease-out",
-        className
-      )}
-    >
-      {isFocusTask && (
-        <span className="flex items-center gap-1 font-mono text-[10px] tracking-wider text-primary uppercase">
-          <Flag className="size-3" aria-hidden="true" />
-          Start here
+  const cardClassName = cn(
+    "group/card flex w-full flex-col gap-3 rounded-xl border border-l-4 bg-card p-4 text-left shadow-sm transition-all duration-300 ease-spring hover:-translate-y-1 hover:border-primary/40 hover:shadow-md",
+    isExiting &&
+      "pointer-events-none animate-out fade-out-0 zoom-out-95 slide-out-to-bottom-2 fill-mode-forwards duration-300 ease-out",
+    className
+  );
+  const cardStyle = { ...style, borderLeftColor: STATUS_COLOR_VAR[task.status] };
+
+  const content = (
+    <>
+      {(isFocusTask || isRunning) && (
+        <span className="flex items-center gap-1 font-mono text-[10px] tracking-wider uppercase" style={isRunning ? { color: "var(--info)" } : undefined}>
+          {isRunning ? <Play className="size-3" aria-hidden="true" /> : <Flag className="size-3 text-primary" aria-hidden="true" />}
+          <span className={isFocusTask && !isRunning ? "text-primary" : undefined}>{isRunning ? "Running" : "Start here"}</span>
         </span>
       )}
 
@@ -104,7 +105,8 @@ export function TaskGridCard({ task, className, style, isFocusTask, onMarkDone, 
       </div>
 
       <p className="truncate text-xs text-muted-foreground">
-        {task.company.name} · {task.workstream.name}
+        {task.workstream.projectName && <>{task.workstream.projectName} · </>}
+        {task.workstream.name}
         {task.activity && <> · {task.activity.name}</>}
       </p>
 
@@ -131,6 +133,33 @@ export function TaskGridCard({ task, className, style, isFocusTask, onMarkDone, 
           </span>
         )}
       </div>
+    </>
+  );
+
+  if (onOpen) {
+    return (
+      <button
+        type="button"
+        onClick={() => onOpen(task.id)}
+        style={cardStyle}
+        aria-disabled={isExiting}
+        onAnimationEnd={isExiting ? onExitEnd : undefined}
+        className={cardClassName}
+      >
+        {content}
+      </button>
+    );
+  }
+
+  return (
+    <Link
+      href={`/dashboard/tasks/${task.id}`}
+      style={cardStyle}
+      aria-disabled={isExiting}
+      onAnimationEnd={isExiting ? onExitEnd : undefined}
+      className={cardClassName}
+    >
+      {content}
     </Link>
   );
 }

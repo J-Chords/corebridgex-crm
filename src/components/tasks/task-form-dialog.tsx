@@ -8,11 +8,12 @@ import { useCompanies, useCompanyLookups } from "@/lib/data/hooks/use-companies"
 import { useProjects } from "@/lib/data/hooks/use-projects";
 import { useWorkstreams } from "@/lib/data/hooks/use-workstreams";
 import { useWorkstreamActivities } from "@/lib/data/hooks/use-workstream-activities";
+import { useActivityCatalog } from "@/lib/data/hooks/use-activity-catalog";
 import { tasksProvider } from "@/lib/data/providers";
 import type { TaskReuseCandidate, TaskWithRelations } from "@/lib/data/providers/tasks-provider";
 import type { DepartmentWithActivities } from "@/lib/data/providers/activity-catalog-provider";
 import type { WorkstreamWithRelations } from "@/lib/data/providers/workstreams-provider";
-import { isEmployee } from "@/lib/data/permissions";
+import { canExtendServiceActivities, isEmployee } from "@/lib/data/permissions";
 import type { TaskPriority, TaskStatus } from "@/lib/data/types";
 import { TaskStatusPicker } from "@/components/tasks/task-status-picker";
 import { TaskPriorityPicker } from "@/components/tasks/task-priority-picker";
@@ -136,6 +137,7 @@ export function TaskFormDialog({
   const [dismissedSuggestionId, setDismissedSuggestionId] = useState<string | null>(null);
   const [reuseOpen, setReuseOpen] = useState(false);
   const [newWorkstreamOpen, setNewWorkstreamOpen] = useState(false);
+  const [addingNewActivity, setAddingNewActivity] = useState(false);
 
   const selectedWorkstream = workstreams.find((w) => w.id === form.workstreamId);
   // Scoped to what THIS workstream actually enabled — falls back to the full service catalog for a
@@ -237,6 +239,28 @@ export function TaskFormDialog({
   // second-guessing a choice they already made by clicking there. Locked to create-mode only: editing
   // an existing task should always allow retagging/removing its activity.
   const activityLocked = mode === "create" && Boolean(defaultActivityId);
+
+  // Phase 8C — "+ Add another Activity to this Service": the full catalog for this Service's own
+  // service line, minus what's already configured, is what a Service lead may enable in-context
+  // during Task creation. `create_task`/mock createTask enable it and create the Task atomically —
+  // this UI never enables anything on its own; it only decides what to *offer* and *ask for*.
+  const { departments: fullServiceCatalog } = useActivityCatalog(
+    selectedWorkstream?.brand.id,
+    selectedWorkstream?.serviceLineId ?? undefined
+  );
+  const enabledActivityIds = new Set(departments.flatMap((d) => d.activities.map((a) => a.id)));
+  const unconfiguredActivities = fullServiceCatalog.flatMap((d) =>
+    d.activities.filter((a) => !enabledActivityIds.has(a.id)).map((a) => ({ ...a, departmentName: d.name }))
+  );
+  const canExtendActivities =
+    user != null && mode === "create" && !activityLocked && selectedWorkstream != null
+      ? canExtendServiceActivities(user, selectedWorkstream, assignableStaff)
+      : false;
+  const pendingNewActivity =
+    form.activityId !== NO_ACTIVITY && !enabledActivityIds.has(form.activityId)
+      ? (unconfiguredActivities.find((a) => a.id === form.activityId) ?? null)
+      : null;
+
   const canSubmit =
     !isSubmitting &&
     form.title.trim().length > 0 &&
@@ -442,6 +466,24 @@ export function TaskFormDialog({
                     <p className="rounded-md border bg-muted/40 px-3 py-2 text-sm">
                       {selectedActivityLabel ?? "Activity"}
                     </p>
+                  ) : pendingNewActivity ? (
+                    <div className="flex items-center justify-between gap-2 rounded-lg border border-primary/30 bg-primary/5 p-2.5 text-sm">
+                      <span>
+                        <span className="font-medium">
+                          {pendingNewActivity.departmentName}: {pendingNewActivity.name}
+                        </span>{" "}
+                        — will be added to this service
+                      </span>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-sm"
+                        aria-label="Undo — don't add this activity"
+                        onClick={() => setForm((p) => ({ ...p, activityId: NO_ACTIVITY }))}
+                      >
+                        <X />
+                      </Button>
+                    </div>
                   ) : (
                     <>
                       <Select
@@ -485,6 +527,46 @@ export function TaskFormDialog({
                       )}
                     </>
                   )}
+
+                  {canExtendActivities && unconfiguredActivities.length > 0 && !pendingNewActivity && (
+                    addingNewActivity ? (
+                      <div className="flex flex-col gap-1.5">
+                        <Select
+                          items={Object.fromEntries(unconfiguredActivities.map((a) => [a.id, `${a.departmentName}: ${a.name}`]))}
+                          value=""
+                          onValueChange={(v) => {
+                            if (v) setForm((p) => ({ ...p, activityId: v }));
+                            setAddingNewActivity(false);
+                          }}
+                        >
+                          <SelectTrigger aria-label="Choose an activity to add to this service" className="w-full">
+                            <SelectValue placeholder="Choose an activity to add…" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {unconfiguredActivities.map((a) => (
+                              <SelectItem key={a.id} value={a.id}>
+                                {a.departmentName}: {a.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <Button type="button" variant="ghost" size="sm" className="w-fit" onClick={() => setAddingNewActivity(false)}>
+                          Cancel
+                        </Button>
+                      </div>
+                    ) : (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="w-fit"
+                        onClick={() => setAddingNewActivity(true)}
+                      >
+                        <Plus className="size-3" /> Add another activity to this service
+                      </Button>
+                    )
+                  )}
+
                   {showSuggestion && suggestion && (
                     <div className="flex items-center justify-between gap-2 rounded-lg border bg-muted/40 p-2.5 text-sm">
                       <span>
@@ -514,7 +596,7 @@ export function TaskFormDialog({
                       </div>
                     </div>
                   )}
-                  {form.activityId !== NO_ACTIVITY && (
+                  {form.activityId !== NO_ACTIVITY && selectedActivityLabel && (
                     <Button
                       type="button"
                       variant="outline"

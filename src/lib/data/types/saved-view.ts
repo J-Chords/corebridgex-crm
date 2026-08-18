@@ -15,6 +15,13 @@ export interface SavedViewFilters {
   priority: TaskPriority | "all";
   assigneeId: string;
   groupBy: TaskGroupBy;
+  /** Phase 8C additions — optional so a saved view created before this phase (missing these keys
+   * entirely in its stored jsonb) still round-trips correctly: `filterTasks` treats a missing/absent
+   * value exactly like "all", never throwing or silently narrowing an old view's results. Running/
+   * Overdue are deliberately NOT here — like the pre-existing `?active=1`/`?overdue=1` KPI deep-link
+   * toggles, they're derived, page-level-only state, never part of a persisted saved filter set. */
+  projectId?: string;
+  activityId?: string;
 }
 
 /**

@@ -50,9 +50,19 @@ interface TaskTimeTrackingProps {
   expectedMinutes: number | null;
   /** Starting a timer can flip a Todo task to In Progress server-side — call this afterward so the parent page's own copy of the task (its status badge) doesn't go stale until the next full reload. Optional since not every embedding context needs it. */
   onTaskChanged?: () => void;
+  /**
+   * Fires after every successful Start/Pause/Resume/Stop — separate from `onTaskChanged` because a
+   * parent can care about "the running-timer state changed" (e.g. the Task Center's own `Running`
+   * quick filter, which reads a *different* `useRunningTimer()` instance than this component's own
+   * local one) without caring whether the Task's own fields changed. This component's own timer
+   * controls already refresh correctly via its local `refreshRunningTimer` regardless of whether a
+   * caller passes this — it exists purely to let an ancestor invalidate its own separate copy of
+   * "is anything running" derived state. Optional since not every embedding context has one.
+   */
+  onTimerChanged?: () => void;
 }
 
-export function TaskTimeTracking({ taskId, companyId, assigneeIds, expectedMinutes, onTaskChanged }: TaskTimeTrackingProps) {
+export function TaskTimeTracking({ taskId, companyId, assigneeIds, expectedMinutes, onTaskChanged, onTimerChanged }: TaskTimeTrackingProps) {
   const { user } = useAuth();
   const { entries, isLoading, refresh } = useTaskTimeEntries(taskId);
   const { runningTimer, refresh: refreshRunningTimer } = useRunningTimer();
@@ -83,6 +93,7 @@ export function TaskTimeTracking({ taskId, companyId, assigneeIds, expectedMinut
       await timeEntriesProvider.startTimer(user, taskId);
       await refreshAll();
       onTaskChanged?.();
+      onTimerChanged?.();
     } finally {
       setIsBusy(false);
     }
@@ -94,6 +105,8 @@ export function TaskTimeTracking({ taskId, companyId, assigneeIds, expectedMinut
     try {
       await timeEntriesProvider.stopTimer(user, runningTimer.id);
       await refreshAll();
+      onTaskChanged?.();
+      onTimerChanged?.();
     } finally {
       setIsBusy(false);
     }
@@ -105,6 +118,8 @@ export function TaskTimeTracking({ taskId, companyId, assigneeIds, expectedMinut
     try {
       await timeEntriesProvider.pauseTimer(user, runningTimer.id);
       await refreshAll();
+      onTaskChanged?.();
+      onTimerChanged?.();
     } finally {
       setIsBusy(false);
     }
@@ -116,6 +131,8 @@ export function TaskTimeTracking({ taskId, companyId, assigneeIds, expectedMinut
     try {
       await timeEntriesProvider.resumeTimer(user, entryId);
       await refreshAll();
+      onTaskChanged?.();
+      onTimerChanged?.();
     } finally {
       setIsBusy(false);
     }

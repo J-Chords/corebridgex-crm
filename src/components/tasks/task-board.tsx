@@ -31,10 +31,11 @@ const COLUMNS: { key: TaskStatus; label: string }[] = [
 interface BoardCardProps {
   task: TaskWithRelations;
   canDrag: boolean;
+  isRunning: boolean;
   onNavigate: () => void;
 }
 
-function BoardCard({ task, canDrag, onNavigate }: BoardCardProps) {
+function BoardCard({ task, canDrag, isRunning, onNavigate }: BoardCardProps) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: task.id,
     disabled: !canDrag,
@@ -62,7 +63,7 @@ function BoardCard({ task, canDrag, onNavigate }: BoardCardProps) {
         isDragging && "opacity-50"
       )}
     >
-      <TaskCard task={task} />
+      <TaskCard task={task} isRunning={isRunning} />
     </div>
   );
 }
@@ -72,10 +73,11 @@ interface BoardColumnProps {
   label: string;
   tasks: TaskWithRelations[];
   user: User;
+  runningTaskId: string | null;
   onNavigate: (taskId: string) => void;
 }
 
-function BoardColumn({ status, label, tasks, user, onNavigate }: BoardColumnProps) {
+function BoardColumn({ status, label, tasks, user, runningTaskId, onNavigate }: BoardColumnProps) {
   const { setNodeRef, isOver } = useDroppable({ id: status });
   const color = STATUS_COLOR_VAR[status];
 
@@ -102,6 +104,7 @@ function BoardColumn({ status, label, tasks, user, onNavigate }: BoardColumnProp
               key={task.id}
               task={task}
               canDrag={canProgressTask(user, { assigneeIds: task.assignees.map((a) => a.id) })}
+              isRunning={task.id === runningTaskId}
               onNavigate={() => onNavigate(task.id)}
             />
           ))
@@ -115,10 +118,14 @@ interface TaskBoardProps {
   user: User;
   tasks: TaskWithRelations[];
   onChanged: () => void;
+  /** The task (if any) carrying the current viewer's own active running timer — drives each card's "Running" cue. */
+  runningTaskId?: string | null;
+  /** When provided, a card click calls this instead of navigating to the full Task route — the Task Center passes its own drawer-open handler; any other future embedding that omits this keeps the original router.push behavior. */
+  onOpenTask?: (taskId: string) => void;
 }
 
 /** Kanban view of the same task list a screen already fetched — columns are fixed by status, cards drag between them to change status (permission-gated per card via canProgressTask). */
-export function TaskBoard({ user, tasks, onChanged }: TaskBoardProps) {
+export function TaskBoard({ user, tasks, onChanged, runningTaskId = null, onOpenTask }: TaskBoardProps) {
   const router = useRouter();
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
 
@@ -137,6 +144,8 @@ export function TaskBoard({ user, tasks, onChanged }: TaskBoardProps) {
     onChanged();
   }
 
+  const navigate = onOpenTask ?? ((taskId: string) => router.push(`/dashboard/tasks/${taskId}`));
+
   return (
     <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
       <div className="flex gap-4 overflow-x-auto pb-2">
@@ -147,7 +156,8 @@ export function TaskBoard({ user, tasks, onChanged }: TaskBoardProps) {
             label={label}
             tasks={grouped.get(key) ?? []}
             user={user}
-            onNavigate={(taskId) => router.push(`/dashboard/tasks/${taskId}`)}
+            runningTaskId={runningTaskId}
+            onNavigate={navigate}
           />
         ))}
       </div>
