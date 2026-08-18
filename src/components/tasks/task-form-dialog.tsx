@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { AlertCircle, History, Plus, X } from "lucide-react";
 import { useAuth } from "@/lib/auth/auth-context";
 import { useCompanies, useCompanyLookups } from "@/lib/data/hooks/use-companies";
+import { useProjects } from "@/lib/data/hooks/use-projects";
 import { useWorkstreams } from "@/lib/data/hooks/use-workstreams";
 import { useWorkstreamActivities } from "@/lib/data/hooks/use-workstream-activities";
 import { tasksProvider } from "@/lib/data/providers";
@@ -83,13 +84,13 @@ interface TaskFormDialogProps {
   onSaved: () => void;
 }
 
-const ALL_COMPANIES = "all";
+const ALL_PROJECTS = "all";
 
 function emptyForm(userId: string, defaultWorkstreamId?: string, defaultActivityId?: string) {
   return {
     title: "",
     description: "",
-    companyId: ALL_COMPANIES,
+    projectId: ALL_PROJECTS,
     workstreamId: defaultWorkstreamId ?? "",
     activityId: defaultActivityId ?? NO_ACTIVITY,
     assigneeIds: [userId],
@@ -122,9 +123,10 @@ export function TaskFormDialog({
 }: TaskFormDialogProps) {
   const { user } = useAuth();
   const { companies } = useCompanies();
+  const { projects } = useProjects();
   const [form, setForm] = useState(() => emptyForm(user?.id ?? "", defaultWorkstreamId, defaultActivityId));
   const { workstreams, refresh: refreshWorkstreams } = useWorkstreams({
-    companyId: form.companyId === ALL_COMPANIES ? undefined : form.companyId,
+    projectId: form.projectId === ALL_PROJECTS ? undefined : form.projectId,
   });
   const { assignableStaff } = useCompanyLookups();
   const router = useRouter();
@@ -139,28 +141,31 @@ export function TaskFormDialog({
   // Scoped to what THIS workstream actually enabled — falls back to the full service catalog for a
   // legacy workstream with no persisted Activity selections yet (see the hook's own doc comment).
   const { departments } = useWorkstreamActivities(selectedWorkstream);
-  // "+ New workstream" needs a concrete client to create into — same constraint WorkstreamFormDialog
-  // already has everywhere else it's used (it only ever opens from within a specific company's page).
-  const companyForNewWorkstream = form.companyId === ALL_COMPANIES ? null : companies.find((c) => c.id === form.companyId);
+  // "+ New service" needs a concrete Project to create into — mirrors WorkstreamFormDialog's own
+  // requirement (it only ever opens with a specific company/project already in hand).
+  const selectedProject = form.projectId === ALL_PROJECTS ? null : projects.find((p) => p.id === form.projectId);
+  const companyForNewWorkstream = selectedProject ? (companies.find((c) => c.id === selectedProject.companyId) ?? null) : null;
 
-  // A task prefilled from a workstream (a workstream detail page's own "Add task") knows its client
-  // already but can't set `companyId` synchronously — the workstream list is still loading when the
-  // form first mounts. This fills it in the moment it can, once only, never overwriting a company
-  // the person picked themselves (edit mode sets `companyId` directly below, with no such gap).
+  // A task prefilled from a workstream (a workstream detail page's own "Add task") knows its project
+  // already but can't set `projectId` synchronously — the workstream list is still loading when the
+  // form first mounts. This fills it in the moment it can, once only, never overwriting a project the
+  // person picked themselves (edit mode leaves projectId at "all" the same way, relying on this same
+  // backfill once the task's own workstream resolves).
   useEffect(() => {
-    if (form.companyId === ALL_COMPANIES && selectedWorkstream) {
+    if (form.projectId === ALL_PROJECTS && selectedWorkstream?.projectId) {
+      const projectId = selectedWorkstream.projectId;
       // eslint-disable-next-line react-hooks/set-state-in-effect
-      setForm((p) => (p.companyId === ALL_COMPANIES ? { ...p, companyId: selectedWorkstream.companyId } : p));
+      setForm((p) => (p.projectId === ALL_PROJECTS ? { ...p, projectId } : p));
     }
-  }, [selectedWorkstream, form.companyId]);
+  }, [selectedWorkstream, form.projectId]);
 
-  function handleCompanyChange(companyId: string) {
-    // Changing the client only clears the workstream when it genuinely no longer applies — picking
-    // "All clients" (or the workstream's own client) leaves the current selection untouched.
-    const stillValid = companyId === ALL_COMPANIES || selectedWorkstream?.companyId === companyId;
+  function handleProjectChange(projectId: string) {
+    // Changing the project only clears the service when it genuinely no longer applies — picking
+    // "All projects" (or the service's own project) leaves the current selection untouched.
+    const stillValid = projectId === ALL_PROJECTS || selectedWorkstream?.projectId === projectId;
     setForm((p) => ({
       ...p,
-      companyId,
+      projectId,
       workstreamId: stillValid ? p.workstreamId : "",
       activityId: stillValid ? p.activityId : NO_ACTIVITY,
     }));
@@ -172,14 +177,14 @@ export function TaskFormDialog({
       ...p,
       workstreamId,
       activityId: NO_ACTIVITY,
-      companyId: picked ? picked.companyId : p.companyId,
+      projectId: picked?.projectId ?? p.projectId,
     }));
   }
 
-  /** The inline "+ New workstream" flow already ran inside a specific client's context, so the created workstream is selected directly — no need to wait for `workstreams` to refetch before picking it. */
+  /** The inline "+ New service" flow already ran inside a specific Project's context, so the created workstream is selected directly — no need to wait for `workstreams` to refetch before picking it. */
   function handleWorkstreamCreated(created: WorkstreamWithRelations) {
     refreshWorkstreams();
-    setForm((p) => ({ ...p, workstreamId: created.id, activityId: NO_ACTIVITY, companyId: created.companyId }));
+    setForm((p) => ({ ...p, workstreamId: created.id, activityId: NO_ACTIVITY, projectId: created.projectId ?? p.projectId }));
     setNewWorkstreamOpen(false);
   }
   const suggestion = form.workstreamId ? suggestActivity(form.title, departments) : null;
@@ -206,7 +211,7 @@ export function TaskFormDialog({
       setForm({
         title: task.title,
         description: task.description,
-        companyId: task.companyId,
+        projectId: ALL_PROJECTS,
         workstreamId: task.workstreamId,
         activityId: task.activityId ?? NO_ACTIVITY,
         assigneeIds: task.assignees.map((a) => a.id),
@@ -368,33 +373,33 @@ export function TaskFormDialog({
             <div className="flex flex-col gap-4 px-6 py-4">
               <FormSection label="Where it belongs">
                 <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="task-company">Client</Label>
+                  <Label htmlFor="task-project">Project</Label>
                   <Select
-                    items={{ [ALL_COMPANIES]: "All clients", ...Object.fromEntries(companies.map((c) => [c.id, c.name])) }}
-                    value={form.companyId}
-                    onValueChange={(v) => handleCompanyChange(v ?? ALL_COMPANIES)}
+                    items={{ [ALL_PROJECTS]: "All projects", ...Object.fromEntries(projects.map((p) => [p.id, p.name])) }}
+                    value={form.projectId}
+                    onValueChange={(v) => handleProjectChange(v ?? ALL_PROJECTS)}
                   >
-                    <SelectTrigger id="task-company" className="w-full">
-                      <SelectValue placeholder="Select a client" />
+                    <SelectTrigger id="task-project" className="w-full">
+                      <SelectValue placeholder="Select a project" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value={ALL_COMPANIES}>All clients</SelectItem>
-                      {companies.map((company) => (
-                        <SelectItem key={company.id} value={company.id}>
-                          {company.name}
+                      <SelectItem value={ALL_PROJECTS}>All projects</SelectItem>
+                      {projects.map((project) => (
+                        <SelectItem key={project.id} value={project.id}>
+                          {project.name}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                   <p className="text-xs text-muted-foreground">
-                    Narrows the workstream list below — pick a client first, or just pick the workstream directly.
+                    Narrows the service list below — pick a project first, or just pick the service directly.
                   </p>
                 </div>
 
                 <div className="flex flex-col gap-1.5">
                   <div className="flex items-center justify-between">
-                    <Label htmlFor="task-workstream">Workstream</Label>
-                    {!employeeView && companyForNewWorkstream && (
+                    <Label htmlFor="task-workstream">Service</Label>
+                    {!employeeView && companyForNewWorkstream && selectedProject && (
                       <Button
                         type="button"
                         variant="ghost"
@@ -402,7 +407,7 @@ export function TaskFormDialog({
                         className="h-auto py-0.5 text-xs"
                         onClick={() => setNewWorkstreamOpen(true)}
                       >
-                        <Plus className="size-3" /> New workstream
+                        <Plus className="size-3" /> New service
                       </Button>
                     )}
                   </div>
@@ -412,7 +417,7 @@ export function TaskFormDialog({
                     onValueChange={(v) => handleWorkstreamChange(v ?? "")}
                   >
                     <SelectTrigger id="task-workstream" className="w-full">
-                      <SelectValue placeholder="Select workstream" />
+                      <SelectValue placeholder="Select service" />
                     </SelectTrigger>
                     <SelectContent>
                       {workstreams.map((workstream) => (
@@ -426,8 +431,8 @@ export function TaskFormDialog({
                     <p className="text-xs text-muted-foreground">
                       Client: <span className="font-medium text-foreground">{selectedWorkstream.company.name}</span>
                     </p>
-                  ) : !employeeView && form.companyId === ALL_COMPANIES ? (
-                    <p className="text-xs text-muted-foreground">Pick a client above to add a new workstream for them.</p>
+                  ) : !employeeView && form.projectId === ALL_PROJECTS ? (
+                    <p className="text-xs text-muted-foreground">Pick a project above to add a new service for it.</p>
                   ) : null}
                 </div>
 

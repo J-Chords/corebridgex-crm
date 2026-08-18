@@ -9,6 +9,12 @@ export interface Workstream {
   /** Optional freeform context — same treatment as Task.description. */
   description: string | null;
   companyId: string;
+  /** The Project (annual client engagement) this Service belongs to — nullable only during the
+   * Phase 8A/8B transition; every newly-created Workstream must always resolve to one (enforced by
+   * `enforce_workstream_project_link`, which also keeps `companyId` in sync with the Project's own
+   * company, closing the "guess between multiple Projects" risk). See docs/current-project-state.md's
+   * Phase 8 notes. */
+  projectId: string | null;
   /** Null for workstreams with no real client service line (e.g. Internal Operations). */
   serviceLineId: string | null;
   /** Denormalized copy of the owning company's brandId — companies don't yet support multi-brand association. */

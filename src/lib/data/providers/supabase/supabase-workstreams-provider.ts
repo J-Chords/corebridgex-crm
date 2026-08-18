@@ -18,6 +18,7 @@ interface WorkstreamRow {
   name: string;
   description: string | null;
   company_id: string;
+  project_id: string | null;
   service_line_id: string | null;
   brand_id: string;
   lead_user_id: string;
@@ -39,6 +40,7 @@ function toWorkstream(row: WorkstreamRow): Workstream {
     name: row.name,
     description: row.description,
     companyId: row.company_id,
+    projectId: row.project_id,
     serviceLineId: row.service_line_id,
     brandId: row.brand_id,
     leadUserId: row.lead_user_id,
@@ -211,6 +213,7 @@ export const supabaseWorkstreamsProvider: WorkstreamsProvider = {
     const supabase = createClient();
     let query = supabase.from("workstreams").select("*").order("name");
     if (filters?.companyId) query = query.eq("company_id", filters.companyId);
+    if (filters?.projectId) query = query.eq("project_id", filters.projectId);
     const { data, error } = await query;
     if (error) throw new Error(error.message);
     return hydrate((data ?? []).map(toWorkstream));
@@ -231,36 +234,32 @@ export const supabaseWorkstreamsProvider: WorkstreamsProvider = {
 
   async createWorkstream(_viewer, input) {
     const supabase = createClient();
-    const { data: company, error: companyError } = await supabase
-      .from("companies")
-      .select("brand_id")
-      .eq("id", input.companyId)
-      .single();
-    if (companyError) throw new Error(companyError.message);
-
-    const { data, error } = await supabase
-      .from("workstreams")
-      .insert({
-        name: input.name,
-        description: input.description,
-        company_id: input.companyId,
-        service_line_id: input.serviceLineId,
-        brand_id: company.brand_id,
-        lead_user_id: input.leadUserId,
-        status: input.status,
-        start_date: input.startDate,
-        end_date: input.endDate,
-        recurrence_frequency: input.recurrenceFrequency,
-        recurrence_anchor_date: input.recurrenceFrequency ? input.recurrenceAnchorDate : null,
-        recurrence_custom_interval_days: input.recurrenceFrequency === "custom" ? input.recurrenceCustomIntervalDays : null,
-        previous_occurrence_workstream_id: input.previousOccurrenceWorkstreamId ?? null,
-      })
-      .select("*")
-      .single();
+    // A plain `.insert().select()` (PostgREST's INSERT...RETURNING) requires the brand-new row to
+    // also pass workstreams_select's can_access_workstream(id) — for a non-superadmin self-leading
+    // a new Service, that check queries the very row being inserted, which Postgres's own command-
+    // visibility rules can never let it see within the same statement. create_workstream performs
+    // the insert (and the team/activities follow-up writes) inside one SECURITY DEFINER RPC instead,
+    // returning the finished row directly — see the migration's own header comment for the full
+    // root-cause writeup. The RPC re-implements workstreams_insert's exact authorization itself
+    // (Employee: canAccessProject + self-lead only, no team; Supervisor/Superadmin: unrestricted).
+    const { data, error } = await supabase.rpc("create_workstream", {
+      p_name: input.name,
+      p_description: input.description,
+      p_company_id: input.companyId,
+      p_project_id: input.projectId ?? null,
+      p_service_line_id: input.serviceLineId,
+      p_lead_user_id: input.leadUserId,
+      p_team_user_ids: input.teamUserIds,
+      p_activity_ids: input.activityIds,
+      p_status: input.status,
+      p_start_date: input.startDate,
+      p_end_date: input.endDate,
+      p_recurrence_frequency: input.recurrenceFrequency,
+      p_recurrence_anchor_date: input.recurrenceFrequency ? input.recurrenceAnchorDate : null,
+      p_recurrence_custom_interval_days: input.recurrenceFrequency === "custom" ? input.recurrenceCustomIntervalDays : null,
+      p_previous_occurrence_workstream_id: input.previousOccurrenceWorkstreamId ?? null,
+    });
     if (error) throw new Error(error.message);
-
-    await syncTeam(data.id, input.teamUserIds);
-    await syncActivities(data.id, input.activityIds);
 
     const [hydrated] = await hydrate([toWorkstream(data)]);
     return hydrated;

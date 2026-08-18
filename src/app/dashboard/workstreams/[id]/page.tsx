@@ -8,7 +8,7 @@ import { useWorkstream } from "@/lib/data/hooks/use-workstreams";
 import { useCompany } from "@/lib/data/hooks/use-companies";
 import { useTasks } from "@/lib/data/hooks/use-tasks";
 import { useWorkstreamActivities } from "@/lib/data/hooks/use-workstream-activities";
-import { canManageWorkstreams } from "@/lib/data/permissions";
+import { canManageWorkstreams, isSuperadmin } from "@/lib/data/permissions";
 import { workstreamDisplayHeading, splitWorkstreamQualifier } from "@/lib/data/workstream-name";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -56,12 +56,18 @@ export default function WorkstreamDetailPage({ params }: { params: Promise<{ id:
     return <p className="text-sm text-muted-foreground">Loading…</p>;
   }
 
+  // Employee/Supervisor were never sent into Company admin pages before Phase 8B either (they
+  // reached this page only via their own Project/Task work) — this just makes the back-link
+  // correct now that those Company routes redirect them away. Superadmin keeps the Company
+  // admin flow, since they retain that navigation.
+  const backHref = user && isSuperadmin(user) ? `/dashboard/companies/${workstream?.company.id}` : `/dashboard/projects/${workstream?.projectId ?? ""}`;
+
   if (notFound || !workstream) {
     return (
       <div className="flex flex-col items-start gap-3">
-        <Link href="/dashboard/companies" className="text-sm text-muted-foreground hover:underline">
+        <Link href={user && isSuperadmin(user) ? "/dashboard/companies" : "/dashboard/projects"} className="text-sm text-muted-foreground hover:underline">
           <ArrowLeft className="mr-1 inline size-3.5" aria-hidden="true" />
-          Back to companies
+          {user && isSuperadmin(user) ? "Back to companies" : "Back to projects"}
         </Link>
         <p className="text-sm text-muted-foreground">
           This workstream doesn&apos;t exist, or you don&apos;t have access to it.
@@ -77,11 +83,11 @@ export default function WorkstreamDetailPage({ params }: { params: Promise<{ id:
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-3">
         <Link
-          href={`/dashboard/companies/${workstream.company.id}`}
+          href={backHref}
           className="w-fit text-sm text-muted-foreground hover:underline"
         >
           <ArrowLeft className="mr-1 inline size-3.5" aria-hidden="true" />
-          Back to {workstream.company.name}
+          {isSuperadmin(user) ? `Back to ${workstream.company.name}` : "Back to project"}
         </Link>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-3">

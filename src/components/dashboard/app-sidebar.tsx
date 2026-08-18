@@ -6,6 +6,7 @@ import {
   Building2,
   Clock,
   ClipboardList,
+  FolderKanban,
   Home,
   HelpCircle,
   LayoutDashboard,
@@ -41,7 +42,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useAuth } from "@/lib/auth/auth-context";
 import { useHelpDialog } from "@/lib/help-dialog-context";
 import { ROLE_LABELS } from "@/lib/data/role-labels";
-import { canManageTasks, canViewTeamUpdatesPage, canViewTeamTimePage } from "@/lib/data/permissions";
+import { canViewTeamUpdatesPage, canViewTeamTimePage, isSuperadmin } from "@/lib/data/permissions";
 import { SearchTriggerBar } from "@/components/dashboard/search-trigger-bar";
 
 import { getInitials as initials } from "@/lib/initials";
@@ -52,13 +53,17 @@ export function AppSidebar() {
   const router = useRouter();
   const { setOpen: setHelpOpen } = useHelpDialog();
 
+  // Employee-first: every role gets the same core operational destinations (Dashboard/My Day/
+  // Projects/Tasks/Reports) — Supervisor and Superadmin only ever ADD to this, never replace it,
+  // per the locked "Supervisor = Employee + team" / "Superadmin = + org admin" principle.
+  // Companies is Superadmin-only now — Employee/Supervisor's operational Client workspace is
+  // Projects (see /dashboard/companies's own route guard for the corresponding page-level lock).
   const navItems = [
     { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
     { href: "/dashboard/my-day", label: "My Day", icon: Sun },
-    { href: "/dashboard/companies", label: "Companies", icon: Building2 },
-    ...(user && canManageTasks(user)
-      ? [{ href: "/dashboard/tasks", label: "Tasks", icon: ListChecks }]
-      : []),
+    { href: "/dashboard/projects", label: "Projects", icon: FolderKanban },
+    { href: "/dashboard/tasks", label: "Tasks", icon: ListChecks },
+    ...(user && isSuperadmin(user) ? [{ href: "/dashboard/companies", label: "Companies", icon: Building2 }] : []),
     { href: "/dashboard/reports", label: "Reports", icon: ClipboardList },
     ...(user && canViewTeamUpdatesPage(user)
       ? [{ href: "/dashboard/team-updates", label: "Team Updates", icon: Users }]

@@ -221,48 +221,34 @@ export const supabaseTasksProvider: TasksProvider = {
     return hydrated ?? null;
   },
 
-  async createTask(viewer, input) {
+  async createTask(_viewer, input) {
     const supabase = createClient();
-    const assigneeIds =
-      input.allowUnassigned && input.assigneeIds.length === 0 ? [] : await resolveAssigneeIds(viewer, input.assigneeIds);
-    const selfAdded = viewer.role === "employee";
-
-    const { data, error } = await supabase
-      .from("tasks")
-      .insert({
-        title: input.title,
-        description: input.description,
-        // company_id is overwritten by the enforce_task_invariants trigger regardless of what's
-        // sent — any placeholder satisfies the NOT NULL column type before the trigger runs.
-        company_id: viewer.id,
-        workstream_id: input.workstreamId,
-        status: input.status,
-        priority: input.priority,
-        due_date: input.dueDate,
-        expected_minutes: input.expectedMinutes ?? null,
-        created_by: viewer.id,
-        self_added: selfAdded,
-        template_id: input.templateId ?? null,
-        activity_id: input.activityId ?? null,
-      })
-      .select("*")
-      .single();
+    // A plain `.insert().select()` (PostgREST's INSERT...RETURNING) requires the brand-new row to
+    // also pass tasks_select's can_access_task(id) — for an Employee's own self-added task, that
+    // check requires an EXISTING task_assignees row, which can't exist yet (assignees were always a
+    // separate, later insert); for Supervisor its own fallback branch self-referentially queries
+    // `tasks` for the very row being returned, hitting the identical Postgres same-command
+    // visibility gap as the Workstream case above. create_task performs the insert, assignee
+    // resolution, checklist rows, and the creation notification inside one SECURITY DEFINER RPC
+    // instead, returning the finished row directly — see the migration's own header comment for the
+    // full root-cause writeup. Assignee scope (self-only for Employee, own team for Supervisor, any
+    // active user for Superadmin, silent fallback to self) is enforced inside the RPC itself now,
+    // not in this file.
+    const { data, error } = await supabase.rpc("create_task", {
+      p_title: input.title,
+      p_description: input.description,
+      p_workstream_id: input.workstreamId,
+      p_activity_id: input.activityId ?? null,
+      p_assignee_ids: input.assigneeIds,
+      p_allow_unassigned: input.allowUnassigned ?? false,
+      p_status: input.status,
+      p_priority: input.priority,
+      p_due_date: input.dueDate,
+      p_expected_minutes: input.expectedMinutes ?? null,
+      p_template_id: input.templateId ?? null,
+      p_checklist_items: input.checklistItems.map((item) => item.description),
+    });
     if (error) throw new Error(error.message);
-
-    if (assigneeIds.length > 0) {
-      const { error: assigneeError } = await supabase
-        .from("task_assignees")
-        .insert(assigneeIds.map((userId) => ({ task_id: data.id, user_id: userId })));
-      if (assigneeError) throw new Error(assigneeError.message);
-    }
-    if (input.checklistItems.length > 0) {
-      const { error: checklistError } = await supabase.from("checklist_items").insert(
-        input.checklistItems.map((item, index) => ({ task_id: data.id, description: item.description, position: index }))
-      );
-      if (checklistError) throw new Error(checklistError.message);
-    }
-
-    await supabase.rpc("notify_task_created", { target_task_id: data.id, assignee_ids: assigneeIds, is_self_added: selfAdded });
 
     const [hydrated] = await hydrate([toTask(data)]);
     return hydrated;

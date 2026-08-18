@@ -31,6 +31,13 @@ export interface WorkstreamInput {
   name: string;
   description: string | null;
   companyId: string;
+  /**
+   * The Project this Service belongs to. Optional on create — when omitted, the provider resolves
+   * it from `companyId` (only when that Company has exactly one Project, matching today's 1:1
+   * reality; ambiguous/missing cases throw rather than guess). Always required in practice from the
+   * Project workspace's own "+ Add Service" flow, which always knows its own Project.
+   */
+  projectId?: string | null;
   serviceLineId: string | null;
   leadUserId: string;
   teamUserIds: string[];
@@ -61,7 +68,7 @@ export interface WorkstreamInput {
  * need to re-derive who's allowed to see or manage what.
  */
 export interface WorkstreamsProvider {
-  listWorkstreams(viewer: User, filters?: { companyId?: string }): Promise<WorkstreamWithRelations[]>;
+  listWorkstreams(viewer: User, filters?: { companyId?: string; projectId?: string }): Promise<WorkstreamWithRelations[]>;
   getWorkstream(viewer: User, id: string): Promise<WorkstreamWithRelations | null>;
   createWorkstream(viewer: User, input: WorkstreamInput): Promise<WorkstreamWithRelations>;
   updateWorkstream(viewer: User, id: string, input: WorkstreamInput): Promise<WorkstreamWithRelations>;

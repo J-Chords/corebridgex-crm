@@ -13,6 +13,9 @@ export interface ProjectTaskSummary {
 export interface ProjectWithRelations extends Project {
   companyName: string;
   owner: User;
+  /** Every operational Project member — resolved through the same safe profile-directory
+   * architecture as Task/Workstream relations (never a plain `profiles` select). */
+  members: User[];
   memberCount: number;
   workstreamCount: number;
   tasks: ProjectTaskSummary;

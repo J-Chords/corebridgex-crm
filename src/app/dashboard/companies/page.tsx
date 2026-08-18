@@ -1,12 +1,12 @@
 "use client";
 
-import { Suspense, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, Plus, Search } from "lucide-react";
 import { useAuth } from "@/lib/auth/auth-context";
 import { useCompanies, useCompanyLookups } from "@/lib/data/hooks/use-companies";
-import { canManageCompanies } from "@/lib/data/permissions";
+import { canManageCompanies, isSuperadmin } from "@/lib/data/permissions";
 import type { CompanyStatus } from "@/lib/data/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -100,7 +100,16 @@ function CompaniesPageContent() {
     });
   }, [companies, search, statusFilter, brandFilter, healthFilter]);
 
-  if (!user) return null;
+  // Company administrative pages are Superadmin-only now — Employee/Supervisor's operational
+  // Client workspace is Projects. A real redirect, not just a hidden sidebar link, per the locked
+  // Phase 8B rule that Employee/Supervisor must never reach Company admin data by direct URL.
+  useEffect(() => {
+    if (user && !isSuperadmin(user)) {
+      router.replace("/dashboard/projects");
+    }
+  }, [user, router]);
+
+  if (!user || !isSuperadmin(user)) return null;
   const canManage = canManageCompanies(user);
 
   return (

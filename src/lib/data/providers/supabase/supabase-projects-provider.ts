@@ -51,19 +51,20 @@ async function hydrate(projects: Project[]): Promise<ProjectWithRelations[]> {
   const companyIds = Array.from(new Set(projects.map((p) => p.companyId)));
   const ownerIds = Array.from(new Set(projects.map((p) => p.ownerId)));
 
-  const [companiesRes, membersRes, workstreamsRes, owners] = await Promise.all([
+  const [companiesRes, memberLinksRes, workstreamsRes] = await Promise.all([
     supabase.from("companies").select("id, name").in("id", companyIds),
     supabase.from("project_members").select("project_id, user_id").in("project_id", projectIds),
     supabase.from("workstreams").select("id, project_id").in("project_id", projectIds),
-    resolveProfileDirectory(ownerIds),
   ]);
   if (companiesRes.error) throw new Error(companiesRes.error.message);
-  if (membersRes.error) throw new Error(membersRes.error.message);
+  if (memberLinksRes.error) throw new Error(memberLinksRes.error.message);
   if (workstreamsRes.error) throw new Error(workstreamsRes.error.message);
 
   const companies = (companiesRes.data ?? []) as { id: string; name: string }[];
-  const members = (membersRes.data ?? []) as { project_id: string; user_id: string }[];
+  const memberLinks = (memberLinksRes.data ?? []) as { project_id: string; user_id: string }[];
   const workstreams = (workstreamsRes.data ?? []) as { id: string; project_id: string | null }[];
+  const allProfileIds = Array.from(new Set([...ownerIds, ...memberLinks.map((m) => m.user_id)]));
+  const profiles = await resolveProfileDirectory(allProfileIds);
 
   const workstreamIds = workstreams.map((w) => w.id);
   const tasksRes = workstreamIds.length
@@ -85,8 +86,10 @@ async function hydrate(projects: Project[]): Promise<ProjectWithRelations[]> {
   return projects.map((project) => {
     const companyRow = companies.find((c) => c.id === project.companyId);
     if (!companyRow) throw new Error(`Project ${project.id} references unknown company ${project.companyId}`);
-    const owner = owners.find((u) => u.id === project.ownerId);
+    const owner = profiles.find((u) => u.id === project.ownerId);
     if (!owner) throw new Error(`Project ${project.id} references unknown owner ${project.ownerId}`);
+    const memberIds = memberLinks.filter((m) => m.project_id === project.id).map((m) => m.user_id);
+    const members = profiles.filter((u) => memberIds.includes(u.id));
 
     const projectWorkstreamIds = workstreamIdsByProject.get(project.id) ?? [];
     const projectTasks = tasks.filter((t) => projectWorkstreamIds.includes(t.workstream_id));
@@ -104,7 +107,8 @@ async function hydrate(projects: Project[]): Promise<ProjectWithRelations[]> {
       ...project,
       companyName: companyRow.name,
       owner,
-      memberCount: members.filter((m) => m.project_id === project.id).length,
+      members,
+      memberCount: members.length,
       workstreamCount: projectWorkstreamIds.length,
       tasks: taskSummary,
       progressPercent,

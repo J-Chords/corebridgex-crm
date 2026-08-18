@@ -4,7 +4,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { useAuth } from "@/lib/auth/auth-context";
 import { useCompanyLookups } from "@/lib/data/hooks/use-companies";
 import { useActivityCatalog } from "@/lib/data/hooks/use-activity-catalog";
-import { isSupervisor } from "@/lib/data/permissions";
+import { isEmployee, isSupervisor } from "@/lib/data/permissions";
 import { INTERNAL_COMPANY_ID } from "@/lib/data/constants";
 import { workstreamsProvider } from "@/lib/data/providers";
 import type { WorkstreamWithRelations } from "@/lib/data/providers/workstreams-provider";
@@ -39,8 +39,12 @@ interface WorkstreamFormDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   mode: "create" | "edit";
-  /** The workstream's company is fixed context, not user-editable — this dialog only opens from a company page. */
+  /** The workstream's company is fixed context, not user-editable — this dialog only opens from a company page or a Project workspace. */
   company: CompanyWithRelations;
+  /** The Project this Service belongs to — required when opened from a Project workspace's own
+   * "+ Add Service" action (Employee flow); omitted for the legacy Company-page flow, where the
+   * provider resolves it from the Company's own single Project. */
+  projectId?: string;
   workstream?: WorkstreamWithRelations;
   onSaved: () => void;
   /** Fires with the newly-created workstream on create — lets an embedded caller (e.g. the task form's inline "+ New workstream") pick it up directly instead of re-fetching. Never fires on edit. */
@@ -80,6 +84,7 @@ export function WorkstreamFormDialog({
   onOpenChange,
   mode,
   company,
+  projectId,
   workstream,
   onSaved,
   onCreated,
@@ -122,9 +127,11 @@ export function WorkstreamFormDialog({
           workstream.recurrenceCustomIntervalDays != null ? String(workstream.recurrenceCustomIntervalDays) : "",
       });
     } else {
-      // Default the creating supervisor onto their own new workstream as lead —
-      // superadmins pick explicitly since they don't personally lead client work.
-      setForm(emptyForm(isSupervisor(user) ? user.id : ""));
+      // An Employee always leads their own new Service — never optional, never someone else's
+      // (mirrors the real workstreams_insert RLS check). A creating Supervisor defaults onto
+      // themselves too, but can still pick someone else; superadmins pick explicitly since they
+      // don't personally lead client work.
+      setForm(emptyForm(isEmployee(user) || isSupervisor(user) ? user.id : ""));
     }
   }, [open, workstream, user]);
 
@@ -200,10 +207,11 @@ export function WorkstreamFormDialog({
         name: deriveWorkstreamName(selectedServiceLine?.name ?? null, form.qualifier),
         description: form.description.trim() || null,
         companyId: company.id,
+        projectId,
         serviceLineId,
         activityIds: form.activityIds,
-        leadUserId: form.leadUserId,
-        teamUserIds: form.teamUserIds,
+        leadUserId: isEmployee(user) ? user.id : form.leadUserId,
+        teamUserIds: isEmployee(user) ? [] : form.teamUserIds,
         status: form.status,
         startDate: form.startDate || null,
         endDate: form.endDate || null,
@@ -243,12 +251,12 @@ export function WorkstreamFormDialog({
           <div className="min-h-0 flex-1 overflow-y-auto">
             <div className="flex flex-col gap-2 px-6 pt-6 pb-2">
               <SheetTitle className="font-mono text-xs tracking-wider text-muted-foreground uppercase">
-                {mode === "create" ? "New workstream" : "Edit workstream"}
+                {mode === "create" ? "New service" : "Edit service"}
               </SheetTitle>
               <SheetDescription className="sr-only">
                 {mode === "create"
-                  ? `Add a new service workstream for ${company.name}.`
-                  : `Editing "${workstream?.name ?? "this workstream"}".`}
+                  ? `Add a new service for ${company.name}.`
+                  : `Editing "${workstream?.name ?? "this service"}".`}
               </SheetDescription>
 
               <Select
@@ -280,13 +288,15 @@ export function WorkstreamFormDialog({
                 <p className="text-xs text-warning">Required — every client workstream represents one service.</p>
               )}
 
-              <Input
-                value={form.qualifier}
-                onChange={(e) => setForm((p) => ({ ...p, qualifier: e.target.value }))}
-                placeholder="Reference / qualifier (optional) — e.g. UK Payroll, Monthly Payroll, 2026"
-                aria-label="Reference or qualifier (optional)"
-                className="h-auto rounded-none border-0 bg-transparent p-0 text-sm text-muted-foreground shadow-none focus-visible:ring-0"
-              />
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="workstream-qualifier">Reference / qualifier (optional)</Label>
+                <Input
+                  id="workstream-qualifier"
+                  value={form.qualifier}
+                  onChange={(e) => setForm((p) => ({ ...p, qualifier: e.target.value }))}
+                  placeholder="e.g. UK Payroll, Monthly Payroll, 2026"
+                />
+              </div>
 
               <Textarea
                 value={form.description}
@@ -313,14 +323,19 @@ export function WorkstreamFormDialog({
                 </div>
               </FormSection>
 
-              <FormSection label="Activities">
+              <FormSection
+                label={selectedServiceLine ? `Available ${selectedServiceLine.name} Activities` : "Activities"}
+              >
                 {form.serviceLineId === NO_SERVICE_LINE ? (
                   <p className="text-sm text-muted-foreground">Select a service to configure its activities.</p>
                 ) : activityDepartments.length === 0 ? (
                   <p className="text-sm text-muted-foreground">No activities set up for this service yet.</p>
                 ) : (
                   <>
-                    <div className="flex flex-col gap-3">
+                    <p className="text-xs text-muted-foreground">
+                      Select the Activities this Project will use for this Service.
+                    </p>
+                    <div className="flex max-h-64 flex-col gap-3 overflow-y-auto pr-1">
                       {activityDepartments.map((dept) => (
                         <div key={dept.id} className="flex flex-col gap-1.5">
                           {activityDepartments.length > 1 && (
@@ -353,30 +368,39 @@ export function WorkstreamFormDialog({
                   <WorkstreamStatusPicker value={form.status} onChange={(status) => setForm((p) => ({ ...p, status }))} />
                 </div>
 
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="workstream-lead">Lead</Label>
-                  <Select
-                    items={Object.fromEntries(assignableStaff.map((s) => [s.id, s.fullName]))}
-                    value={form.leadUserId}
-                    onValueChange={(v) => setLead(v ?? "")}
-                  >
-                    <SelectTrigger id="workstream-lead" className="w-full">
-                      <SelectValue placeholder="Select lead" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {assignableStaff.map((staff) => (
-                        <SelectItem key={staff.id} value={staff.id}>
-                          {staff.fullName}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+                {isEmployee(user) ? (
+                  <div className="flex flex-col gap-1.5">
+                    <Label>Lead</Label>
+                    <p className="text-sm text-muted-foreground">You — Services you create are always your own.</p>
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex flex-col gap-1.5">
+                      <Label htmlFor="workstream-lead">Lead</Label>
+                      <Select
+                        items={Object.fromEntries(assignableStaff.map((s) => [s.id, s.fullName]))}
+                        value={form.leadUserId}
+                        onValueChange={(v) => setLead(v ?? "")}
+                      >
+                        <SelectTrigger id="workstream-lead" className="w-full">
+                          <SelectValue placeholder="Select lead" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {assignableStaff.map((staff) => (
+                            <SelectItem key={staff.id} value={staff.id}>
+                              {staff.fullName}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
 
-                <div className="flex flex-col gap-1.5">
-                  <Label>Team</Label>
-                  <TaskAssigneeChips staff={assignableStaff} selectedIds={form.teamUserIds} onToggle={toggleTeamMember} />
-                </div>
+                    <div className="flex flex-col gap-1.5">
+                      <Label>Team</Label>
+                      <TaskAssigneeChips staff={assignableStaff} selectedIds={form.teamUserIds} onToggle={toggleTeamMember} />
+                    </div>
+                  </>
+                )}
 
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div className="flex flex-col gap-1.5">
@@ -389,7 +413,7 @@ export function WorkstreamFormDialog({
                     />
                   </div>
                   <div className="flex flex-col gap-1.5">
-                    <Label htmlFor="workstream-end-date">Renewal date</Label>
+                    <Label htmlFor="workstream-end-date">Service end date</Label>
                     <Input
                       id="workstream-end-date"
                       type="date"
@@ -406,7 +430,7 @@ export function WorkstreamFormDialog({
               <FormSection label="Recurrence (optional)">
                 <label className="flex items-center justify-between gap-4">
                   <div className="flex flex-col gap-0.5">
-                    <span className="text-sm font-medium">This workstream recurs</span>
+                    <span className="text-sm font-medium">This service recurs</span>
                     <span className="text-xs text-muted-foreground">
                       Set a cadence so &quot;Generate next occurrence&quot; knows when the next period is due.
                     </span>
@@ -489,7 +513,7 @@ export function WorkstreamFormDialog({
               Cancel
             </Button>
             <Button type="submit" disabled={!canSubmit}>
-              {isSubmitting ? "Saving…" : mode === "create" ? "Create workstream" : "Save changes"}
+              {isSubmitting ? "Saving…" : mode === "create" ? "Create service" : "Save changes"}
             </Button>
           </SheetFooter>
         </form>

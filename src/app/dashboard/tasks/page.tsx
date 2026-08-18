@@ -9,7 +9,6 @@ import { useTasks } from "@/lib/data/hooks/use-tasks";
 import { useCompanies, useCompanyLookups } from "@/lib/data/hooks/use-companies";
 import { useWorkstreams } from "@/lib/data/hooks/use-workstreams";
 import { useTaskFilters, filterTasks, groupTasksBy } from "@/lib/data/hooks/use-task-filters";
-import { canManageTasks } from "@/lib/data/permissions";
 import type { TaskStatus } from "@/lib/data/types";
 import type { TaskWithRelations } from "@/lib/data/providers/tasks-provider";
 import { Button } from "@/components/ui/button";
@@ -154,18 +153,10 @@ function TasksPageContent() {
 
   if (!user) return null;
 
-  if (!canManageTasks(user)) {
-    return (
-      <div className="flex flex-col gap-2">
-        <h1 className="font-heading text-2xl font-semibold">Tasks</h1>
-        <p className="text-sm text-muted-foreground">
-          The full task list is for supervisors and superadmins. Your own tasks are on your
-          dashboard — a dedicated &ldquo;My Day&rdquo; view arrives in a later phase.
-        </p>
-      </div>
-    );
-  }
-
+  // Phase 8B — open to every role. The real access boundary is the Task query itself
+  // (RLS/permissions already scope results to Employee's own assigned work, Supervisor's own +
+  // team, Superadmin's org-wide view), not a page-level gate — removing this gate is a UI change
+  // only, the underlying data was already correctly scoped per viewer.
   return (
     <div className="flex flex-col gap-6">
       <Link href="/dashboard" className="w-fit text-sm text-muted-foreground hover:underline">
@@ -176,7 +167,11 @@ function TasksPageContent() {
         <div>
           <h1 className="font-heading text-2xl font-semibold">Tasks</h1>
           <p className="text-sm text-muted-foreground">
-            {user.role === "supervisor" ? "Tasks assigned across your team." : "Every task across the org."}
+            {user.role === "employee"
+              ? "Your own accessible and assigned tasks."
+              : user.role === "supervisor"
+                ? "Your own tasks, plus tasks assigned across your team."
+                : "Every task across the org."}
           </p>
         </div>
         <div className="flex items-center gap-2">

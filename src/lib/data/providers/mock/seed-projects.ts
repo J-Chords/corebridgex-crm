@@ -1,8 +1,9 @@
 import type { Project } from "../../types";
-import { INTERNAL_COMPANY_ID, INTERNAL_PROJECT_ID } from "../../constants";
+import { INTERNAL_COMPANY_ID } from "../../constants";
 import { seedCompanies } from "./seed-companies";
 import { seedWorkstreams } from "./seed-workstreams";
 import { seedUsers } from "./seed-users";
+import { projectIdForCompany } from "./project-id-for-company";
 
 /**
  * Deterministic backfill, mirroring the real hosted migration's own logic exactly
@@ -40,7 +41,7 @@ export const seedProjects: Project[] = seedCompanies.map((company) => {
   const contractEndDate = isInternal ? null : company.renewalDate;
 
   return {
-    id: company.id === INTERNAL_COMPANY_ID ? INTERNAL_PROJECT_ID : `project-${company.id}`,
+    id: projectIdForCompany(company.id),
     companyId: company.id,
     name: nameFor(company.name, contractStartDate, isInternal),
     ownerId: owner,

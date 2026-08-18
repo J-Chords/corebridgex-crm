@@ -140,6 +140,7 @@ export function GenerateOccurrenceDialog({
         name: form.name.trim(),
         description: workstream.description,
         companyId: workstream.companyId,
+        projectId: workstream.projectId,
         serviceLineId: workstream.serviceLineId,
         activityIds: carriedActivityIds,
         leadUserId: form.leadUserId,

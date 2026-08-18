@@ -1,5 +1,6 @@
 import type { Workstream } from "../../types";
 import { INTERNAL_COMPANY_ID, INTERNAL_WORKSTREAM_ID } from "../../constants";
+import { projectIdForCompany } from "./project-id-for-company";
 
 /**
  * One workstream per existing (company, service line) pairing from
@@ -18,7 +19,7 @@ import { INTERNAL_COMPANY_ID, INTERNAL_WORKSTREAM_ID } from "../../constants";
  * (see `workstreamHours` in mock-workstreams-provider.ts), never a number stored on the workstream
  * itself.
  */
-export const seedWorkstreams: Workstream[] = [
+const rawSeedWorkstreams: Omit<Workstream, "projectId">[] = [
   {
     id: "workstream-1",
     name: "Accounting 2026",
@@ -267,3 +268,8 @@ export const seedWorkstreams: Workstream[] = [
     updatedAt: "2026-07-21T09:00:00.000Z",
   },
 ];
+
+export const seedWorkstreams: Workstream[] = rawSeedWorkstreams.map((w) => ({
+  ...w,
+  projectId: projectIdForCompany(w.companyId),
+}));

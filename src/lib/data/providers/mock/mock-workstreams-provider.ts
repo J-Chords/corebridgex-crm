@@ -1,6 +1,13 @@
 import type { WorkstreamsProvider, WorkstreamWithRelations } from "../workstreams-provider";
 import type { Workstream, User } from "../../types";
-import { canAccessCompany, canAccessWorkstream, canCreateWorkstream, canManageWorkstreams, isEmployee } from "../../permissions";
+import {
+  canAccessCompany,
+  canAccessWorkstream,
+  canCreateWorkstream,
+  canCreateWorkstreamInProject,
+  canManageWorkstreams,
+  isEmployee,
+} from "../../permissions";
 import { computeWorkstreamBudget } from "../../time-budget";
 import { computeWorkstreamRecurrence } from "../../recurrence";
 import { db } from "./mock-db";
@@ -105,6 +112,28 @@ function toWorkstreamWithRelations(workstream: Workstream): WorkstreamWithRelati
   };
 }
 
+function projectMemberIds(projectId: string): string[] {
+  return db.projectMembers.filter((m) => m.projectId === projectId).map((m) => m.userId);
+}
+
+/**
+ * Mirrors enforce_workstream_project_link exactly: when a Project is given, its own companyId
+ * wins (closing the "guess between multiple Projects" risk); when omitted, resolved from
+ * companyId ONLY when that Company has exactly one Project — ambiguous/missing cases throw
+ * rather than silently pick one.
+ */
+function resolveProject(companyId: string, projectId: string | null | undefined): { projectId: string; companyId: string } {
+  if (projectId) {
+    const project = db.projects.find((p) => p.id === projectId);
+    if (!project) throw new Error("Project not found.");
+    return { projectId: project.id, companyId: project.companyId };
+  }
+  const matches = db.projects.filter((p) => p.companyId === companyId);
+  if (matches.length === 0) throw new Error("This company has no project yet — create one before adding a service.");
+  if (matches.length > 1) throw new Error("This company has more than one project — a service must specify which project it belongs to.");
+  return { projectId: matches[0].id, companyId: matches[0].companyId };
+}
+
 function requireAccess(viewer: User, workstream: Workstream) {
   const accessible = canAccessWorkstream(
     viewer,
@@ -182,7 +211,17 @@ export const mockWorkstreamsProvider: WorkstreamsProvider = {
   },
 
   async createWorkstream(viewer, input) {
-    if (!canCreateWorkstream(viewer, input.companyId, db.users)) {
+    // Resolves/validates the Project first — mirrors enforce_workstream_project_link exactly, and
+    // its resolved companyId always wins over whatever the caller sent (closes the "guess between
+    // multiple Projects" / "pass an unrelated companyId" risk for every role, not just Employee).
+    const resolved = resolveProject(input.companyId, input.projectId);
+    const project = db.projects.find((p) => p.id === resolved.projectId)!;
+
+    if (input.projectId) {
+      if (!canCreateWorkstreamInProject(viewer, { companyId: project.companyId, ownerId: project.ownerId, memberUserIds: projectMemberIds(project.id) }, db.users)) {
+        throw new Error("You don't have access to create a service in that project.");
+      }
+    } else if (!canCreateWorkstream(viewer, resolved.companyId, db.users)) {
       throw new Error("You don't have access to create a workstream for that company.");
     }
     if (isEmployee(viewer) && input.leadUserId !== viewer.id) {
@@ -192,7 +231,7 @@ export const mockWorkstreamsProvider: WorkstreamsProvider = {
       // without granting any broader staff-assignment power.
       throw new Error("You can only create a workstream you lead yourself.");
     }
-    const company = db.companies.find((c) => c.id === input.companyId);
+    const company = db.companies.find((c) => c.id === resolved.companyId);
     if (!company) throw new Error("Company not found.");
     requireActivitiesBelongToService(input.activityIds, input.serviceLineId);
 
@@ -202,7 +241,8 @@ export const mockWorkstreamsProvider: WorkstreamsProvider = {
       id,
       name: input.name,
       description: input.description,
-      companyId: input.companyId,
+      companyId: resolved.companyId,
+      projectId: resolved.projectId,
       serviceLineId: input.serviceLineId,
       brandId: company.brandId,
       leadUserId: input.leadUserId,

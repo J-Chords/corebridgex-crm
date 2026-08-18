@@ -1,13 +1,14 @@
 "use client";
 
-import { use, useMemo, useState } from "react";
+import { use, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { ArrowLeft, Pencil, Plus, Sparkles, Star } from "lucide-react";
 import { useAuth } from "@/lib/auth/auth-context";
 import { useCompany } from "@/lib/data/hooks/use-companies";
 import { useWorkstreams } from "@/lib/data/hooks/use-workstreams";
 import { useTasks } from "@/lib/data/hooks/use-tasks";
-import { canManageCompanies, canManageWorkstreams } from "@/lib/data/permissions";
+import { canManageCompanies, canManageWorkstreams, isSuperadmin } from "@/lib/data/permissions";
 import type { ClientContact } from "@/lib/data/types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -45,6 +46,7 @@ import { getInitials as initials } from "@/lib/initials";
 export default function CompanyDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const { user } = useAuth();
+  const router = useRouter();
   const { company, contacts, isLoading, notFound, refresh } = useCompany(id);
   const { workstreams, isLoading: workstreamsLoading, refresh: refreshWorkstreams } = useWorkstreams({ companyId: id });
   const { tasks, isLoading: tasksLoading, refresh: refreshTasks } = useTasks({ companyId: id });
@@ -62,7 +64,14 @@ export default function CompanyDetailPage({ params }: { params: Promise<{ id: st
     [workstreams]
   );
 
-  if (!user) return null;
+  // Company administrative pages are Superadmin-only now — see companies/page.tsx's own guard.
+  useEffect(() => {
+    if (user && !isSuperadmin(user)) {
+      router.replace("/dashboard/projects");
+    }
+  }, [user, router]);
+
+  if (!user || !isSuperadmin(user)) return null;
 
   if (isLoading) {
     return <p className="text-sm text-muted-foreground">Loading…</p>;

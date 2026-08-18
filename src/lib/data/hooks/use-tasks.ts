@@ -5,7 +5,7 @@ import { useAuth } from "@/lib/auth/auth-context";
 import { tasksProvider } from "@/lib/data/providers";
 import type { TaskReuseCandidate, TaskWithRelations } from "@/lib/data/providers/tasks-provider";
 
-export function useTasks(filters?: { companyId?: string; workstreamId?: string }) {
+export function useTasks(filters?: { companyId?: string; workstreamId?: string; workstreamIds?: string[] }) {
   const { user } = useAuth();
   const [tasks, setTasks] = useState<TaskWithRelations[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -27,6 +27,7 @@ export function useTasks(filters?: { companyId?: string; workstreamId?: string }
   const filtered = tasks.filter((t) => {
     if (filters?.companyId && t.companyId !== filters.companyId) return false;
     if (filters?.workstreamId && t.workstreamId !== filters.workstreamId) return false;
+    if (filters?.workstreamIds && !filters.workstreamIds.includes(t.workstreamId)) return false;
     return true;
   });
 

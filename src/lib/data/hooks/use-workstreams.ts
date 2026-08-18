@@ -5,7 +5,7 @@ import { useAuth } from "@/lib/auth/auth-context";
 import { workstreamsProvider } from "@/lib/data/providers";
 import type { WorkstreamWithRelations } from "@/lib/data/providers/workstreams-provider";
 
-export function useWorkstreams(filters?: { companyId?: string }) {
+export function useWorkstreams(filters?: { companyId?: string; projectId?: string }) {
   const { user } = useAuth();
   const [workstreams, setWorkstreams] = useState<WorkstreamWithRelations[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -24,9 +24,11 @@ export function useWorkstreams(filters?: { companyId?: string }) {
     refresh();
   }, [refresh]);
 
-  const filtered = filters?.companyId
-    ? workstreams.filter((e) => e.companyId === filters.companyId)
-    : workstreams;
+  const filtered = workstreams.filter((e) => {
+    if (filters?.companyId && e.companyId !== filters.companyId) return false;
+    if (filters?.projectId && e.projectId !== filters.projectId) return false;
+    return true;
+  });
 
   return { workstreams: filtered, isLoading, refresh };
 }

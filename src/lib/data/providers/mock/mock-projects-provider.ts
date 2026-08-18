@@ -7,12 +7,8 @@ function memberUserIds(projectId: string): string[] {
   return db.projectMembers.filter((m) => m.projectId === projectId).map((m) => m.userId);
 }
 
-function taskSummaryFor(companyId: string): ProjectTaskSummary {
-  // Mock has no workstreams.projectId field (deliberately not added this slice — every Company
-  // maps to exactly one Project today, so joining via companyId is equivalent and avoids
-  // threading a new field through every Workstream call site for a read-only surface). The real
-  // Supabase provider uses the actual workstreams.project_id column instead.
-  const workstreamIds = db.workstreams.filter((w) => w.companyId === companyId).map((w) => w.id);
+function taskSummaryFor(projectId: string): ProjectTaskSummary {
+  const workstreamIds = db.workstreams.filter((w) => w.projectId === projectId).map((w) => w.id);
   const tasks = db.tasks.filter((t) => workstreamIds.includes(t.workstreamId));
   const today = new Date().toISOString().slice(0, 10);
   const doneCount = tasks.filter((t) => t.status === "done").length;
@@ -31,15 +27,17 @@ function toProjectWithRelations(project: Project): ProjectWithRelations | null {
   const owner = db.users.find((u) => u.id === project.ownerId);
   if (!owner) throw new Error(`Project ${project.id} references unknown owner ${project.ownerId}`);
 
-  const workstreamCount = db.workstreams.filter((w) => w.companyId === project.companyId).length;
-  const tasks = taskSummaryFor(project.companyId);
+  const workstreamCount = db.workstreams.filter((w) => w.projectId === project.id).length;
+  const tasks = taskSummaryFor(project.id);
   const progressPercent = tasks.totalCount === 0 ? 0 : Math.round((tasks.doneCount / tasks.totalCount) * 100);
+  const members = db.users.filter((u) => memberUserIds(project.id).includes(u.id));
 
   return {
     ...project,
     companyName: company.name,
     owner,
-    memberCount: memberUserIds(project.id).length,
+    members,
+    memberCount: members.length,
     workstreamCount,
     tasks,
     progressPercent,

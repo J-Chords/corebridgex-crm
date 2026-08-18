@@ -393,6 +393,24 @@ export function canCreateWorkstream(viewer: User, companyId: string, allUsers: U
 }
 
 /**
+ * Phase 8B — the Project-aware version of `canCreateWorkstream`, used by the "+ Add Service" flow
+ * inside a Project workspace: supervisor/superadmin unconditionally, or an Employee who can
+ * access the Project itself (`canAccessProject`) rather than merely the underlying Company —
+ * closes the "pass a Company id you happen to know" risk, since Project membership is now the
+ * real operational relationship. `canCreateWorkstream` (Company-based) remains for the legacy
+ * Company-page flow, which stays Supervisor/Superadmin-only in practice now that Employee no
+ * longer has that page at all.
+ */
+export function canCreateWorkstreamInProject(
+  viewer: User,
+  project: { companyId: string; ownerId: string; memberUserIds: string[] },
+  allUsers: User[]
+): boolean {
+  if (isSupervisor(viewer) || isSuperadmin(viewer)) return true;
+  return isEmployee(viewer) && canAccessProject(viewer, project, allUsers);
+}
+
+/**
  * Workstream visibility gate: lead/team membership, mirroring the task visibility
  * gate's shape. The Internal/Non-billable workstream is always visible to everyone,
  * same special-casing as INTERNAL_COMPANY_ID in visibleCompanyIds.
