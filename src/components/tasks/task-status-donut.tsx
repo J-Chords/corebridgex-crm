@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { TaskWithRelations } from "@/lib/data/providers/tasks-provider";
 import type { TaskStatus } from "@/lib/data/types";
 
@@ -75,7 +76,11 @@ export function TaskStatusDonut({ tasks }: TaskStatusDonutProps) {
       </div>
       <div className="flex flex-1 flex-col gap-1.5">
         {segments.map(({ status, count }) => (
-          <div key={status} className="flex items-center justify-between gap-2 text-xs">
+          <Link
+            key={status}
+            href={`/dashboard/tasks?status=${status}`}
+            className="flex items-center justify-between gap-2 rounded-md px-1 py-0.5 text-xs hover:bg-muted/60"
+          >
             <span className="flex items-center gap-1.5 text-muted-foreground">
               <span
                 className="size-2 shrink-0 rounded-full"
@@ -85,7 +90,7 @@ export function TaskStatusDonut({ tasks }: TaskStatusDonutProps) {
               {STATUS_LABEL[status]}
             </span>
             <span className="font-medium text-foreground">{count}</span>
-          </div>
+          </Link>
         ))}
       </div>
     </div>

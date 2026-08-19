@@ -8,7 +8,9 @@ export interface SectionBreakProps {
   className?: string;
 }
 
-/** Mono, uppercase divider between dashboard sections — "01 · TODAY" flanked by rules. */
+/** Mono, uppercase divider between dashboard sections — "01 · TODAY" flanked by rules. Purely
+ * organizational — a numbered section heading is never itself expandable; Expand controls belong to
+ * the individual widgets a section contains, not the section label. */
 export function SectionBreak({ num, label, className }: SectionBreakProps) {
   return (
     <div className={cn("flex items-center gap-4 py-1", className)}>

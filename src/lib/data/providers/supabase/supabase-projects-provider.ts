@@ -1,4 +1,4 @@
-import type { ProjectsProvider, ProjectWithRelations, ProjectTaskSummary } from "../projects-provider";
+import type { ProjectsProvider, ProjectWithRelations, ProjectTaskSummary, ProjectInput, ProjectRenewalInput } from "../projects-provider";
 import type { Project, ProjectStatus } from "../../types";
 import { createClient } from "@/lib/supabase/client";
 import { resolveProfileDirectory } from "./profile-directory";
@@ -54,7 +54,7 @@ async function hydrate(projects: Project[]): Promise<ProjectWithRelations[]> {
   const [companiesRes, memberLinksRes, workstreamsRes] = await Promise.all([
     supabase.from("companies").select("id, name").in("id", companyIds),
     supabase.from("project_members").select("project_id, user_id").in("project_id", projectIds),
-    supabase.from("workstreams").select("id, project_id").in("project_id", projectIds),
+    supabase.from("workstreams").select("id, name, project_id").in("project_id", projectIds),
   ]);
   if (companiesRes.error) throw new Error(companiesRes.error.message);
   if (memberLinksRes.error) throw new Error(memberLinksRes.error.message);
@@ -62,7 +62,7 @@ async function hydrate(projects: Project[]): Promise<ProjectWithRelations[]> {
 
   const companies = (companiesRes.data ?? []) as { id: string; name: string }[];
   const memberLinks = (memberLinksRes.data ?? []) as { project_id: string; user_id: string }[];
-  const workstreams = (workstreamsRes.data ?? []) as { id: string; project_id: string | null }[];
+  const workstreams = (workstreamsRes.data ?? []) as { id: string; name: string; project_id: string | null }[];
   const allProfileIds = Array.from(new Set([...ownerIds, ...memberLinks.map((m) => m.user_id)]));
   const profiles = await resolveProfileDirectory(allProfileIds);
 
@@ -92,6 +92,9 @@ async function hydrate(projects: Project[]): Promise<ProjectWithRelations[]> {
     const members = profiles.filter((u) => memberIds.includes(u.id));
 
     const projectWorkstreamIds = workstreamIdsByProject.get(project.id) ?? [];
+    const services = workstreams
+      .filter((w) => w.project_id === project.id)
+      .map((w) => ({ id: w.id, name: w.name }));
     const projectTasks = tasks.filter((t) => projectWorkstreamIds.includes(t.workstream_id));
     const doneCount = projectTasks.filter((t) => t.status === "done").length;
     const overdueCount = projectTasks.filter((t) => t.status !== "done" && t.due_date != null && t.due_date < today).length;
@@ -110,10 +113,19 @@ async function hydrate(projects: Project[]): Promise<ProjectWithRelations[]> {
       members,
       memberCount: members.length,
       workstreamCount: projectWorkstreamIds.length,
+      services,
       tasks: taskSummary,
       progressPercent,
     };
   });
+}
+
+async function syncProjectMembers(projectId: string, userIds: string[]) {
+  const supabase = createClient();
+  await supabase.from("project_members").delete().eq("project_id", projectId);
+  if (userIds.length > 0) {
+    await supabase.from("project_members").insert(userIds.map((userId) => ({ project_id: projectId, user_id: userId })));
+  }
 }
 
 export const supabaseProjectsProvider: ProjectsProvider = {
@@ -132,5 +144,69 @@ export const supabaseProjectsProvider: ProjectsProvider = {
     if (!data) return null;
     const [hydrated] = await hydrate([toProject(data)]);
     return hydrated ?? null;
+  },
+
+  async createProject(_viewer, input: ProjectInput) {
+    const supabase = createClient();
+    const { data, error } = await supabase.rpc("create_project", {
+      p_company_id: input.companyId,
+      p_name: input.name,
+      p_owner_id: input.ownerId,
+      p_status: input.status,
+      p_contract_start_date: input.contractStartDate,
+      p_contract_months: input.contractMonths,
+      p_contract_end_date: input.contractEndDate,
+      p_description: input.description,
+      p_member_user_ids: input.memberUserIds,
+    });
+    if (error) throw new Error(error.message);
+    const [hydrated] = await hydrate([toProject(data)]);
+    return hydrated;
+  },
+
+  // Ordinary editing (no new Services involved) is a plain update + members resync — RLS
+  // (`projects_update`/`project_members_write`) is already Superadmin-only, and a superadmin's own
+  // `is_superadmin()` short-circuit never re-queries the row being written, so this doesn't hit the
+  // RETURNING-time RLS-visibility bug class create_workstream/create_task's own RPCs were built to
+  // avoid — an RPC here would be pure ceremony for a case that's already safe.
+  async updateProject(_viewer, id, input: ProjectInput) {
+    const supabase = createClient();
+    const { data, error } = await supabase
+      .from("projects")
+      .update({
+        name: input.name,
+        owner_id: input.ownerId,
+        status: input.status,
+        contract_start_date: input.contractStartDate,
+        contract_months: input.contractMonths,
+        contract_end_date: input.contractEndDate,
+        description: input.description,
+      })
+      .eq("id", id)
+      .select("*")
+      .single();
+    if (error) throw new Error(error.message);
+
+    await syncProjectMembers(id, input.memberUserIds);
+
+    const [hydrated] = await hydrate([toProject(data)]);
+    return hydrated;
+  },
+
+  async renewProject(_viewer, sourceProjectId, input: ProjectRenewalInput) {
+    const supabase = createClient();
+    const { data, error } = await supabase.rpc("renew_project", {
+      p_source_project_id: sourceProjectId,
+      p_name: input.name,
+      p_contract_start_date: input.contractStartDate,
+      p_contract_months: input.contractMonths,
+      p_contract_end_date: input.contractEndDate,
+      p_owner_id: input.ownerId,
+      p_member_user_ids: input.memberUserIds,
+      p_workstream_ids_to_carry: input.workstreamIdsToCarryForward,
+    });
+    if (error) throw new Error(error.message);
+    const [hydrated] = await hydrate([toProject(data)]);
+    return hydrated;
   },
 };

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
 import {
   Building2,
+  CalendarDays,
   Clock,
   ClipboardList,
   FolderKanban,
@@ -63,6 +64,7 @@ export function AppSidebar() {
     { href: "/dashboard/my-day", label: "My Day", icon: Sun },
     { href: "/dashboard/projects", label: "Projects", icon: FolderKanban },
     { href: "/dashboard/tasks", label: "Tasks", icon: ListChecks },
+    { href: "/dashboard/planner", label: "Planner", icon: CalendarDays },
     ...(user && isSuperadmin(user) ? [{ href: "/dashboard/companies", label: "Companies", icon: Building2 }] : []),
     { href: "/dashboard/reports", label: "Reports", icon: ClipboardList },
     ...(user && canViewTeamUpdatesPage(user)

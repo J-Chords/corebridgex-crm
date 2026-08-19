@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import type { User } from "@/lib/data/types";
 import { useTasks } from "@/lib/data/hooks/use-tasks";
 import { useCompanies, useCompanyLookups } from "@/lib/data/hooks/use-companies";
@@ -8,6 +9,8 @@ import { useRecentHandoffs } from "@/lib/data/hooks/use-task-handoffs";
 import { GreetingText } from "@/components/dashboard/greeting-heading";
 import { SearchTriggerBar } from "@/components/dashboard/search-trigger-bar";
 import { KpiPreviewList } from "@/components/dashboard/kpi-preview-list";
+import { TaskDrawer } from "@/components/tasks/task-drawer";
+import { TaskKpiDetail } from "@/components/dashboard/task-kpi-detail";
 import { StatCard } from "@/components/ui/stat-card";
 import { SectionBreak } from "@/components/ui/section-break";
 import { TeamWorkloadCard } from "@/components/dashboard/team-workload-card";
@@ -21,11 +24,12 @@ import { STAGGER_ITEM_CLASS, staggerDelay } from "@/lib/stagger";
 import { cn } from "@/lib/utils";
 
 export function SuperadminDashboard({ user }: { user: User }) {
-  const { tasks } = useTasks();
+  const { tasks, refresh } = useTasks();
   const { companies } = useCompanies();
   const { workstreams } = useWorkstreams();
   const { brands, assignableStaff } = useCompanyLookups();
   const { handoffs } = useRecentHandoffs();
+  const [drawerTaskId, setDrawerTaskId] = useState<string | null>(null);
 
   const staff = assignableStaff.filter((u) => u.id !== user.id);
 
@@ -54,17 +58,21 @@ export function SuperadminDashboard({ user }: { user: User }) {
           value={String(companies.length)}
           className={STAGGER_ITEM_CLASS}
           style={staggerDelay(0)}
-          preview={
-            <KpiPreviewList
-              items={companies.slice(0, 4).map((c) => ({
-                id: c.id,
-                title: c.name,
-                subtitle: c.brand.name,
-                href: `/dashboard/companies/${c.id}`,
-              }))}
-              emptyMessage="No clients yet."
-            />
-          }
+          detail={{
+            title: "Total Clients",
+            description: `${companies.length} client${companies.length === 1 ? "" : "s"}`,
+            content: () => (
+              <KpiPreviewList
+                items={companies.map((c) => ({
+                  id: c.id,
+                  title: c.name,
+                  subtitle: c.brand.name,
+                  href: `/dashboard/companies/${c.id}`,
+                }))}
+                emptyMessage="No clients yet."
+              />
+            ),
+          }}
           viewAllHref="/dashboard/companies"
         />
         <StatCard
@@ -72,33 +80,40 @@ export function SuperadminDashboard({ user }: { user: User }) {
           value={String(assignableStaff.length)}
           className={STAGGER_ITEM_CLASS}
           style={staggerDelay(1)}
-          preview={
-            <KpiPreviewList
-              items={assignableStaff.slice(0, 4).map((s) => ({
-                id: s.id,
-                title: s.fullName,
-                subtitle: ROLE_LABELS[s.role],
-              }))}
-              emptyMessage="No staff yet."
-            />
-          }
+          detail={{
+            title: "Total Staff",
+            description: `${assignableStaff.length} staff member${assignableStaff.length === 1 ? "" : "s"}`,
+            content: () => (
+              <KpiPreviewList
+                items={assignableStaff.map((s) => ({
+                  id: s.id,
+                  title: s.fullName,
+                  subtitle: ROLE_LABELS[s.role],
+                }))}
+                emptyMessage="No staff yet."
+              />
+            ),
+          }}
         />
         <StatCard
           label="Active tasks"
           value={String(activeTaskCount)}
           className={STAGGER_ITEM_CLASS}
           style={staggerDelay(2)}
-          preview={
-            <KpiPreviewList
-              items={activeTasks.slice(0, 4).map((t) => ({
-                id: t.id,
-                title: t.title,
-                subtitle: t.company.name,
-                href: `/dashboard/tasks/${t.id}`,
-              }))}
-              emptyMessage="Nothing active right now."
-            />
-          }
+          detail={{
+            title: "Active Tasks",
+            description: `${activeTaskCount} task${activeTaskCount === 1 ? "" : "s"}`,
+            content: (close) => (
+              <TaskKpiDetail
+                tasks={activeTasks}
+                emptyMessage="Nothing active right now."
+                onOpenTask={(id) => {
+                  close();
+                  setDrawerTaskId(id);
+                }}
+              />
+            ),
+          }}
           viewAllHref="/dashboard/tasks?active=1"
         />
         <StatCard
@@ -107,17 +122,21 @@ export function SuperadminDashboard({ user }: { user: User }) {
           tone={atRiskCount > 0 ? "danger" : "default"}
           className={STAGGER_ITEM_CLASS}
           style={staggerDelay(3)}
-          preview={
-            <KpiPreviewList
-              items={atRiskCompanies.slice(0, 4).map((c) => ({
-                id: c.id,
-                title: c.name,
-                subtitle: c.brand.name,
-                href: `/dashboard/companies/${c.id}`,
-              }))}
-              emptyMessage="No at-risk clients right now."
-            />
-          }
+          detail={{
+            title: "At-Risk Clients",
+            description: `${atRiskCount} client${atRiskCount === 1 ? "" : "s"}`,
+            content: () => (
+              <KpiPreviewList
+                items={atRiskCompanies.map((c) => ({
+                  id: c.id,
+                  title: c.name,
+                  subtitle: c.brand.name,
+                  href: `/dashboard/companies/${c.id}`,
+                }))}
+                emptyMessage="No at-risk clients right now."
+              />
+            ),
+          }}
           viewAllHref="/dashboard/companies?health=at-risk"
         />
       </div>
@@ -143,6 +162,12 @@ export function SuperadminDashboard({ user }: { user: User }) {
           <UpcomingDeadlinesCard tasks={tasks} />
         </div>
       </div>
+
+      <TaskDrawer
+        taskId={drawerTaskId}
+        onOpenChange={(open) => !open && setDrawerTaskId(null)}
+        onChanged={refresh}
+      />
     </div>
   );
 }

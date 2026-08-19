@@ -38,3 +38,13 @@ export function splitWorkstreamQualifier(name: string, serviceLineName: string |
 export function workstreamDisplayHeading(name: string, serviceLineName: string | null): string {
   return serviceLineName ?? name;
 }
+
+/**
+ * A compact one-line form of an already-derived workstream `name` for tight display contexts (e.g.
+ * a Project list's Service column badges) — swaps the heavier " — " qualifier separator for " · "
+ * without dropping the qualifier itself (still needed to differentiate same-type services). A no-op
+ * when the name has no qualifier.
+ */
+export function workstreamCompactLabel(name: string): string {
+  return name.replace(QUALIFIER_SEPARATOR, " · ");
+}

@@ -470,3 +470,15 @@ export function canAccessProject(
   }
   return project.ownerId === viewer.id || project.memberUserIds.includes(viewer.id);
 }
+
+/**
+ * Phase 8E — Project (the annual-contract record itself, not its Services) create/edit/renew is
+ * Superadmin-only. This is Company-administration-adjacent, structural org data — deliberately
+ * narrower than `canManageCompanies` (Supervisor + Superadmin): Supervisor's extra privileges over
+ * Employee are team/operational privileges, never Company/contract administration, and creating a
+ * Project is a different act from an Employee/Supervisor operationally creating a Service inside
+ * one they already have (`canCreateWorkstreamInProject`, unaffected by this).
+ */
+export function canManageProjects(user: User): boolean {
+  return isSuperadmin(user);
+}

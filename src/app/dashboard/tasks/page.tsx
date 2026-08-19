@@ -92,11 +92,16 @@ function TasksPageContent() {
   // — one-time on mount, same `patch` the filter bar itself already calls, no change to useTaskFilters.
   const [runningOnly, setRunningOnly] = useState(false);
   const [overdueOnly, setOverdueOnly] = useState(() => searchParams.get("overdue") === "1");
+  const [dueTodayOnly, setDueTodayOnly] = useState(() => searchParams.get("due") === "today");
   useEffect(() => {
     const status = searchParams.get("status");
     if (status && VALID_STATUSES.includes(status as TaskStatus)) {
       patch({ status: status as TaskStatus });
     }
+    // Phase 8E — same one-time deep-link seeding, for a Supervisor/Superadmin dashboard card
+    // drilling down to one team member's own tasks (e.g. Team Workload's per-person row).
+    const assignee = searchParams.get("assignee");
+    if (assignee) patch({ assigneeId: assignee });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -157,8 +162,9 @@ function TasksPageContent() {
     if (activeOnly) result = result.filter((t) => t.status !== "done");
     if (runningOnly) result = result.filter((t) => t.id === runningTaskId);
     if (overdueOnly) result = result.filter((t) => t.status !== "done" && t.dueDate != null && t.dueDate < today);
+    if (dueTodayOnly) result = result.filter((t) => t.status !== "done" && t.dueDate === today);
     return result;
-  }, [tasks, filters, activeOnly, runningOnly, overdueOnly, runningTaskId, today]);
+  }, [tasks, filters, activeOnly, runningOnly, overdueOnly, dueTodayOnly, runningTaskId, today]);
   const groups = useMemo(
     () => (filters.groupBy === "none" ? [] : groupTasksBy(filtered, filters.groupBy)),
     [filtered, filters.groupBy]
@@ -173,6 +179,7 @@ function TasksPageContent() {
     done: 0,
     running: beforeStatusFilter.filter((t) => t.id === runningTaskId).length,
     overdue: beforeStatusFilter.filter((t) => t.status !== "done" && t.dueDate != null && t.dueDate < today).length,
+    dueToday: beforeStatusFilter.filter((t) => t.status !== "done" && t.dueDate === today).length,
   };
   for (const task of beforeStatusFilter) statusCounts[task.status]++;
 
@@ -308,6 +315,8 @@ function TasksPageContent() {
         onRunningChange={handleRunningChange}
         overdueOnly={overdueOnly}
         onOverdueChange={setOverdueOnly}
+        dueTodayOnly={dueTodayOnly}
+        onDueTodayChange={setDueTodayOnly}
         counts={statusCounts}
       />
 

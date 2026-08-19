@@ -2,13 +2,14 @@
 
 import { use, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Plus } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { ArrowLeft, Pencil, Plus, RefreshCw } from "lucide-react";
 import { useAuth } from "@/lib/auth/auth-context";
 import { useProject } from "@/lib/data/hooks/use-projects";
 import { useWorkstreams } from "@/lib/data/hooks/use-workstreams";
 import { useTasks } from "@/lib/data/hooks/use-tasks";
 import { useCompany } from "@/lib/data/hooks/use-companies";
-import { canCreateWorkstreamInProject } from "@/lib/data/permissions";
+import { canCreateWorkstreamInProject, canManageProjects } from "@/lib/data/permissions";
 import { workstreamDisplayHeading } from "@/lib/data/workstream-name";
 import { ROLE_LABELS } from "@/lib/data/role-labels";
 import { Button } from "@/components/ui/button";
@@ -18,6 +19,8 @@ import { ChecklistProgress } from "@/components/ui/checklist-progress";
 import { ProjectStatusBadge } from "@/components/projects/project-status-badge";
 import { WorkstreamStatusBadge } from "@/components/workstreams/workstream-status-badge";
 import { WorkstreamFormDialog } from "@/components/workstreams/workstream-form-dialog";
+import { ProjectFormDialog } from "@/components/projects/project-form-dialog";
+import { ProjectRenewalDialog } from "@/components/projects/project-renewal-dialog";
 import { TaskRowList } from "@/components/tasks/task-row";
 import { cn } from "@/lib/utils";
 import { getInitials as initials } from "@/lib/initials";
@@ -46,12 +49,15 @@ const TABS: { key: TabKey; label: string }[] = [
 export default function ProjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const { user } = useAuth();
+  const router = useRouter();
   const { project, isLoading, notFound, refresh } = useProject(id);
   const { workstreams, isLoading: workstreamsLoading, refresh: refreshWorkstreams } = useWorkstreams({ projectId: id });
   const { tasks, isLoading: tasksLoading } = useTasks({ workstreamIds: workstreams.map((w) => w.id) });
   const { company } = useCompany(project?.companyId ?? "");
   const [tab, setTab] = useState<TabKey>("overview");
   const [addServiceOpen, setAddServiceOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [renewOpen, setRenewOpen] = useState(false);
 
   if (!user) return null;
 
@@ -89,12 +95,24 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
         Back to projects
       </Link>
 
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="font-heading text-2xl font-semibold">{project.name}</h1>
           <p className="text-sm text-muted-foreground">{project.companyName}</p>
         </div>
-        <ProjectStatusBadge status={project.status} />
+        <div className="flex items-center gap-2">
+          {canManageProjects(user) && (
+            <>
+              <Button size="sm" variant="outline" onClick={() => setRenewOpen(true)}>
+                <RefreshCw /> Renew Project
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => setEditOpen(true)}>
+                <Pencil /> Edit Project
+              </Button>
+            </>
+          )}
+          <ProjectStatusBadge status={project.status} />
+        </div>
       </div>
 
       <div className="flex items-center gap-1 border-b">
@@ -274,6 +292,18 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
             refresh();
           }}
         />
+      )}
+
+      {canManageProjects(user) && (
+        <>
+          <ProjectFormDialog open={editOpen} onOpenChange={setEditOpen} mode="edit" project={project} onSaved={refresh} />
+          <ProjectRenewalDialog
+            open={renewOpen}
+            onOpenChange={setRenewOpen}
+            project={project}
+            onRenewed={(newProject) => router.push(`/dashboard/projects/${newProject.id}`)}
+          />
+        </>
       )}
     </div>
   );

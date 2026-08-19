@@ -17,10 +17,13 @@ import { formatMinutes } from "@/lib/format-minutes";
 import { GreetingText } from "@/components/dashboard/greeting-heading";
 import { SearchTriggerBar } from "@/components/dashboard/search-trigger-bar";
 import { KpiPreviewList } from "@/components/dashboard/kpi-preview-list";
+import { TaskDrawer } from "@/components/tasks/task-drawer";
+import { TaskKpiDetail } from "@/components/dashboard/task-kpi-detail";
+import { TaskStatusFocusContent } from "@/components/dashboard/task-status-focus-content";
 import { StatCard } from "@/components/ui/stat-card";
 import { SectionBreak } from "@/components/ui/section-break";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardAction } from "@/components/ui/card";
 import { TaskRowList } from "@/components/tasks/task-row";
 import { TaskFormDialog } from "@/components/tasks/task-form-dialog";
 import { TaskStatusDonut } from "@/components/tasks/task-status-donut";
@@ -30,8 +33,12 @@ import { ReportsAwaitingReviewCard } from "@/components/dashboard/reports-awaiti
 import { RecurringWorkDueCard } from "@/components/dashboard/recurring-work-due-card";
 import { TeamActivityCard } from "@/components/dashboard/team-activity-card";
 import { UpcomingDeadlinesCard } from "@/components/dashboard/upcoming-deadlines-card";
+import { CardExpandButton } from "@/components/dashboard/card-expand-button";
+import { DashboardWidgetFocusDialog } from "@/components/dashboard/dashboard-widget-focus-dialog";
 import { STAGGER_ITEM_CLASS, staggerDelay } from "@/lib/stagger";
 import { cn } from "@/lib/utils";
+
+const MAX_MY_TASKS_PREVIEW = 6;
 
 function todayDateString() {
   return new Date().toISOString().slice(0, 10);
@@ -41,6 +48,10 @@ function formatElapsed(seconds: number) {
   const m = Math.floor(seconds / 60);
   const s = seconds % 60;
   return `${m}:${String(s).padStart(2, "0")}`;
+}
+
+function formatEntryDate(value: string) {
+  return new Date(value).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
 /** Matches `ClientHealthBadge`'s own label text, for the "Clients needing attention" KPI's preview subtitle. */
@@ -60,6 +71,10 @@ export function SupervisorDashboard({ user }: { user: User }) {
   const { handoffs } = useRecentHandoffs();
   const [taskDialogOpen, setTaskDialogOpen] = useState(false);
   const [isStopping, setIsStopping] = useState(false);
+  const [drawerTaskId, setDrawerTaskId] = useState<string | null>(null);
+  const [myTasksFocusOpen, setMyTasksFocusOpen] = useState(false);
+  const [timeFocusOpen, setTimeFocusOpen] = useState(false);
+  const [taskStatusFocusOpen, setTaskStatusFocusOpen] = useState(false);
 
   const teamMembers = assignableStaff.filter((u) => u.id !== user.id);
   const teamReports = reports.filter((r) => !isAccomplishmentsReportOwner(user, r));
@@ -80,6 +95,7 @@ export function SupervisorDashboard({ user }: { user: User }) {
   const myOpenTasks = myTasks.filter((t) => t.status !== "done");
   const weekEntries = myEntries.filter((e) => e.durationMinutes !== null && e.startTime >= sevenDaysAgoIso);
   const weekMinutes = weekEntries.reduce((sum, e) => sum + (e.durationMinutes ?? 0), 0);
+  const weekEntriesSorted = [...weekEntries].sort((a, b) => b.startTime.localeCompare(a.startTime));
   const runningEntry = myEntries.find((e) => e.durationMinutes === null) ?? null;
   const elapsedSeconds = useElapsedSeconds(runningEntry?.startTime ?? null);
 
@@ -114,17 +130,20 @@ export function SupervisorDashboard({ user }: { user: User }) {
           value={String(openTasks.length)}
           className={STAGGER_ITEM_CLASS}
           style={staggerDelay(0)}
-          preview={
-            <KpiPreviewList
-              items={openTasks.slice(0, 4).map((t) => ({
-                id: t.id,
-                title: t.title,
-                subtitle: t.company.name,
-                href: `/dashboard/tasks/${t.id}`,
-              }))}
-              emptyMessage="Nothing open right now."
-            />
-          }
+          detail={{
+            title: "Team Open Tasks",
+            description: `${openTasks.length} task${openTasks.length === 1 ? "" : "s"}`,
+            content: (close) => (
+              <TaskKpiDetail
+                tasks={openTasks}
+                emptyMessage="Nothing open right now."
+                onOpenTask={(id) => {
+                  close();
+                  setDrawerTaskId(id);
+                }}
+              />
+            ),
+          }}
           viewAllHref="/dashboard/tasks?active=1"
         />
         <StatCard
@@ -133,17 +152,20 @@ export function SupervisorDashboard({ user }: { user: User }) {
           tone={overdueCount > 0 ? "warning" : "default"}
           className={STAGGER_ITEM_CLASS}
           style={staggerDelay(1)}
-          preview={
-            <KpiPreviewList
-              items={overdueTasks.slice(0, 4).map((t) => ({
-                id: t.id,
-                title: t.title,
-                subtitle: t.company.name,
-                href: `/dashboard/tasks/${t.id}`,
-              }))}
-              emptyMessage="Nothing overdue right now."
-            />
-          }
+          detail={{
+            title: "Team Overdue Tasks",
+            description: `${overdueCount} task${overdueCount === 1 ? "" : "s"}`,
+            content: (close) => (
+              <TaskKpiDetail
+                tasks={overdueTasks}
+                emptyMessage="Nothing overdue right now."
+                onOpenTask={(id) => {
+                  close();
+                  setDrawerTaskId(id);
+                }}
+              />
+            ),
+          }}
           viewAllHref="/dashboard/tasks?overdue=1"
         />
         <StatCard
@@ -151,17 +173,20 @@ export function SupervisorDashboard({ user }: { user: User }) {
           value={String(completedThisWeekCount)}
           className={STAGGER_ITEM_CLASS}
           style={staggerDelay(2)}
-          preview={
-            <KpiPreviewList
-              items={completedThisWeek.slice(0, 4).map((t) => ({
-                id: t.id,
-                title: t.title,
-                subtitle: t.company.name,
-                href: `/dashboard/tasks/${t.id}`,
-              }))}
-              emptyMessage="Nothing completed yet this week."
-            />
-          }
+          detail={{
+            title: "Completed This Week",
+            description: `${completedThisWeekCount} task${completedThisWeekCount === 1 ? "" : "s"}`,
+            content: (close) => (
+              <TaskKpiDetail
+                tasks={completedThisWeek}
+                emptyMessage="Nothing completed yet this week."
+                onOpenTask={(id) => {
+                  close();
+                  setDrawerTaskId(id);
+                }}
+              />
+            ),
+          }}
           viewAllHref="/dashboard/tasks?status=done"
         />
         <StatCard
@@ -169,17 +194,21 @@ export function SupervisorDashboard({ user }: { user: User }) {
           value={String(clientsNeedingAttentionCount)}
           className={STAGGER_ITEM_CLASS}
           style={staggerDelay(3)}
-          preview={
-            <KpiPreviewList
-              items={clientsNeedingAttention.slice(0, 4).map((c) => ({
-                id: c.id,
-                title: c.name,
-                subtitle: HEALTH_LABEL[c.health.status],
-                href: `/dashboard/companies/${c.id}`,
-              }))}
-              emptyMessage="No clients need attention right now."
-            />
-          }
+          detail={{
+            title: "Clients Needing Attention",
+            description: `${clientsNeedingAttentionCount} client${clientsNeedingAttentionCount === 1 ? "" : "s"}`,
+            content: () => (
+              <KpiPreviewList
+                items={clientsNeedingAttention.map((c) => ({
+                  id: c.id,
+                  title: c.name,
+                  subtitle: HEALTH_LABEL[c.health.status],
+                  href: `/dashboard/companies/${c.id}`,
+                }))}
+                emptyMessage="No clients need attention right now."
+              />
+            ),
+          }}
           viewAllHref="/dashboard/companies?health=attention"
         />
       </div>
@@ -196,25 +225,41 @@ export function SupervisorDashboard({ user }: { user: User }) {
               <ListChecks className="size-4 text-muted-foreground" aria-hidden="true" />
               My Tasks
             </CardTitle>
-            <Button size="sm" variant="outline" onClick={() => setTaskDialogOpen(true)}>
-              <Plus /> Add task
-            </Button>
+            <div className="flex items-center gap-1">
+              <Button size="sm" variant="outline" onClick={() => setTaskDialogOpen(true)}>
+                <Plus /> Add task
+              </Button>
+              <CardExpandButton onClick={() => setMyTasksFocusOpen(true)} label="Expand My Tasks" />
+            </div>
           </CardHeader>
-          <CardContent>
+          <CardContent className="flex flex-col gap-3">
             <TaskRowList
-              tasks={myOpenTasks}
+              tasks={myOpenTasks.slice(0, MAX_MY_TASKS_PREVIEW)}
               isLoading={myTasksLoading}
               emptyMessage="Nothing assigned to you right now — add your own task to get started."
               subtitleFor={(task) =>
                 `${task.company.name} · ${task.workstream.name}${task.activity ? ` · ${task.activity.name}` : ""}`
               }
+              onOpen={setDrawerTaskId}
             />
+            {myOpenTasks.length > MAX_MY_TASKS_PREVIEW && (
+              <button
+                type="button"
+                onClick={() => setMyTasksFocusOpen(true)}
+                className="self-start text-xs font-medium text-primary hover:underline"
+              >
+                +{myOpenTasks.length - MAX_MY_TASKS_PREVIEW} more
+              </button>
+            )}
           </CardContent>
         </Card>
 
         <Card className={cn(STAGGER_ITEM_CLASS)} style={staggerDelay(1)}>
           <CardHeader>
             <CardTitle className="text-base">My time this week</CardTitle>
+            <CardAction>
+              <CardExpandButton onClick={() => setTimeFocusOpen(true)} label="Expand My time this week" />
+            </CardAction>
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
             <div>
@@ -250,6 +295,79 @@ export function SupervisorDashboard({ user }: { user: User }) {
         </Card>
       </div>
 
+      <DashboardWidgetFocusDialog
+        open={myTasksFocusOpen}
+        onOpenChange={setMyTasksFocusOpen}
+        title="My Tasks"
+        description={`${myOpenTasks.length} open task${myOpenTasks.length === 1 ? "" : "s"}`}
+      >
+        <TaskRowList
+          tasks={myOpenTasks}
+          isLoading={myTasksLoading}
+          emptyMessage="Nothing assigned to you right now — add your own task to get started."
+          subtitleFor={(task) =>
+            `${task.company.name} · ${task.workstream.name}${task.activity ? ` · ${task.activity.name}` : ""}`
+          }
+          onOpen={setDrawerTaskId}
+        />
+      </DashboardWidgetFocusDialog>
+
+      <DashboardWidgetFocusDialog
+        open={timeFocusOpen}
+        onOpenChange={setTimeFocusOpen}
+        title="My time this week"
+        description={`${formatMinutes(weekMinutes)} logged across the last 7 days`}
+      >
+        <div className="border-b pb-4">
+          <span className="mb-2 block font-mono text-xs tracking-wider text-muted-foreground uppercase">
+            Running timer
+          </span>
+          {runningEntry ? (
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex flex-col gap-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTimeFocusOpen(false);
+                    setDrawerTaskId(runningEntry.task.id);
+                  }}
+                  className="text-left text-sm font-medium hover:underline"
+                >
+                  {runningEntry.task.title}
+                </button>
+                <span className="font-mono text-lg text-primary">{formatElapsed(elapsedSeconds)}</span>
+              </div>
+              <Button variant="destructive" size="sm" onClick={handleStopTimer} disabled={isStopping}>
+                <Square /> Stop
+              </Button>
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">No timer running — start one from any task.</p>
+          )}
+        </div>
+        {weekEntriesSorted.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No time logged yet this week.</p>
+        ) : (
+          weekEntriesSorted.map((entry) => (
+            <button
+              key={entry.id}
+              type="button"
+              onClick={() => {
+                setTimeFocusOpen(false);
+                setDrawerTaskId(entry.task.id);
+              }}
+              className="flex items-center justify-between gap-3 rounded-lg border bg-card p-3 text-left transition-colors hover:bg-muted/40"
+            >
+              <div className="flex min-w-0 flex-col gap-0.5">
+                <span className="truncate text-sm font-medium">{entry.task.title}</span>
+                <span className="text-xs text-muted-foreground">{formatEntryDate(entry.startTime)}</span>
+              </div>
+              <span className="shrink-0 text-xs text-muted-foreground">{formatMinutes(entry.durationMinutes ?? 0)}</span>
+            </button>
+          ))
+        )}
+      </DashboardWidgetFocusDialog>
+
       <SectionBreak num="02" label="Team Attention" />
 
       <div className="grid gap-4 lg:grid-cols-3">
@@ -261,6 +379,9 @@ export function SupervisorDashboard({ user }: { user: User }) {
           <Card>
             <CardHeader>
               <CardTitle className="text-base">Team Tasks by Status</CardTitle>
+              <CardAction>
+                <CardExpandButton onClick={() => setTaskStatusFocusOpen(true)} label="Expand Team Tasks by Status" />
+              </CardAction>
             </CardHeader>
             <CardContent>
               <TaskStatusDonut tasks={tasks} />
@@ -268,6 +389,21 @@ export function SupervisorDashboard({ user }: { user: User }) {
           </Card>
         </div>
       </div>
+
+      <DashboardWidgetFocusDialog
+        open={taskStatusFocusOpen}
+        onOpenChange={setTaskStatusFocusOpen}
+        title="Team Tasks by Status"
+        description={`${tasks.length} task${tasks.length === 1 ? "" : "s"}`}
+      >
+        <TaskStatusFocusContent
+          tasks={tasks}
+          onOpenTask={(id) => {
+            setTaskStatusFocusOpen(false);
+            setDrawerTaskId(id);
+          }}
+        />
+      </DashboardWidgetFocusDialog>
 
       <SectionBreak num="03" label="Review & Activity" />
 
@@ -283,6 +419,12 @@ export function SupervisorDashboard({ user }: { user: User }) {
       </div>
 
       <TaskFormDialog open={taskDialogOpen} onOpenChange={setTaskDialogOpen} mode="create" onSaved={refreshMyTasks} />
+      <TaskDrawer
+        taskId={drawerTaskId}
+        onOpenChange={(open) => !open && setDrawerTaskId(null)}
+        onChanged={refreshMyTasks}
+        onTimerChanged={refreshMyEntries}
+      />
     </div>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, Play } from "lucide-react";
+import { AlertTriangle, CalendarClock, Play } from "lucide-react";
 import type { TaskStatus } from "@/lib/data/types";
 import { STATUS_COLOR_VAR, TASK_STATUS_SELECT_ITEMS } from "@/components/tasks/task-status-badge";
 import { cn } from "@/lib/utils";
@@ -52,6 +52,7 @@ export interface TaskStatusQuickFilterCounts {
   done: number;
   running: number;
   overdue: number;
+  dueToday: number;
 }
 
 interface TaskStatusQuickFiltersProps {
@@ -61,6 +62,8 @@ interface TaskStatusQuickFiltersProps {
   onRunningChange: (value: boolean) => void;
   overdueOnly: boolean;
   onOverdueChange: (value: boolean) => void;
+  dueTodayOnly: boolean;
+  onDueTodayChange: (value: boolean) => void;
   counts: TaskStatusQuickFilterCounts;
 }
 
@@ -79,6 +82,8 @@ export function TaskStatusQuickFilters({
   onRunningChange,
   overdueOnly,
   onOverdueChange,
+  dueTodayOnly,
+  onDueTodayChange,
   counts,
 }: TaskStatusQuickFiltersProps) {
   return (
@@ -110,6 +115,14 @@ export function TaskStatusQuickFilters({
         selected={overdueOnly}
         count={counts.overdue}
         onClick={() => onOverdueChange(!overdueOnly)}
+      />
+      <Pill
+        label="Due today"
+        color="var(--warning)"
+        icon={<CalendarClock className="size-3" aria-hidden="true" />}
+        selected={dueTodayOnly}
+        count={counts.dueToday}
+        onClick={() => onDueTodayChange(!dueTodayOnly)}
       />
     </div>
   );

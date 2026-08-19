@@ -80,7 +80,7 @@ function CompaniesPageContent() {
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<CompanyStatus | "all">("all");
-  const [brandFilter, setBrandFilter] = useState<string>("all");
+  const [brandFilter, setBrandFilter] = useState<string>(() => searchParams.get("brand") ?? "all");
   const [healthFilter, setHealthFilter] = useState<HealthFilter>(() => {
     const health = searchParams.get("health");
     return isHealthFilter(health) ? health : "all";
