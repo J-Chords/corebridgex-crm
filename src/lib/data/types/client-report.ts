@@ -14,11 +14,21 @@ export type ClientReportLineItemSource = "daily-update" | "raw" | "manual";
  */
 export interface ClientReportLineItem {
   id: string;
-  /** YYYY-MM-DD. */
+  /** YYYY-MM-DD — the date the work was actually logged (`TimeEntry.startTime`'s local work date), never a Task's completion/due/creation date. */
   date: string;
   minutes: number;
   details: string;
   source: ClientReportLineItemSource;
+  /**
+   * The Task this line came from (Phase 9D) — stable identity so a Task worked across multiple
+   * dates can be grouped into one weekly summary plus its individual dated lines (see
+   * `groupLineItemsByTask` in `client-report-weekly.ts`). Optional/nullable for backward
+   * compatibility: a legacy pre-9D line item, and any manually-added line, has none — both render
+   * as a standalone row, never grouped.
+   */
+  taskId?: string | null;
+  /** Snapshotted Task title, alongside `taskId`; null wherever `taskId` is null. */
+  taskLabel?: string | null;
 }
 
 export interface ClientReportActivitySection {
@@ -48,16 +58,27 @@ export interface ClientReportComment {
   createdAt: string;
 }
 
-export type ClientReportHistoryEventType = "finalized" | "reopened" | "re-finalized";
+export type ClientReportHistoryEventType = "finalized" | "reopened" | "re-finalized" | "generation-warning";
 
-/** Internal integrity log — same shape as AccomplishmentsReportHistoryEvent. Staff-only: never
- *  rendered in print/export, since actorName is a staff member's name. */
+/**
+ * Internal integrity log — same shape as AccomplishmentsReportHistoryEvent. Staff-only: never
+ * rendered in print/export, since actorName is a staff member's name.
+ *
+ * `"generation-warning"` (Phase 9D hotfix) is the smallest backward-compatible way to surface a
+ * generation-time note (e.g. a completed Task with no legitimate tracked time, omitted rather than
+ * given a fabricated Duration) to whoever reviews the Draft later — reusing this already-migrated
+ * jsonb column instead of a new schema/table just for a non-blocking internal notice. `message` is
+ * only ever set for this event type; every other type keeps its existing `actorName`-only shape.
+ */
 export interface ClientReportHistoryEvent {
   id: string;
   type: ClientReportHistoryEventType;
   actorId: string;
   actorName: string;
   createdAt: string;
+  /** Set only for `"generation-warning"` — the warning text itself. Never staff-name content by
+   * construction (it names a Task, never a person). */
+  message?: string;
 }
 
 /**

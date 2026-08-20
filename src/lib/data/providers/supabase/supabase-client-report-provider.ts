@@ -4,23 +4,28 @@ import type {
   ClientReportComment,
   ClientReportDepartmentSection,
   ClientReportHistoryEvent,
-  ClientReportLineItem,
-  ClientReportLineItemSource,
-  DailyUpdateEntry,
+  TaskStatus,
+  User,
 } from "../../types";
-import { getEntryActualMinutes } from "../../types/daily-update";
-import { formatMinutes } from "../../../format-minutes";
+import { computeWeeklyReportSections, type WeeklyReportDailyUpdateEntryInput } from "../../client-report-weekly";
 import { createClient } from "@/lib/supabase/client";
 
 /**
- * Real Supabase Client Reports provider (Phase 7E). `generateReport`'s evidence-gathering stays
- * in TypeScript, mirroring computeDepartmentSections/contributorsForDate/resolveDayContribution
- * in mock-client-report-provider.ts exactly — every other state transition is a thin RPC wrapper.
- * The name-free/anonymization boundary is unchanged from the mock: line items never carry a
- * name, only task title + duration (raw fallback) or the person's own reviewed Daily Update
- * `details` prose — staff identity (`generatedByName`/comments/history) stays on the row for
- * internal audit use, exactly as it does in the mock, and must never be surfaced by whatever
- * eventually produces a client-facing print/export view.
+ * Real Supabase Client Reports provider (Phase 7E, evolved Phase 9D). `generateReport`'s
+ * cross-contributor evidence (Tasks + aggregated Time + confirmed Daily Update narrative) comes
+ * from the hardened `get_client_report_weekly_evidence` RPC (Phase 9D hotfix) rather than direct
+ * browser SELECTs against `time_entries`/`daily_updates` — those tables' RLS is deliberately
+ * owner/team-scoped, not Project-scoped, so an ordinary SELECT would only ever see the CALLING
+ * user's own Time Entries on a shared Task, silently under-counting a coworker's legitimate time on
+ * that same Task/date. The RPC performs its own independent `can_access_project` authorization
+ * check and returns only pre-aggregated, identity-stripped evidence (see the migration's own doc
+ * comment for the exact minimum-evidence contract) — `time_entries_select`/`daily_updates_select`
+ * themselves are unchanged. Activity/Department catalog rows and the staff-name safety-net list stay
+ * ordinary RLS-scoped SELECTs (no cross-contributor concern there), same as before. Every other
+ * state transition is a thin RPC wrapper. The name-free/anonymization boundary is unchanged: line
+ * items never carry a name, only a Task's own title/description or a screened confirmed Daily Update
+ * narrative — staff identity (`generatedByName`/comments/history) stays on the row for internal
+ * audit use only, never surfaced by the client-facing print/export view.
  */
 
 interface ReportRow {
@@ -90,208 +95,116 @@ async function hydrate(rows: ReportRow[]): Promise<ClientReport[]> {
   );
 }
 
-function shiftDate(date: string, deltaDays: number): string {
-  const d = new Date(`${date}T00:00:00Z`);
-  d.setUTCDate(d.getUTCDate() + deltaDays);
-  return d.toISOString().slice(0, 10);
+/** One `"generation-warning"` history event per warning (Phase 9D) — same shape/reasoning as the
+ * mock provider's own `buildGenerationWarningEvents`: the smallest backward-compatible way to
+ * surface a generation-time note to whoever reviews the Draft later, reusing the already-migrated
+ * `history` jsonb column. Never staff-name content by construction (it names a Task, never a
+ * person), and never printed/exported (`ClientReportHistory` is already `print:hidden`). */
+function buildGenerationWarningEvents(viewer: User, warnings: string[]): ClientReportHistoryEvent[] {
+  const now = new Date().toISOString();
+  return warnings.map((message) => ({
+    id: crypto.randomUUID(),
+    type: "generation-warning" as const,
+    actorId: viewer.id,
+    actorName: viewer.fullName,
+    createdAt: now,
+    message,
+  }));
 }
 
-function eachDateInRange(start: string, end: string): string[] {
-  const dates: string[] = [];
-  for (let d = start; d <= end; d = shiftDate(d, 1)) dates.push(d);
-  return dates;
-}
-
-interface RawContribution {
+interface WeeklyEvidenceTask {
+  id: string;
+  title: string;
+  description: string | null;
+  status: TaskStatus;
+  statusChangedAt: string | null;
   activityId: string | null;
-  date: string;
-  minutes: number;
-  details: string;
-  source: ClientReportLineItemSource;
+}
+interface WeeklyEvidenceResponse {
+  tasks: WeeklyEvidenceTask[];
+  timeEvidence: { taskId: string; date: string; minutes: number }[];
+  dailyUpdateEvidence: { taskId: string; date: string; details: string }[];
 }
 
-function toLineItem(c: RawContribution): ClientReportLineItem {
-  return { id: crypto.randomUUID(), date: c.date, minutes: c.minutes, details: c.details, source: c.source };
-}
-
-function byDate(a: ClientReportLineItem, b: ClientReportLineItem): number {
-  return a.date.localeCompare(b.date);
-}
-
-async function computeDepartmentSections(
-  projectId: string,
-  companyId: string,
-  rangeStart: string,
-  rangeEnd: string
-): Promise<ClientReportDepartmentSection[]> {
+/**
+ * Phase 9D hotfix — gathers Tasks + cross-contributor-aggregated Time + confirmed Daily Update
+ * narrative for this Project from the hardened `get_client_report_weekly_evidence` RPC (see this
+ * file's own top-of-file doc comment for why a plain browser SELECT can't do this safely), then
+ * layers on ordinary RLS-scoped catalog/staff-name-safety-net queries exactly like before, and hands
+ * everything to the same pure `computeWeeklyReportSections`, which owns the actual qualifying-Task
+ * rule, aggregation, narrative precedence, and anti-double-counting contract — see that module's own
+ * doc comment. Mirrors `mock-client-report-provider.ts`'s own `generateWeeklyDepartments` in shape,
+ * differing only in where the Task/Time/Daily-Update evidence itself comes from.
+ */
+async function generateWeeklyDepartments(projectId: string, rangeStart: string, rangeEnd: string): Promise<{ departments: ClientReportDepartmentSection[]; warnings: string[] }> {
   const supabase = createClient();
-  const rangeStartTs = `${rangeStart}T00:00:00.000Z`;
-  const rangeEndTs = `${rangeEnd}T23:59:59.999Z`;
 
-  // Phase 9B: scope evidence to this one Project via its own Workstreams, never to the whole
-  // Company — a Company with two annual Projects must never have both years' work mixed into one
-  // report. Daily Update entries are still matched by companyId below (Daily Update has no Project
-  // concept yet) — a known, disclosed residual gap, not something this slice invents a fix for.
-  const { data: workstreamRows, error: workstreamError } = await supabase
-    .from("workstreams")
-    .select("id")
-    .eq("project_id", projectId);
-  if (workstreamError) throw new Error(workstreamError.message);
-  const workstreamIds = ((workstreamRows ?? []) as { id: string }[]).map((w) => w.id);
+  // Postgres has no notion of "the browser's timezone" — the RPC buckets Time Entries into local
+  // work dates via `AT TIME ZONE`, so the browser's own detected IANA zone is passed explicitly,
+  // the SQL-side equivalent of the TypeScript `dateKeyFromTimestamp` rule used everywhere else.
+  const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
-  const { data: taskRows, error: taskError } = workstreamIds.length
-    ? await supabase
-        .from("tasks")
-        .select("id, title, activity_id, status_changed_by, status_changed_at")
-        .in("workstream_id", workstreamIds)
-    : { data: [] as { id: string; title: string; activity_id: string | null; status_changed_by: string | null; status_changed_at: string | null }[], error: null };
-  if (taskError) throw new Error(taskError.message);
-  const companyTasks = (taskRows ?? []) as {
-    id: string; title: string; activity_id: string | null; status_changed_by: string | null; status_changed_at: string | null;
-  }[];
-  const taskIds = companyTasks.map((t) => t.id);
+  const { data: evidence, error: evidenceError } = await supabase.rpc("get_client_report_weekly_evidence", {
+    p_project_id: projectId,
+    p_range_start: rangeStart,
+    p_range_end: rangeEnd,
+    p_timezone: timezone,
+  });
+  if (evidenceError) throw new Error(evidenceError.message);
+  const { tasks: taskRowsData, timeEvidence, dailyUpdateEvidence } = evidence as WeeklyEvidenceResponse;
 
-  const [timeEntriesRes, dailyUpdatesRes] = await Promise.all([
-    taskIds.length
-      ? supabase.from("time_entries").select("task_id, user_id, duration_minutes, start_time").in("task_id", taskIds).not("duration_minutes", "is", null).gte("start_time", rangeStartTs).lte("start_time", rangeEndTs)
-      : Promise.resolve({ data: [] as { task_id: string; user_id: string; duration_minutes: number | null; start_time: string }[], error: null }),
-    supabase.from("daily_updates").select("user_id, date, status, entries").eq("status", "confirmed").gte("date", rangeStart).lte("date", rangeEnd),
+  const dailyUpdateEntries: WeeklyReportDailyUpdateEntryInput[] = dailyUpdateEvidence.map((ev) => ({
+    date: ev.date,
+    sourceTaskId: ev.taskId,
+    details: ev.details,
+  }));
+
+  const [activityRes, staffRes] = await Promise.all([
+    (async () => {
+      const activityIds = Array.from(new Set(taskRowsData.map((t) => t.activityId).filter((x): x is string => x != null)));
+      return activityIds.length
+        ? supabase.from("activities").select("id, name, department_id, position").in("id", activityIds)
+        : { data: [] as { id: string; name: string; department_id: string; position: number }[], error: null };
+    })(),
+    // Name-scan safety net only (see client-report-weekly.ts) — not a new access boundary; this is
+    // the same RLS-scoped visibility the generating user already has everywhere else.
+    supabase.from("profiles").select("full_name"),
   ]);
-  if (timeEntriesRes.error) throw new Error(timeEntriesRes.error.message);
-  if (dailyUpdatesRes.error) throw new Error(dailyUpdatesRes.error.message);
+  if (activityRes.error) throw new Error(activityRes.error.message);
+  if (staffRes.error) throw new Error(staffRes.error.message);
+  const activities = (activityRes.data ?? []) as { id: string; name: string; department_id: string; position: number }[];
+  const knownStaffNames = ((staffRes.data ?? []) as { full_name: string }[]).map((p) => p.full_name);
 
-  const timeEntries = (timeEntriesRes.data ?? []) as { task_id: string; user_id: string; duration_minutes: number | null; start_time: string }[];
-  const dailyUpdates = (dailyUpdatesRes.data ?? []) as { user_id: string; date: string; status: string; entries: DailyUpdateEntry[] }[];
-
-  function contributorsForDate(date: string): Set<string> {
-    const ids = new Set<string>();
-    for (const task of companyTasks) {
-      for (const te of timeEntries) {
-        if (te.task_id === task.id && te.start_time.slice(0, 10) === date) ids.add(te.user_id);
-      }
-      if (task.status_changed_by && task.status_changed_at?.slice(0, 10) === date) ids.add(task.status_changed_by);
-    }
-    for (const update of dailyUpdates) {
-      if (update.date !== date) continue;
-      if (update.entries.some((e) => e.companyId === companyId)) ids.add(update.user_id);
-    }
-    return ids;
-  }
-
-  function resolveDayContribution(userId: string, date: string): RawContribution[] {
-    const update = dailyUpdates.find((u) => u.user_id === userId && u.date === date);
-    if (update) {
-      return update.entries
-        .filter((e) => e.companyId === companyId)
-        .map((e) => ({ activityId: e.activityId, date, minutes: getEntryActualMinutes(e), details: e.details, source: "daily-update" as const }));
-    }
-
-    const items: RawContribution[] = [];
-    for (const task of companyTasks) {
-      const dayTimeEntries = timeEntries.filter((te) => te.task_id === task.id && te.user_id === userId && te.start_time.slice(0, 10) === date);
-      const minutes = dayTimeEntries.reduce((sum, te) => sum + (te.duration_minutes ?? 0), 0);
-      const statusTouched = task.status_changed_by === userId && task.status_changed_at?.slice(0, 10) === date;
-      if (minutes === 0 && !statusTouched) continue;
-      items.push({
-        activityId: task.activity_id,
-        date,
-        minutes,
-        details: minutes > 0 ? `${task.title} (${formatMinutes(minutes)})` : task.title,
-        source: "raw",
-      });
-    }
-    return items;
-  }
-
-  const contributions: RawContribution[] = [];
-  for (const date of eachDateInRange(rangeStart, rangeEnd)) {
-    for (const userId of contributorsForDate(date)) {
-      contributions.push(...resolveDayContribution(userId, date));
-    }
-  }
-
-  const byActivityId = new Map<string, RawContribution[]>();
-  const otherContributions: RawContribution[] = [];
-  for (const c of contributions) {
-    if (c.activityId === null) {
-      otherContributions.push(c);
-      continue;
-    }
-    const list = byActivityId.get(c.activityId) ?? [];
-    list.push(c);
-    byActivityId.set(c.activityId, list);
-  }
-
-  const activityIds = Array.from(byActivityId.keys());
-  const { data: activityRows, error: activityError } = activityIds.length
-    ? await supabase.from("activities").select("id, name, department_id, position").in("id", activityIds)
-    : { data: [] as { id: string; name: string; department_id: string; position: number }[], error: null };
-  if (activityError) throw new Error(activityError.message);
-  const activities = (activityRows ?? []) as { id: string; name: string; department_id: string; position: number }[];
   const departmentIds = Array.from(new Set(activities.map((a) => a.department_id)));
   const { data: deptRows, error: deptError } = departmentIds.length
     ? await supabase.from("departments").select("id, name, position").in("id", departmentIds)
     : { data: [] as { id: string; name: string; position: number }[], error: null };
   if (deptError) throw new Error(deptError.message);
-  const departmentsById = new Map(((deptRows ?? []) as { id: string; name: string; position: number }[]).map((d) => [d.id, d]));
+  const departmentRows = (deptRows ?? []) as { id: string; name: string; position: number }[];
 
-  interface DeptAccum {
-    departmentId: string;
-    departmentName: string;
-    position: number;
-    activities: { activityId: string; activityName: string; position: number; lineItems: ClientReportLineItem[] }[];
-  }
-  const accum = new Map<string, DeptAccum>();
-
-  for (const [activityId, items] of byActivityId) {
-    const activity = activities.find((a) => a.id === activityId);
-    if (!activity) continue;
-    const department = departmentsById.get(activity.department_id);
-    if (!department) continue;
-    let dept = accum.get(department.id);
-    if (!dept) {
-      dept = { departmentId: department.id, departmentName: department.name, position: department.position, activities: [] };
-      accum.set(department.id, dept);
-    }
-    dept.activities.push({ activityId: activity.id, activityName: activity.name, position: activity.position, lineItems: items.map(toLineItem).sort(byDate) });
-  }
-
-  const departments: ClientReportDepartmentSection[] = Array.from(accum.values())
-    .sort((a, b) => a.position - b.position)
-    .map((d) => ({
-      departmentId: d.departmentId,
-      departmentName: d.departmentName,
-      activities: d.activities.sort((a, b) => a.position - b.position).map(({ activityId, activityName, lineItems }) => ({ activityId, activityName, lineItems })),
-    }));
-
-  if (otherContributions.length > 0) {
-    departments.push({
-      departmentId: null,
-      departmentName: "Other",
-      activities: [{ activityId: null, activityName: "Untagged work", lineItems: otherContributions.map(toLineItem).sort(byDate) }],
-    });
-  }
-
-  return departments;
+  const { departments, warnings } = computeWeeklyReportSections({
+    tasks: taskRowsData,
+    timeEvidence,
+    dailyUpdateEntries,
+    activities: activities.map((a) => ({ id: a.id, name: a.name, departmentId: a.department_id, position: a.position })),
+    departments: departmentRows,
+    knownStaffNames,
+    rangeStart,
+    rangeEnd,
+  });
+  return { departments, warnings };
 }
 
 export const supabaseClientReportProvider: ClientReportProvider = {
-  async generateReport(_viewer, input: GenerateClientReportInput) {
+  async generateReport(viewer, input: GenerateClientReportInput) {
     const supabase = createClient();
-    // Evidence-gathering stays exactly as before (flat-fetch-then-JS-join) — only the final write
-    // moves off a raw `.insert().select().single()` and onto `generate_client_report`, a SECURITY
-    // DEFINER RPC that independently validates Project access and derives Company/brand from the
-    // Project itself server-side (never trusting a client-supplied company_id). The company_id
-    // fetched here is used only to scope this function's own evidence query (Daily Update
-    // matching) — it has no bearing on what the RPC actually persists.
-    const { data: project, error: projectError } = await supabase
-      .from("projects")
-      .select("company_id")
-      .eq("id", input.projectId)
-      .single();
-    if (projectError) throw new Error(projectError.message);
-
-    const departments = await computeDepartmentSections(input.projectId, project.company_id, input.rangeStart, input.rangeEnd);
+    // Cross-contributor evidence comes from the hardened get_client_report_weekly_evidence RPC
+    // (see generateWeeklyDepartments's own doc comment) — only the final write goes through
+    // `generate_client_report`, a separate SECURITY DEFINER RPC that independently validates
+    // Project access and derives Company/brand from the Project itself server-side (never trusting
+    // a client-supplied company_id).
+    const { departments, warnings } = await generateWeeklyDepartments(input.projectId, input.rangeStart, input.rangeEnd);
+    const history = buildGenerationWarningEvents(viewer, warnings);
 
     const { data, error } = await supabase.rpc("generate_client_report", {
       p_project_id: input.projectId,
@@ -299,6 +212,7 @@ export const supabaseClientReportProvider: ClientReportProvider = {
       p_range_start: input.rangeStart,
       p_range_end: input.rangeEnd,
       p_departments: departments,
+      p_history: history,
     });
     if (error) throw new Error(error.message);
     const [hydrated] = await hydrate([data as ReportRow]);

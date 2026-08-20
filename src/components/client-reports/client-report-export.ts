@@ -8,13 +8,20 @@ function csvField(value: string): string {
   return value;
 }
 
-/** Department/Activity/Date/Duration/Details only — no generatedByName, no comments, no history. Nothing here is ever a staff name by construction. */
+/**
+ * Service/Activity/Task/Date/Duration/Details only — no generatedByName, no comments, no history.
+ * Nothing here is ever a staff name by construction. One row per actual dated detail row (Phase
+ * 9D) — never an additional row for a multi-day Task's presentation-only weekly summary, since a
+ * spreadsheet SUM over the Duration column must equal Total Week Hours exactly once per Time Entry,
+ * not twice. `Task` repeats as plain descriptive text across a multi-day Task's own rows; it is
+ * never itself a duration-bearing row.
+ */
 function reportToCsv(report: ClientReport): string {
-  const rows: string[][] = [["Department", "Activity", "Date", "Duration", "Details"]];
+  const rows: string[][] = [["Service", "Activity", "Task", "Date", "Duration", "Details"]];
   for (const dept of report.departments) {
     for (const activity of dept.activities) {
       for (const item of activity.lineItems) {
-        rows.push([dept.departmentName, activity.activityName, item.date, formatMinutes(item.minutes), item.details]);
+        rows.push([dept.departmentName, activity.activityName, item.taskLabel ?? "", item.date, formatMinutes(item.minutes), item.details]);
       }
     }
   }

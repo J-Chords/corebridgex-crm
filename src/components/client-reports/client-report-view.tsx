@@ -1,5 +1,6 @@
 "use client";
 
+import { Fragment } from "react";
 import { Plus, X } from "lucide-react";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -8,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatMinutes } from "@/lib/format-minutes";
 import { sumActivity, sumAllDepartments, sumDepartment } from "@/lib/data/client-report-totals";
+import { groupLineItemsByTask } from "@/lib/data/client-report-weekly";
 import type { ClientReportDepartmentSection, ClientReportLineItem } from "@/lib/data/types";
 import { cn } from "@/lib/utils";
 
@@ -96,69 +98,98 @@ export function ClientReportView({
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {activity.lineItems.map((item, lineIndex) => (
-                      <TableRow key={item.id} className="print:break-inside-avoid">
-                        <TableCell className="whitespace-normal">
-                          {editable ? (
-                            <Textarea
-                              value={item.details}
-                              onChange={(e) => onLineChange?.(deptIndex, activityIndex, lineIndex, { details: e.target.value })}
-                              placeholder="What was done…"
-                              rows={2}
-                              className="text-sm print:hidden"
-                            />
-                          ) : (
-                            <p className="text-sm whitespace-pre-wrap">{item.details || "—"}</p>
+                    {groupLineItemsByTask(activity.lineItems).map((group) => {
+                      // A Task worked across more than one date gets ONE presentation-only weekly
+                      // summary row (Task title + the group's total, always `sum(items)` — never
+                      // an independently stored/edited number, see client-report-weekly.ts) plus
+                      // its individual dated rows below. A single-date Task shows just that one
+                      // row, with its Task title as a small caption — a "summary of 1" would be
+                      // redundant. Legacy/manually-added lines (`taskId` null) render exactly as
+                      // before, with no caption at all.
+                      const isMultiDay = group.items.length > 1;
+                      return (
+                        <Fragment key={group.taskId ?? group.items[0].item.id}>
+                          {isMultiDay && (
+                            <TableRow className="bg-muted/40 print:break-inside-avoid">
+                              <TableCell colSpan={2} className="text-sm font-semibold">
+                                {group.taskLabel ?? "Task"}
+                                <span className="ml-2 font-mono text-xs font-normal tracking-wide text-muted-foreground uppercase">
+                                  Weekly summary
+                                </span>
+                              </TableCell>
+                              <TableCell className="text-right font-mono text-xs font-semibold">{formatMinutes(group.totalMinutes)}</TableCell>
+                              {editable && <TableCell />}
+                            </TableRow>
                           )}
-                          {editable && (
-                            <p className="hidden text-sm whitespace-pre-wrap text-foreground print:block">{item.details || "—"}</p>
-                          )}
-                        </TableCell>
-                        <TableCell className="font-mono text-xs">
-                          {editable ? (
-                            <Input
-                              type="date"
-                              value={item.date}
-                              onChange={(e) => onLineChange?.(deptIndex, activityIndex, lineIndex, { date: e.target.value })}
-                              className="print:hidden"
-                            />
-                          ) : (
-                            formatDate(item.date)
-                          )}
-                          {editable && <span className="hidden text-foreground print:inline">{formatDate(item.date)}</span>}
-                        </TableCell>
-                        <TableCell className="text-right font-mono text-xs">
-                          {editable ? (
-                            <Input
-                              type="number"
-                              min={0}
-                              step={5}
-                              value={item.minutes}
-                              onChange={(e) =>
-                                onLineChange?.(deptIndex, activityIndex, lineIndex, { minutes: Math.max(0, Number(e.target.value) || 0) })
-                              }
-                              className="text-right print:hidden"
-                            />
-                          ) : (
-                            formatMinutes(item.minutes)
-                          )}
-                          {editable && <span className="hidden text-foreground print:inline">{formatMinutes(item.minutes)}</span>}
-                        </TableCell>
-                        {editable && (
-                          <TableCell className="print:hidden">
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon-xs"
-                              aria-label="Remove line"
-                              onClick={() => onRemoveLine?.(deptIndex, activityIndex, lineIndex)}
-                            >
-                              <X />
-                            </Button>
-                          </TableCell>
-                        )}
-                      </TableRow>
-                    ))}
+                          {group.items.map(({ item, index: lineIndex }) => (
+                            <TableRow key={item.id} className={cn("print:break-inside-avoid", isMultiDay && "border-l-2 border-l-muted")}>
+                              <TableCell className="whitespace-normal">
+                                {!isMultiDay && group.taskLabel && (
+                                  <p className="mb-1 text-xs font-medium text-muted-foreground">{group.taskLabel}</p>
+                                )}
+                                {editable ? (
+                                  <Textarea
+                                    value={item.details}
+                                    onChange={(e) => onLineChange?.(deptIndex, activityIndex, lineIndex, { details: e.target.value })}
+                                    placeholder="What was done…"
+                                    rows={2}
+                                    className="text-sm print:hidden"
+                                  />
+                                ) : (
+                                  <p className="text-sm whitespace-pre-wrap">{item.details || "—"}</p>
+                                )}
+                                {editable && (
+                                  <p className="hidden text-sm whitespace-pre-wrap text-foreground print:block">{item.details || "—"}</p>
+                                )}
+                              </TableCell>
+                              <TableCell className="font-mono text-xs">
+                                {editable ? (
+                                  <Input
+                                    type="date"
+                                    value={item.date}
+                                    onChange={(e) => onLineChange?.(deptIndex, activityIndex, lineIndex, { date: e.target.value })}
+                                    className="print:hidden"
+                                  />
+                                ) : (
+                                  formatDate(item.date)
+                                )}
+                                {editable && <span className="hidden text-foreground print:inline">{formatDate(item.date)}</span>}
+                              </TableCell>
+                              <TableCell className="text-right font-mono text-xs">
+                                {editable ? (
+                                  <Input
+                                    type="number"
+                                    min={0}
+                                    step={5}
+                                    value={item.minutes}
+                                    onChange={(e) =>
+                                      onLineChange?.(deptIndex, activityIndex, lineIndex, { minutes: Math.max(0, Number(e.target.value) || 0) })
+                                    }
+                                    className="text-right print:hidden"
+                                  />
+                                ) : (
+                                  formatMinutes(item.minutes)
+                                )}
+                                {editable && <span className="hidden text-foreground print:inline">{formatMinutes(item.minutes)}</span>}
+                              </TableCell>
+                              {editable && (
+                                <TableCell className="print:hidden">
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon-xs"
+                                    aria-label="Remove line"
+                                    onClick={() => onRemoveLine?.(deptIndex, activityIndex, lineIndex)}
+                                  >
+                                    <X />
+                                  </Button>
+                                </TableCell>
+                              )}
+                            </TableRow>
+                          ))}
+                        </Fragment>
+                      );
+                    })}
                     {activity.lineItems.length === 0 && (
                       <TableRow>
                         <TableCell colSpan={editable ? 4 : 3} className="text-sm text-muted-foreground">
@@ -190,7 +221,7 @@ export function ClientReportView({
 
       <Card className="print:break-inside-avoid print:border-black/20 print:shadow-none">
         <CardFooter className="justify-end py-4 font-mono text-base font-bold">
-          Grand total: {formatMinutes(sumAllDepartments(departments))}
+          Total Week Hours: {formatMinutes(sumAllDepartments(departments))}
         </CardFooter>
       </Card>
     </div>

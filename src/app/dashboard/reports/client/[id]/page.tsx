@@ -7,6 +7,7 @@ import { AlertCircle, ArrowLeft, Download, Plus, Printer, RotateCcw, Trash2 } fr
 import { useAuth } from "@/lib/auth/auth-context";
 import { useClientReport } from "@/lib/data/hooks/use-client-reports";
 import { useCompanyLookups } from "@/lib/data/hooks/use-companies";
+import { useProject } from "@/lib/data/hooks/use-projects";
 import { useUnsavedChangesGuard } from "@/lib/data/hooks/use-unsaved-changes-guard";
 import { clientReportProvider } from "@/lib/data/providers";
 import {
@@ -56,6 +57,11 @@ export default function ClientReportDetailPage({ params }: { params: Promise<{ i
   const { user } = useAuth();
   const { report, isLoading, notFound, refresh } = useClientReport(id);
   const { assignableStaff } = useCompanyLookups();
+  // Live lookup, not a stored snapshot field — Section 27's "clearly communicate Client, Project,
+  // Period, Status" only needs the Project's current name displayed, so this avoids a migration
+  // purely for presentation (unlike companyLabel/brandLabel, which snapshot for a real historical-
+  // accuracy reason elsewhere). A legacy report's `projectId` is null, so `project` is simply null.
+  const { project } = useProject(report?.projectId ?? "");
   const toastManager = useToastManager();
   const router = useRouter();
 
@@ -322,7 +328,10 @@ export default function ClientReportDetailPage({ params }: { params: Promise<{ i
               {isTrashed && <span className="text-xs text-destructive">In Trash</span>}
             </div>
             <p className="text-sm text-muted-foreground">
-              {report.brandLabel} · {formatRange(report.rangeStart, report.rangeEnd)}
+              {report.brandLabel}
+              {project ? ` · ${project.name}` : report.projectId === null ? " · Legacy report (no Project on file)" : ""}
+              {" · "}
+              {formatRange(report.rangeStart, report.rangeEnd)}
               {report.status === "finalized" && report.finalizedAt
                 ? ` · Finalized ${formatDateTime(report.finalizedAt)}`
                 : ` · Generated ${formatDateTime(report.generatedAt)} by ${report.generatedByName}`}
@@ -422,8 +431,9 @@ export default function ClientReportDetailPage({ params }: { params: Promise<{ i
         ) : confirmingFinalize ? (
           <>
             <span className="max-w-md text-sm text-muted-foreground">
-              Finalizing freezes this report permanently — it can never be reopened or edited again. Make sure
-              no employee names appear anywhere in the Details text before you continue.
+              Finalizing freezes this report permanently — it can never be reopened or edited again, and later
+              Time Entry corrections will not change it. Make sure no employee names appear anywhere in the
+              Details text before you continue.
             </span>
             <Button variant="outline" onClick={() => setConfirmingFinalize(false)}>
               Cancel
