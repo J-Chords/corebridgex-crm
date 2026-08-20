@@ -3,6 +3,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { AlertCircle } from "lucide-react";
 import { useCompanies } from "@/lib/data/hooks/use-companies";
+import { useProjects } from "@/lib/data/hooks/use-projects";
 import { useActivityCatalog } from "@/lib/data/hooks/use-activity-catalog";
 import type { AddManualDailyUpdateEntryInput } from "@/lib/data/providers/daily-updates-provider";
 import {
@@ -19,8 +20,10 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertTitle } from "@/components/ui/alert";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ExpectedTimeInput } from "@/components/ui/expected-time-input";
 
 const NO_COMPANY = "none";
+const NO_PROJECT = "none";
 const NO_ACTIVITY = "none";
 
 interface AddManualEntryDialogProps {
@@ -29,17 +32,24 @@ interface AddManualEntryDialogProps {
   onSave: (input: AddManualDailyUpdateEntryInput) => Promise<void>;
 }
 
-/** Logs work the auto-draft never sees (a meeting, a call, "Other") — same shape as an auto-drafted entry, but client/activity are optional since a manual entry isn't necessarily tied to either. */
+/** Logs work the auto-draft never sees (a meeting, a call, "Other") — same shape as an auto-drafted
+ * entry, but Client/Project/Activity are all optional since a manual entry isn't necessarily tied to
+ * any of them. The Project picker only appears once a Client is chosen AND that client has at least
+ * one accessible Project — genuine internal/non-client work never gets forced into picking one. */
 export function AddManualEntryDialog({ open, onOpenChange, onSave }: AddManualEntryDialogProps) {
   const { companies } = useCompanies();
+  const { projects } = useProjects();
   const [companyId, setCompanyId] = useState(NO_COMPANY);
+  const [projectId, setProjectId] = useState(NO_PROJECT);
   const [activityId, setActivityId] = useState(NO_ACTIVITY);
-  const [minutes, setMinutes] = useState("");
+  const [scheduledMinutes, setScheduledMinutes] = useState<number | null>(null);
+  const [actualMinutes, setActualMinutes] = useState("");
   const [details, setDetails] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const selectedCompany = companies.find((c) => c.id === companyId);
+  const companyProjects = selectedCompany ? projects.filter((p) => p.companyId === selectedCompany.id) : [];
   const { departments } = useActivityCatalog(selectedCompany?.brand.id);
 
   useEffect(() => {
@@ -47,8 +57,10 @@ export function AddManualEntryDialog({ open, onOpenChange, onSave }: AddManualEn
     // Reset the form every time the dialog opens.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setCompanyId(NO_COMPANY);
+    setProjectId(NO_PROJECT);
     setActivityId(NO_ACTIVITY);
-    setMinutes("");
+    setScheduledMinutes(null);
+    setActualMinutes("");
     setDetails("");
     setError(null);
   }, [open]);
@@ -64,8 +76,10 @@ export function AddManualEntryDialog({ open, onOpenChange, onSave }: AddManualEn
     try {
       await onSave({
         companyId: companyId === NO_COMPANY ? null : companyId,
+        projectId: projectId === NO_PROJECT ? null : projectId,
         activityId: activityId === NO_ACTIVITY ? null : activityId,
-        minutesLogged: minutes ? Math.max(0, Math.round(Number(minutes))) : 0,
+        actualMinutes: actualMinutes ? Math.max(0, Math.round(Number(actualMinutes))) : 0,
+        scheduledMinutes,
         details: details.trim(),
       });
       onOpenChange(false);
@@ -93,6 +107,7 @@ export function AddManualEntryDialog({ open, onOpenChange, onSave }: AddManualEn
                 value={companyId}
                 onValueChange={(v) => {
                   setCompanyId(v ?? NO_COMPANY);
+                  setProjectId(NO_PROJECT);
                   setActivityId(NO_ACTIVITY);
                 }}
               >
@@ -145,16 +160,48 @@ export function AddManualEntryDialog({ open, onOpenChange, onSave }: AddManualEn
             </div>
           </div>
 
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="manual-entry-minutes">Time (minutes, optional)</Label>
-            <Input
-              id="manual-entry-minutes"
-              type="number"
-              min={0}
-              value={minutes}
-              onChange={(e) => setMinutes(e.target.value)}
-              placeholder="0"
-            />
+          {/* Project only ever appears once a client is picked and has an accessible Project —
+              genuine internal/non-client work is never forced to pick one. */}
+          {selectedCompany && companyProjects.length > 0 && (
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="manual-entry-project">Project (optional)</Label>
+              <Select
+                items={{ [NO_PROJECT]: "No project", ...Object.fromEntries(companyProjects.map((p) => [p.id, p.name])) }}
+                value={projectId}
+                onValueChange={(v) => setProjectId(v ?? NO_PROJECT)}
+              >
+                <SelectTrigger id="manual-entry-project" className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NO_PROJECT}>No project</SelectItem>
+                  {companyProjects.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="manual-entry-scheduled">Scheduled (optional)</Label>
+              <ExpectedTimeInput id="manual-entry-scheduled" valueMinutes={scheduledMinutes} onChange={setScheduledMinutes} />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="manual-entry-actual">Actual time (minutes, optional)</Label>
+              <Input
+                id="manual-entry-actual"
+                type="number"
+                min={0}
+                value={actualMinutes}
+                onChange={(e) => setActualMinutes(e.target.value)}
+                placeholder="0"
+              />
+              <p className="text-xs text-muted-foreground">A fallback value — not a real Time Entry.</p>
+            </div>
           </div>
 
           <div className="flex flex-col gap-1.5">

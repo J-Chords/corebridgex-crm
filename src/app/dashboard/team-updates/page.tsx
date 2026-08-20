@@ -5,6 +5,7 @@ import { CheckCircle2, Circle, PencilLine } from "lucide-react";
 import { useAuth } from "@/lib/auth/auth-context";
 import { useCompanyLookups } from "@/lib/data/hooks/use-companies";
 import { useDailyUpdatesForDate } from "@/lib/data/hooks/use-daily-updates";
+import { dailyUpdatesProvider } from "@/lib/data/providers";
 import { canViewTeamUpdatesPage } from "@/lib/data/permissions";
 import { DateStepper, todayDateString, formatDatePhrase } from "@/components/team-updates/date-stepper";
 import { TeamUpdatesRoster } from "@/components/team-updates/team-updates-roster";
@@ -17,7 +18,7 @@ export default function TeamUpdatesPage() {
   const { assignableStaff, isLoading: staffLoading } = useCompanyLookups();
   const [date, setDate] = useState(todayDateString());
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
-  const { updates, isLoading: updatesLoading } = useDailyUpdatesForDate(date);
+  const { updates, isLoading: updatesLoading, refresh: refreshUpdates } = useDailyUpdatesForDate(date);
 
   if (!user) return null;
 
@@ -63,7 +64,7 @@ export default function TeamUpdatesPage() {
 
       {!isLoading && (
         <div className={cn("flex flex-wrap items-center gap-3", STAGGER_ITEM_CLASS)}>
-          <StatChip icon={CheckCircle2} tone="success" label="Confirmed" value={confirmedCount} />
+          <StatChip icon={CheckCircle2} tone="success" label="Submitted" value={confirmedCount} />
           <StatChip icon={PencilLine} tone="warning" label="Draft" value={draftCount} />
           <StatChip icon={Circle} tone="neutral" label="Not started" value={notStartedCount} />
         </div>
@@ -82,8 +83,15 @@ export default function TeamUpdatesPage() {
         />
         <TeamUpdatesDetail
           key={activeUserId}
+          viewer={user}
+          allUsers={people}
           person={activePerson}
           update={activeUpdate}
+          onReview={async () => {
+            if (!activeUpdate) return;
+            await dailyUpdatesProvider.reviewUpdate(user, activeUpdate.id);
+            await refreshUpdates();
+          }}
           className={STAGGER_ITEM_CLASS}
           style={staggerDelay(1)}
         />

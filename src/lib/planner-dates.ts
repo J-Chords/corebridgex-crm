@@ -5,6 +5,12 @@
  * `YYYY-MM-DD` business date (no time-of-day, no timezone) — every function here parses/formats it
  * through `Date`'s *local* year/month/day constructor and getters only, so a date-only string always
  * round-trips to itself regardless of where the browser is running.
+ *
+ * Phase 9C hotfix added `dateKeyFromTimestamp`/`localDayBoundsUtc` — the same local-calendar
+ * discipline, but for classifying an absolute timestamp (a Time Entry's `startTime`, a Handoff's
+ * `createdAt`, etc.) by which local work-day it falls on, and for turning a selected local day back
+ * into the UTC instant range a `timestamptz` query needs. Daily Update is the first consumer; reuse
+ * these rather than adding another competing date implementation.
  */
 
 const PAD2 = (n: number) => String(n).padStart(2, "0");
@@ -80,4 +86,33 @@ export function formatDayLabel(date: Date): string {
 
 export function formatShortDayLabel(date: Date): string {
   return date.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+}
+
+/**
+ * Classifies an absolute timestamp (e.g. a Time Entry's `startTime`, a Task's `statusChangedAt`, a
+ * Handoff's `createdAt`) by the LOCAL calendar date it falls on — the one correct way to answer
+ * "which work day does this timestamp belong to," since the same instant can fall on different
+ * calendar dates depending on timezone (`2026-08-21T00:30:00Z` is `2026-08-20` in
+ * America/Toronto). Never use `timestamp.slice(0, 10)` for this — that reads the UTC date embedded
+ * in the ISO string, not the viewer's local date. `new Date(isoTimestamp)` already parses to the
+ * correct absolute instant; `formatDateOnly`'s local getters then read off the right calendar day.
+ */
+export function dateKeyFromTimestamp(isoTimestamp: string): string {
+  return formatDateOnly(new Date(isoTimestamp));
+}
+
+/**
+ * The local calendar day `dateKey` (`YYYY-MM-DD`), expressed as a half-open UTC instant range
+ * (`startUtc <= timestamp < endUtc`) suitable for a Postgres `timestamptz` query — local midnight
+ * at the start of `dateKey` through local midnight at the start of the following day, each
+ * converted to its own UTC instant via `Date.toISOString()`. Never construct
+ * `` `${dateKey}T00:00:00.000Z` `` for this — that's UTC midnight, not local midnight, and silently
+ * misclassifies anything logged near midnight in a non-UTC timezone. Built from a calendar-day
+ * increment (`addDays`, which uses `Date`'s own `setDate`), not raw millisecond arithmetic, so a
+ * DST transition day still produces the correct (23- or 25-hour) window instead of a fixed 24h one.
+ */
+export function localDayBoundsUtc(dateKey: string): { startUtc: string; endUtc: string } {
+  const start = parseDateOnly(dateKey);
+  const end = addDays(start, 1);
+  return { startUtc: start.toISOString(), endUtc: end.toISOString() };
 }

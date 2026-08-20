@@ -3,15 +3,18 @@
 import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { addDays, formatDateOnly, parseDateOnly, todayDateOnly } from "@/lib/planner-dates";
 
+/** Local calendar "today," matching Daily Update's own — Team Updates browses the same local
+ * work-date Daily Update classifies entries by, never the UTC date (Phase 9C hotfix; previously
+ * `new Date().toISOString().slice(0, 10)`, which could step the displayed "today" a day off from
+ * the viewer's own calendar in the evening). */
 export function todayDateString(): string {
-  return new Date().toISOString().slice(0, 10);
+  return todayDateOnly();
 }
 
 function shiftDate(date: string, deltaDays: number): string {
-  const d = new Date(`${date}T00:00:00Z`);
-  d.setUTCDate(d.getUTCDate() + deltaDays);
-  return d.toISOString().slice(0, 10);
+  return formatDateOnly(addDays(parseDateOnly(date), deltaDays));
 }
 
 /** "today" / "yesterday" / "on Monday, August 3" — built for a sentence like "What did your team do {phrase}?" */
@@ -19,14 +22,16 @@ export function formatDatePhrase(date: string): string {
   const today = todayDateString();
   if (date === today) return "today";
   if (date === shiftDate(today, -1)) return "yesterday";
-  const d = new Date(`${date}T00:00:00Z`);
-  const sameYear = d.getUTCFullYear() === new Date(`${today}T00:00:00Z`).getUTCFullYear();
+  // parseDateOnly gives a local-midnight Date for `date` — toLocaleDateString's default (no
+  // `timeZone` override) already renders it in the browser's own local timezone, so the previous
+  // forced `timeZone: "UTC"` is both unnecessary and wrong now that the Date itself is local-safe.
+  const d = parseDateOnly(date);
+  const sameYear = d.getFullYear() === parseDateOnly(today).getFullYear();
   const label = d.toLocaleDateString("en-US", {
     weekday: "long",
     month: "long",
     day: "numeric",
     year: sameYear ? undefined : "numeric",
-    timeZone: "UTC",
   });
   return `on ${label}`;
 }

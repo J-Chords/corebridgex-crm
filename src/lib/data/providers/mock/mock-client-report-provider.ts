@@ -7,6 +7,7 @@ import type {
   Task,
   User,
 } from "../../types";
+import { getEntryActualMinutes } from "../../types/daily-update";
 import {
   canCommentOnClientReport,
   canEditOwnClientDraft,
@@ -100,7 +101,7 @@ function resolveDayContribution(
       .map((e) => ({
         activityId: e.activityId,
         date,
-        minutes: e.minutesLogged,
+        minutes: getEntryActualMinutes(e),
         details: e.details,
         source: "daily-update" as const,
       }));

@@ -8,6 +8,7 @@ import type {
   ClientReportLineItemSource,
   DailyUpdateEntry,
 } from "../../types";
+import { getEntryActualMinutes } from "../../types/daily-update";
 import { formatMinutes } from "../../../format-minutes";
 import { createClient } from "@/lib/supabase/client";
 
@@ -182,7 +183,7 @@ async function computeDepartmentSections(
     if (update) {
       return update.entries
         .filter((e) => e.companyId === companyId)
-        .map((e) => ({ activityId: e.activityId, date, minutes: e.minutesLogged, details: e.details, source: "daily-update" as const }));
+        .map((e) => ({ activityId: e.activityId, date, minutes: getEntryActualMinutes(e), details: e.details, source: "daily-update" as const }));
     }
 
     const items: RawContribution[] = [];

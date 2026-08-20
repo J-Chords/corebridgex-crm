@@ -426,6 +426,34 @@ export function canViewTeamUpdatesPage(user: User): boolean {
   return isSupervisor(user) || isSuperadmin(user);
 }
 
+/**
+ * Team Lead review (Phase 9C) — deliberately narrower than `canViewDailyUpdate`: being able to see
+ * a submission does not imply being able to review it. Only a submitted (confirmed) update may be
+ * reviewed, never a draft; **only a not-yet-reviewed submission may be reviewed** (Phase 9C hotfix
+ * — one review marker per submitted snapshot, never overwritten by a second reviewer; reopening
+ * clears `reviewedAt` back to null so a re-submit becomes reviewable again); nobody may review
+ * their own, including a Supervisor's own submission (it stays an ordinary Employee-style
+ * submission awaiting a legitimate higher reviewer, per the locked "Supervisor remains an Employee
+ * operationally" rule); Superadmin may review organization-wide; a Supervisor only a genuine direct
+ * report's. Mirrors `review_daily_update`'s own predicate exactly
+ * (`is_superadmin() OR (is_supervisor() AND manages_user(target))`, plus the same `reviewed_at is
+ * null` guard), not `canViewDailyUpdate`'s broader shape, so the two can never drift into "if I can
+ * see it, I can review it."
+ */
+export function canReviewDailyUpdate(
+  viewer: User,
+  update: { userId: string; status: DailyUpdateStatus; reviewedAt: string | null },
+  allUsers: User[]
+): boolean {
+  if (update.status !== "confirmed") return false;
+  if (update.reviewedAt !== null) return false;
+  if (isDailyUpdateOwner(viewer, update)) return false;
+  if (isSuperadmin(viewer)) return true;
+  if (!isSupervisor(viewer)) return false;
+  const owner = allUsers.find((u) => u.id === update.userId);
+  return !!owner && managesUser(viewer, owner);
+}
+
 /** Same visibility shape as `canViewDailyUpdate` — own time always visible; someone else's only to whoever manages them. */
 export function canViewTimeForUser(viewer: User, targetUserId: string, allUsers: User[]): boolean {
   if (viewer.id === targetUserId) return true;
