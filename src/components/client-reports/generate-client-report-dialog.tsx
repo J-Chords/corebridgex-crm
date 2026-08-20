@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AlertCircle } from "lucide-react";
 import { useAuth } from "@/lib/auth/auth-context";
-import { useCompanies } from "@/lib/data/hooks/use-companies";
+import { useProjects } from "@/lib/data/hooks/use-projects";
 import { clientReportProvider } from "@/lib/data/providers";
 import type { ReportRangeLabel } from "@/lib/data/types";
 import {
@@ -51,21 +51,44 @@ const RANGE_LABEL_ITEMS: Record<ReportRangeLabel, string> = {
 function emptyForm() {
   return {
     companyId: "",
+    projectId: "",
     rangeLabel: "this-week" as ReportRangeLabel,
     customStart: todayDateString(),
     customEnd: todayDateString(),
   };
 }
 
-/** Generates a new client-facing report — company + date range only, no Person/Client toggle like the internal report's dialog, since this report is always company-scoped. */
+/**
+ * Generates a new client-facing report — Client, Project, then date range (Phase 9B: a Client can
+ * have several annual Projects, e.g. "...2025-2026"/"...2026-2027", so the Project the report is
+ * scoped to must be picked explicitly whenever more than one exists — never inferred/guessed). No
+ * Person/Client toggle like the internal report's dialog, since this report is always
+ * Company/Project-scoped. `useProjects()` already returns only Projects the viewer can legitimately
+ * access, so the Client list here is naturally restricted to Clients with at least one such
+ * Project — an Employee sees only their own accessible Projects' Clients, never the full Company
+ * directory.
+ */
 export function GenerateClientReportDialog({ open, onOpenChange }: GenerateClientReportDialogProps) {
   const { user } = useAuth();
-  const { companies } = useCompanies();
+  const { projects } = useProjects();
   const router = useRouter();
 
   const [form, setForm] = useState(emptyForm);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const companies = useMemo(() => {
+    const byId = new Map<string, string>();
+    for (const p of projects) byId.set(p.companyId, p.companyName);
+    return Array.from(byId.entries())
+      .map(([id, name]) => ({ id, name }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [projects]);
+
+  const projectsForCompany = useMemo(
+    () => projects.filter((p) => p.companyId === form.companyId).sort((a, b) => a.name.localeCompare(b.name)),
+    [projects, form.companyId]
+  );
 
   useEffect(() => {
     if (!open) return;
@@ -73,6 +96,19 @@ export function GenerateClientReportDialog({ open, onOpenChange }: GenerateClien
     setForm(emptyForm());
     setError(null);
   }, [open]);
+
+  // Auto-select the Project the moment exactly one legitimate option exists for the chosen
+  // Client; clear it (forcing an explicit choice) whenever there's more than one, or none.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setForm((prev) => {
+      if (projectsForCompany.length === 1) {
+        return prev.projectId === projectsForCompany[0].id ? prev : { ...prev, projectId: projectsForCompany[0].id };
+      }
+      if (projectsForCompany.some((p) => p.id === prev.projectId)) return prev;
+      return prev.projectId === "" ? prev : { ...prev, projectId: "" };
+    });
+  }, [projectsForCompany]);
 
   if (!user) return null;
 
@@ -89,7 +125,7 @@ export function GenerateClientReportDialog({ open, onOpenChange }: GenerateClien
   })();
 
   const rangeValid = Boolean(rangeStart) && Boolean(rangeEnd) && rangeStart <= rangeEnd;
-  const canSubmit = Boolean(form.companyId) && rangeValid;
+  const canSubmit = Boolean(form.projectId) && rangeValid;
 
   async function handleSubmit() {
     if (!user || !canSubmit) return;
@@ -97,7 +133,7 @@ export function GenerateClientReportDialog({ open, onOpenChange }: GenerateClien
     setIsSubmitting(true);
     try {
       const report = await clientReportProvider.generateReport(user, {
-        companyId: form.companyId,
+        projectId: form.projectId,
         rangeLabel: form.rangeLabel,
         rangeStart,
         rangeEnd,
@@ -128,7 +164,7 @@ export function GenerateClientReportDialog({ open, onOpenChange }: GenerateClien
             <Select
               items={Object.fromEntries(companies.map((c) => [c.id, c.name]))}
               value={form.companyId}
-              onValueChange={(v) => setForm((p) => ({ ...p, companyId: v ?? "" }))}
+              onValueChange={(v) => setForm((p) => ({ ...p, companyId: v ?? "", projectId: "" }))}
             >
               <SelectTrigger id="client-report-company" className="w-full">
                 <SelectValue placeholder="Select a client" />
@@ -141,7 +177,45 @@ export function GenerateClientReportDialog({ open, onOpenChange }: GenerateClien
                 ))}
               </SelectContent>
             </Select>
+            {companies.length === 0 && (
+              <p className="text-xs text-muted-foreground">
+                No accessible Project yet — ask your supervisor if you need one to report against.
+              </p>
+            )}
           </div>
+
+          {form.companyId && (
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="client-report-project">Project</Label>
+              {projectsForCompany.length <= 1 ? (
+                <p className="rounded-md border bg-muted/40 px-3 py-2 text-sm">
+                  {projectsForCompany[0]?.name ?? "No accessible Project for this client."}
+                </p>
+              ) : (
+                <Select
+                  items={Object.fromEntries(projectsForCompany.map((p) => [p.id, p.name]))}
+                  value={form.projectId}
+                  onValueChange={(v) => setForm((p) => ({ ...p, projectId: v ?? "" }))}
+                >
+                  <SelectTrigger id="client-report-project" className="w-full">
+                    <SelectValue placeholder="Select a Project" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {projectsForCompany.map((p) => (
+                      <SelectItem key={p.id} value={p.id}>
+                        {p.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+              {projectsForCompany.length > 1 && (
+                <p className="text-xs text-muted-foreground">
+                  This client has more than one Project — pick the one this report is for.
+                </p>
+              )}
+            </div>
+          )}
 
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="client-report-range">Range</Label>

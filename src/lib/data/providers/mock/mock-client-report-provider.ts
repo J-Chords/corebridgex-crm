@@ -9,13 +9,20 @@ import type {
 } from "../../types";
 import {
   canCommentOnClientReport,
-  canEditClientReportEntries,
+  canEditOwnClientDraft,
+  canFinalizeClientReport,
   canGenerateClientReport,
-  canReopenClientReport,
+  canPermanentlyDeleteClientReport,
+  canRestoreClientReport,
+  canTrashClientReport,
   canViewClientReport,
 } from "../../permissions";
 import { formatMinutes } from "../../../format-minutes";
 import { db } from "./mock-db";
+
+function projectMemberUserIds(projectId: string): string[] {
+  return db.projectMembers.filter((m) => m.projectId === projectId).map((m) => m.userId);
+}
 
 function shiftDate(date: string, deltaDays: number): string {
   const d = new Date(`${date}T00:00:00Z`);
@@ -30,11 +37,13 @@ function eachDateInRange(start: string, end: string): string[] {
 }
 
 /**
- * Everyone who touched this company on `date` — either through one of its tasks (time logged or
- * status changed) or through a confirmed Daily Update entry for this company that day. The second
- * check is load-bearing for manual Daily Update entries: they have no backing task, so the task/
- * time-entry scan alone would never discover their owner as a contributor, and their confirmed,
- * human-written entry would be silently dropped from every client report for this company.
+ * Everyone who touched this company on `date` — either through one of this Project's own tasks
+ * (time logged or status changed) or through a confirmed Daily Update entry for this company that
+ * day. The second check is load-bearing for manual Daily Update entries: they have no backing
+ * task, so the task/time-entry scan alone would never discover their owner as a contributor, and
+ * their confirmed, human-written entry would be silently dropped from every client report for this
+ * company. Daily Update entries are still Company-scoped, not Project-scoped (Daily Update has no
+ * Project concept yet) — a known, disclosed residual gap, not something 9B invents a fix for.
  */
 function contributorsForDate(companyTasks: Task[], companyId: string, date: string): Set<string> {
   const ids = new Set<string>();
@@ -132,9 +141,19 @@ function byDate(a: ClientReportLineItem, b: ClientReportLineItem): number {
  * Only departments/activities that were actually touched appear here — there's no "every catalog
  * activity, ticked or not" walk like the internal Accomplishments Report. The generator adds anything
  * else via "+ Add section" on the detail page.
+ *
+ * Phase 9B: Task evidence is scoped to this one Project — via each Task's own Workstream.projectId
+ * — never to the whole Company. A Company with two annual Projects (e.g. "...2025-2026" and
+ * "...2026-2027") can never have both years' work mixed into a single report generation this way.
  */
-function computeDepartmentSections(companyId: string, rangeStart: string, rangeEnd: string): ClientReportDepartmentSection[] {
-  const companyTasks = db.tasks.filter((t) => t.companyId === companyId);
+function computeDepartmentSections(
+  projectId: string,
+  companyId: string,
+  rangeStart: string,
+  rangeEnd: string
+): ClientReportDepartmentSection[] {
+  const projectWorkstreamIds = new Set(db.workstreams.filter((w) => w.projectId === projectId).map((w) => w.id));
+  const companyTasks = db.tasks.filter((t) => projectWorkstreamIds.has(t.workstreamId));
   const contributions: RawContribution[] = [];
   for (const date of eachDateInRange(rangeStart, rangeEnd)) {
     for (const userId of contributorsForDate(companyTasks, companyId, date)) {
@@ -225,14 +244,8 @@ function notifyOfClientReportComment(report: ClientReport, author: User) {
   ];
 }
 
-function requireViewAccess(viewer: User, report: ClientReport) {
-  if (!canViewClientReport(viewer, report, db.users)) {
-    throw new Error("You don't have access to that client report.");
-  }
-}
-
 function requireOwnerEdit(viewer: User, report: ClientReport) {
-  if (!canEditClientReportEntries(viewer, report)) {
+  if (!canEditOwnClientDraft(viewer, report)) {
     if (report.status === "finalized") {
       throw new Error("This report is finalized and can no longer be edited.");
     }
@@ -240,21 +253,59 @@ function requireOwnerEdit(viewer: User, report: ClientReport) {
   }
 }
 
+function requireFinalizeAccess(viewer: User, report: ClientReport) {
+  if (!canFinalizeClientReport(viewer, report, db.users)) {
+    throw new Error("You don't have permission to finalize this report.");
+  }
+}
+
+function requireTrashAccess(viewer: User, report: ClientReport) {
+  if (!canTrashClientReport(viewer, report)) {
+    throw new Error("Only the report's generator or a Superadmin can move it to Trash.");
+  }
+}
+
+function requireRestoreAccess(viewer: User, report: ClientReport) {
+  if (!canRestoreClientReport(viewer, report)) {
+    throw new Error("Only the report's generator or a Superadmin can restore it.");
+  }
+}
+
+function requirePermanentDeleteAccess(viewer: User) {
+  if (!canPermanentlyDeleteClientReport(viewer)) {
+    throw new Error("Only a Superadmin can permanently delete a report.");
+  }
+}
+
 export const mockClientReportProvider: ClientReportProvider = {
   async generateReport(viewer, input: GenerateClientReportInput) {
-    if (!canGenerateClientReport(viewer, input.companyId, db.users)) {
-      throw new Error("You don't have access to generate a client report for that company.");
+    const project = db.projects.find((p) => p.id === input.projectId);
+    if (!project) throw new Error("Project not found.");
+    if (
+      !canGenerateClientReport(
+        viewer,
+        { companyId: project.companyId, ownerId: project.ownerId, memberUserIds: projectMemberUserIds(project.id) },
+        db.users
+      )
+    ) {
+      throw new Error("You don't have access to generate a client report for that Project.");
     }
-    const company = db.companies.find((c) => c.id === input.companyId);
-    if (!company) throw new Error("Client not found.");
+    if (input.rangeStart > input.rangeEnd) throw new Error("Invalid date range.");
+
+    // Company/brand are derived from the Project server-side (mirrors the real RPC) — never
+    // trusted from a browser-supplied companyId, closing the "mismatched project_id + company_id"
+    // risk explicitly called out for Phase 9B.
+    const company = db.companies.find((c) => c.id === project.companyId);
+    if (!company) throw new Error(`Project ${project.id} references unknown company ${project.companyId}`);
     const brand = db.brands.find((b) => b.id === company.brandId);
     if (!brand) throw new Error(`Company ${company.id} references unknown brand ${company.brandId}`);
 
-    const departments = computeDepartmentSections(input.companyId, input.rangeStart, input.rangeEnd);
+    const departments = computeDepartmentSections(project.id, company.id, input.rangeStart, input.rangeEnd);
 
     const now = new Date().toISOString();
     const report: ClientReport = {
       id: crypto.randomUUID(),
+      projectId: project.id,
       companyId: company.id,
       companyLabel: company.name,
       brandId: brand.id,
@@ -307,14 +358,18 @@ export const mockClientReportProvider: ClientReportProvider = {
   async finalizeReport(viewer, id) {
     const existing = db.clientReports.find((r) => r.id === id);
     if (!existing) throw new Error("Report not found.");
+    // Authorization is checked before the already-finalized idempotent short-circuit below,
+    // mirroring the SQL RPC's own tightened ordering — an unauthorized caller must never get this
+    // report's content back, even via the "already finalized, just return it" convenience path.
+    requireFinalizeAccess(viewer, existing);
     if (existing.status === "finalized") return existing;
-    requireOwnerEdit(viewer, existing);
 
     const now = new Date().toISOString();
-    const hasFinalizedBefore = existing.history.some((e) => e.type === "finalized" || e.type === "re-finalized");
+    // Never "re-finalized" — a true Client Report can no longer be reopened (Phase 9B locked
+    // immutability rule), so a report can only ever be finalized once, ever.
     const event = {
       id: crypto.randomUUID(),
-      type: hasFinalizedBefore ? ("re-finalized" as const) : ("finalized" as const),
+      type: "finalized" as const,
       actorId: viewer.id,
       actorName: viewer.fullName,
       createdAt: now,
@@ -323,33 +378,6 @@ export const mockClientReportProvider: ClientReportProvider = {
       ...existing,
       status: "finalized",
       finalizedAt: now,
-      history: [...existing.history, event],
-      updatedAt: now,
-    };
-    db.clientReports = db.clientReports.map((r) => (r.id === id ? updated : r));
-    return updated;
-  },
-
-  async reopenReport(viewer, id) {
-    const existing = db.clientReports.find((r) => r.id === id);
-    if (!existing) throw new Error("Report not found.");
-    if (!canReopenClientReport(viewer, existing)) {
-      if (existing.status !== "finalized") throw new Error("Only a finalized report can be reopened.");
-      throw new Error("Only the report's owner can reopen it.");
-    }
-
-    const now = new Date().toISOString();
-    const event = {
-      id: crypto.randomUUID(),
-      type: "reopened" as const,
-      actorId: viewer.id,
-      actorName: viewer.fullName,
-      createdAt: now,
-    };
-    const updated: ClientReport = {
-      ...existing,
-      status: "draft",
-      finalizedAt: null,
       history: [...existing.history, event],
       updatedAt: now,
     };
@@ -386,7 +414,7 @@ export const mockClientReportProvider: ClientReportProvider = {
   async trashReport(viewer, id) {
     const existing = db.clientReports.find((r) => r.id === id);
     if (!existing) throw new Error("Report not found.");
-    requireViewAccess(viewer, existing);
+    requireTrashAccess(viewer, existing);
 
     const updated: ClientReport = {
       ...existing,
@@ -400,7 +428,7 @@ export const mockClientReportProvider: ClientReportProvider = {
   async restoreReport(viewer, id) {
     const existing = db.clientReports.find((r) => r.id === id);
     if (!existing) throw new Error("Report not found.");
-    requireViewAccess(viewer, existing);
+    requireRestoreAccess(viewer, existing);
     if (!existing.deletedAt) return existing;
 
     const updated: ClientReport = { ...existing, deletedAt: null, updatedAt: new Date().toISOString() };
@@ -411,7 +439,7 @@ export const mockClientReportProvider: ClientReportProvider = {
   async permanentlyDeleteReport(viewer, id) {
     const existing = db.clientReports.find((r) => r.id === id);
     if (!existing) throw new Error("Report not found.");
-    requireViewAccess(viewer, existing);
+    requirePermanentDeleteAccess(viewer);
     if (!existing.deletedAt) throw new Error("Move the report to Trash before permanently deleting it.");
 
     db.clientReports = db.clientReports.filter((r) => r.id !== id);

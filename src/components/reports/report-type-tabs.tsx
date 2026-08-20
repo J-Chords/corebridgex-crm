@@ -2,17 +2,22 @@
 
 import Link from "next/link";
 import { useAuth } from "@/lib/auth/auth-context";
-import { canManageClientReports } from "@/lib/data/permissions";
 import { cn } from "@/lib/utils";
 
 interface ReportTypeTabsProps {
   active: "accomplishments" | "client";
 }
 
-/** Switches between the internal Accomplishments Report and the client-facing Client Reports area — two distinct routes/types, presented as one cohesive "Reports" section. Self-hides for employees, who have no access to Client Reports at all. */
+/**
+ * Switches between the internal report ("Internal Reports") and the client-facing Client Reports
+ * area — two distinct routes/types, presented as one cohesive "Reports" section. Phase 9B: shown
+ * to every role now that Employees may generate and view their own Client Report drafts too — each
+ * page's own content still scopes correctly per viewer (an Employee only ever sees their own
+ * generated reports on the Client Reports page, never a "Team's/All" section).
+ */
 export function ReportTypeTabs({ active }: ReportTypeTabsProps) {
   const { user } = useAuth();
-  if (!user || !canManageClientReports(user)) return null;
+  if (!user) return null;
 
   return (
     <div className="flex w-fit items-center gap-0.5 rounded-lg border p-0.5">
@@ -23,7 +28,7 @@ export function ReportTypeTabs({ active }: ReportTypeTabsProps) {
           active === "accomplishments" ? "bg-secondary text-secondary-foreground" : "text-muted-foreground hover:text-foreground"
         )}
       >
-        Accomplishments
+        Internal Reports
       </Link>
       <Link
         href="/dashboard/reports/client"

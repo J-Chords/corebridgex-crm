@@ -266,12 +266,25 @@ export function canCommentOnAccomplishmentsReport(
  * own work), and employees have no view access at all, not even to one they'd otherwise qualify to see
  * — there's no "your own" client report an employee could own in the first place.
  */
-export function canGenerateClientReport(viewer: User, companyId: string, allUsers: User[]): boolean {
-  return (isSupervisor(viewer) || isSuperadmin(viewer)) && canAccessCompany(viewer, companyId, allUsers);
+/**
+ * Client Report generation (Phase 9B locked business rule — "Employees may generate Client Report
+ * drafts"). Deliberately Project-scoped, not Company-scoped: `canAccessProject` already gives an
+ * Employee "Projects they personally belong to," a Supervisor "+ their team's," and Superadmin
+ * everything, in one call — exactly the target matrix for generation, no per-role branching needed
+ * here. Scoping by Project (not Company) is what prevents a Company with two annual Projects (e.g.
+ * "...2025-2026" and "...2026-2027") from ever having both years' work mixed into one report.
+ */
+export function canGenerateClientReport(
+  viewer: User,
+  project: { companyId: string; ownerId: string; memberUserIds: string[] },
+  allUsers: User[]
+): boolean {
+  return canAccessProject(viewer, project, allUsers);
 }
 
-/** Gates the "Client Reports" tab/page itself, before any specific company is even picked — same role check as canGenerateClientReport, minus the per-company access check. */
-export function canManageClientReports(user: User): boolean {
+/** Whether the "Team's/All Client Reports" second tab exists at all on the list page — an Employee
+ * has no one "below" them to see reports for, same shape as the internal report's own My/Team split. */
+export function canViewOthersClientReports(user: User): boolean {
   return isSupervisor(user) || isSuperadmin(user);
 }
 
@@ -280,25 +293,73 @@ export function isClientReportOwner(viewer: User, report: { generatedById: strin
   return report.generatedById === viewer.id;
 }
 
+/**
+ * View gate. Owner always sees their own report (this now includes an Employee viewing a Client
+ * Report they themselves generated — the pre-9B version checked `isEmployee` first and returned
+ * false unconditionally, which incorrectly hid an Employee-owner's own generated report from
+ * themselves; owner-check now runs first). Otherwise: never an employee, and only a supervisor/
+ * superadmin who manages the actual owner.
+ */
 export function canViewClientReport(viewer: User, report: { generatedById: string }, allUsers: User[]): boolean {
-  if (isEmployee(viewer)) return false;
   if (isClientReportOwner(viewer, report)) return true;
+  if (isEmployee(viewer)) return false;
   const owner = allUsers.find((u) => u.id === report.generatedById);
   return !!owner && managesUser(viewer, owner);
 }
 
-export function canEditClientReportEntries(
+/** Editing draft content (Save, "+ Add section/line") stays owner-only regardless of role — an
+ * Employee's own generated draft is theirs to refine before anyone reviews it. Deliberately
+ * separate from `canFinalizeClientReport` below: generate/edit-own-draft and finalize are two
+ * different permissions now, per the Phase 9B "generate draft != finalize" split. */
+export function canEditOwnClientDraft(
   viewer: User,
   report: { generatedById: string; status: ClientReportStatus }
 ): boolean {
   return report.status === "draft" && isClientReportOwner(viewer, report);
 }
 
-export function canReopenClientReport(
+/**
+ * Finalizing a true Client Report is deliberately kept conservative and NOT owner-based — an
+ * Employee, even the report's own generator, can never finalize it themselves (Phase 9B locked
+ * rule: "do not broaden finalize to all Employees"). A Supervisor/Superadmin may finalize a report
+ * they can view, own or not, so an Employee-generated draft can be reviewed and finalized by
+ * someone else without the Employee needing finalize rights.
+ *
+ * **Security hotfix (still Phase 9B)**: this previously read `isSupervisor(viewer) ||
+ * isSuperadmin(viewer)` with no report-specific check at all — since the underlying
+ * `finalize_client_report` RPC is `SECURITY DEFINER`, that made `is_supervisor()` alone an
+ * unconditional, organization-wide finalize bypass at the server layer (any Supervisor could
+ * finalize ANY report by id, not just their own team's) — directly violating the locked "Supervisor
+ * = Employee + legitimate direct-report/team privileges, never organization-wide" rule. Fixed by
+ * reusing the same `canViewClientReport` gate finalize always implied it was scoped by: Superadmin
+ * stays unconditional; a Supervisor may finalize only a report they can legitimately *view* under
+ * the existing owner-or-managed-generator rule (their own, or a direct report's). This is
+ * intentionally NOT yet the full "Sparing Efficiency reviewer" concept (that's a future, narrower,
+ * orthogonal capability — see docs/product-brief.md's Phase 9 notes); for 9B it's "Supervisor,
+ * scoped to their legitimate team visibility, or Superadmin." The underlying RPC additionally
+ * defends the Project dimension (`can_access_project`) as belt-and-suspenders — not mirrored here,
+ * since this screen doesn't otherwise load the full Project record; the RPC remains authoritative.
+ */
+export function canFinalizeClientReport(
   viewer: User,
-  report: { generatedById: string; status: ClientReportStatus }
+  report: { generatedById: string; status: ClientReportStatus },
+  allUsers: User[]
 ): boolean {
-  return report.status === "finalized" && isClientReportOwner(viewer, report);
+  if (report.status !== "draft") return false;
+  if (isSuperadmin(viewer)) return true;
+  return isSupervisor(viewer) && canViewClientReport(viewer, report, allUsers);
+}
+
+/**
+ * Locked Phase 9B rule: a finalized true Client Report can never be reopened back to draft — it is
+ * a permanently immutable historical snapshot once finalized (unlike the internal Accomplishments
+ * Report, whose reopen/re-finalize cycle is unchanged). This function is kept, always returning
+ * false, only so any stray call site fails closed rather than throwing on a missing import; the
+ * real enforcement is the retired `reopen_client_report` RPC (execute revoked) and the removed
+ * Reopen UI control.
+ */
+export function canReopenClientReport(): boolean {
+  return false;
 }
 
 export function canCommentOnClientReport(
@@ -309,6 +370,27 @@ export function canCommentOnClientReport(
   if (isEmployee(viewer)) return false;
   if (isClientReportOwner(viewer, report)) return false;
   return canViewClientReport(viewer, report, allUsers);
+}
+
+/**
+ * Trash/Restore are deliberately narrower than View/Comment/Finalize — being able to see a report
+ * (owner, or a Supervisor managing its generator) does not imply being able to delete it. Only the
+ * report's own generator, or Superadmin, may trash/restore it; a Supervisor who can legitimately
+ * view/comment on/finalize a direct report's Client Report must not also get destructive control
+ * over it merely because they can see it (Phase 9B hotfix; mirrors the RPCs' own predicate).
+ */
+export function canTrashClientReport(viewer: User, report: { generatedById: string }): boolean {
+  return isClientReportOwner(viewer, report) || isSuperadmin(viewer);
+}
+
+export function canRestoreClientReport(viewer: User, report: { generatedById: string }): boolean {
+  return canTrashClientReport(viewer, report);
+}
+
+/** Permanent delete is an administrative retention action, Superadmin-only always — never the
+ * report's own generator, regardless of role. */
+export function canPermanentlyDeleteClientReport(viewer: User): boolean {
+  return isSuperadmin(viewer);
 }
 
 /** The one person a daily update is about — there's no "kind" distinction like Accomplishments Report, a daily update is always about its own userId. */

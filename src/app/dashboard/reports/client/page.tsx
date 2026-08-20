@@ -5,7 +5,7 @@ import Link from "next/link";
 import { CheckCircle2, ClipboardList, PencilLine, Plus, Search, Trash2 } from "lucide-react";
 import { useAuth } from "@/lib/auth/auth-context";
 import { useClientReports } from "@/lib/data/hooks/use-client-reports";
-import { canManageClientReports, isClientReportOwner, isSuperadmin } from "@/lib/data/permissions";
+import { canViewOthersClientReports, isClientReportOwner, isSuperadmin } from "@/lib/data/permissions";
 import type { ClientReportStatus } from "@/lib/data/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -52,17 +52,7 @@ export default function ClientReportsPage() {
 
   if (!user) return null;
 
-  if (!canManageClientReports(user)) {
-    return (
-      <div className="flex flex-col gap-2">
-        <h1 className="font-heading text-2xl font-semibold">Client Reports</h1>
-        <p className="text-sm text-muted-foreground">
-          Client Reports is for supervisors and superadmins. Ask your supervisor if you need one generated.
-        </p>
-      </div>
-    );
-  }
-
+  const showOthersTab = canViewOthersClientReports(user);
   const othersLabel = isSuperadmin(user) ? "All Client Reports" : "Team's Client Reports";
   const draftCount = scoped.filter((r) => r.status === "draft").length;
   const finalizedCount = scoped.filter((r) => r.status === "finalized").length;
@@ -95,14 +85,16 @@ export default function ClientReportsPage() {
         <StatCard label="Finalized" value={String(finalizedCount)} icon={CheckCircle2} style={staggerDelay(2)} />
       </div>
 
-      <div className="flex w-fit items-center gap-0.5 rounded-lg border p-0.5">
-        <Button size="sm" variant={tab === "mine" ? "secondary" : "ghost"} onClick={() => setTab("mine")}>
-          My Reports
-        </Button>
-        <Button size="sm" variant={tab === "others" ? "secondary" : "ghost"} onClick={() => setTab("others")}>
-          {othersLabel}
-        </Button>
-      </div>
+      {showOthersTab && (
+        <div className="flex w-fit items-center gap-0.5 rounded-lg border p-0.5">
+          <Button size="sm" variant={tab === "mine" ? "secondary" : "ghost"} onClick={() => setTab("mine")}>
+            My Reports
+          </Button>
+          <Button size="sm" variant={tab === "others" ? "secondary" : "ghost"} onClick={() => setTab("others")}>
+            {othersLabel}
+          </Button>
+        </div>
+      )}
 
       <ClientReportsTable
         reports={visible}

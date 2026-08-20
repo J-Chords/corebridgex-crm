@@ -66,9 +66,10 @@ export default function ReportsPage() {
 
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="font-heading text-3xl font-semibold tracking-tight">Accomplishments Reports</h1>
+          <h1 className="font-heading text-3xl font-semibold tracking-tight">Internal Reports</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Auto-drafted from tracked work — generate one, refine it, then finalize.
+            Fully-attributed, internal-only — auto-drafted from tracked work, generate one, refine it, then
+            finalize. For the client-facing document, use Client Reports instead.
           </p>
         </div>
         <div className="flex items-center gap-2">

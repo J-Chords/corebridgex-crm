@@ -24,6 +24,7 @@ import { createClient } from "@/lib/supabase/client";
 
 interface ReportRow {
   id: string;
+  project_id: string | null;
   company_id: string;
   company_label: string;
   brand_id: string;
@@ -46,6 +47,7 @@ interface ReportRow {
 function toReport(row: ReportRow, comments: ClientReportComment[]): ClientReport {
   return {
     id: row.id,
+    projectId: row.project_id,
     companyId: row.company_id,
     companyLabel: row.company_label,
     brandId: row.brand_id,
@@ -115,15 +117,33 @@ function byDate(a: ClientReportLineItem, b: ClientReportLineItem): number {
   return a.date.localeCompare(b.date);
 }
 
-async function computeDepartmentSections(companyId: string, rangeStart: string, rangeEnd: string): Promise<ClientReportDepartmentSection[]> {
+async function computeDepartmentSections(
+  projectId: string,
+  companyId: string,
+  rangeStart: string,
+  rangeEnd: string
+): Promise<ClientReportDepartmentSection[]> {
   const supabase = createClient();
   const rangeStartTs = `${rangeStart}T00:00:00.000Z`;
   const rangeEndTs = `${rangeEnd}T23:59:59.999Z`;
 
-  const { data: taskRows, error: taskError } = await supabase
-    .from("tasks")
-    .select("id, title, activity_id, status_changed_by, status_changed_at")
-    .eq("company_id", companyId);
+  // Phase 9B: scope evidence to this one Project via its own Workstreams, never to the whole
+  // Company — a Company with two annual Projects must never have both years' work mixed into one
+  // report. Daily Update entries are still matched by companyId below (Daily Update has no Project
+  // concept yet) — a known, disclosed residual gap, not something this slice invents a fix for.
+  const { data: workstreamRows, error: workstreamError } = await supabase
+    .from("workstreams")
+    .select("id")
+    .eq("project_id", projectId);
+  if (workstreamError) throw new Error(workstreamError.message);
+  const workstreamIds = ((workstreamRows ?? []) as { id: string }[]).map((w) => w.id);
+
+  const { data: taskRows, error: taskError } = workstreamIds.length
+    ? await supabase
+        .from("tasks")
+        .select("id, title, activity_id, status_changed_by, status_changed_at")
+        .in("workstream_id", workstreamIds)
+    : { data: [] as { id: string; title: string; activity_id: string | null; status_changed_by: string | null; status_changed_at: string | null }[], error: null };
   if (taskError) throw new Error(taskError.message);
   const companyTasks = (taskRows ?? []) as {
     id: string; title: string; activity_id: string | null; status_changed_by: string | null; status_changed_at: string | null;
@@ -255,31 +275,30 @@ async function computeDepartmentSections(companyId: string, rangeStart: string, 
 }
 
 export const supabaseClientReportProvider: ClientReportProvider = {
-  async generateReport(viewer, input: GenerateClientReportInput) {
+  async generateReport(_viewer, input: GenerateClientReportInput) {
     const supabase = createClient();
-    const { data: company, error: companyError } = await supabase.from("companies").select("name, brand_id").eq("id", input.companyId).single();
-    if (companyError) throw new Error(companyError.message);
-    const { data: brand, error: brandError } = await supabase.from("brands").select("name").eq("id", company.brand_id).single();
-    if (brandError) throw new Error(brandError.message);
-
-    const departments = await computeDepartmentSections(input.companyId, input.rangeStart, input.rangeEnd);
-
-    const { data, error } = await supabase
-      .from("client_reports")
-      .insert({
-        company_id: input.companyId,
-        company_label: company.name,
-        brand_id: company.brand_id,
-        brand_label: brand.name,
-        range_label: input.rangeLabel,
-        range_start: input.rangeStart,
-        range_end: input.rangeEnd,
-        departments,
-        generated_by: viewer.id,
-        generated_by_name: viewer.fullName,
-      })
-      .select("*")
+    // Evidence-gathering stays exactly as before (flat-fetch-then-JS-join) — only the final write
+    // moves off a raw `.insert().select().single()` and onto `generate_client_report`, a SECURITY
+    // DEFINER RPC that independently validates Project access and derives Company/brand from the
+    // Project itself server-side (never trusting a client-supplied company_id). The company_id
+    // fetched here is used only to scope this function's own evidence query (Daily Update
+    // matching) — it has no bearing on what the RPC actually persists.
+    const { data: project, error: projectError } = await supabase
+      .from("projects")
+      .select("company_id")
+      .eq("id", input.projectId)
       .single();
+    if (projectError) throw new Error(projectError.message);
+
+    const departments = await computeDepartmentSections(input.projectId, project.company_id, input.rangeStart, input.rangeEnd);
+
+    const { data, error } = await supabase.rpc("generate_client_report", {
+      p_project_id: input.projectId,
+      p_range_label: input.rangeLabel,
+      p_range_start: input.rangeStart,
+      p_range_end: input.rangeEnd,
+      p_departments: departments,
+    });
     if (error) throw new Error(error.message);
     const [hydrated] = await hydrate([data as ReportRow]);
     return hydrated;
@@ -319,14 +338,6 @@ export const supabaseClientReportProvider: ClientReportProvider = {
   async finalizeReport(_viewer, id) {
     const supabase = createClient();
     const { data, error } = await supabase.rpc("finalize_client_report", { target_report_id: id });
-    if (error) throw new Error(error.message);
-    const [hydrated] = await hydrate([data as ReportRow]);
-    return hydrated;
-  },
-
-  async reopenReport(_viewer, id) {
-    const supabase = createClient();
-    const { data, error } = await supabase.rpc("reopen_client_report", { target_report_id: id });
     if (error) throw new Error(error.message);
     const [hydrated] = await hydrate([data as ReportRow]);
     return hydrated;

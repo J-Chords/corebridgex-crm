@@ -6,6 +6,7 @@ import { ArrowLeft, RotateCcw, Trash2 } from "lucide-react";
 import { useAuth } from "@/lib/auth/auth-context";
 import { useTrashedClientReports } from "@/lib/data/hooks/use-client-reports";
 import { clientReportProvider } from "@/lib/data/providers";
+import { canPermanentlyDeleteClientReport, canRestoreClientReport } from "@/lib/data/permissions";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -35,6 +36,9 @@ export default function ClientReportsTrashPage() {
   const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null);
 
   const sorted = [...reports].sort((a, b) => (b.deletedAt ?? "").localeCompare(a.deletedAt ?? ""));
+
+  if (!user) return null;
+  const canPermanentlyDelete = canPermanentlyDeleteClientReport(user);
 
   async function handleRestore(id: string) {
     if (!user) return;
@@ -128,22 +132,26 @@ export default function ClientReportsTrashPage() {
                       </>
                     ) : (
                       <>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleRestore(report.id)}
-                          disabled={pendingId === report.id}
-                        >
-                          <RotateCcw /> Restore
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => setConfirmingDeleteId(report.id)}
-                          disabled={pendingId === report.id}
-                        >
-                          <Trash2 /> Delete forever
-                        </Button>
+                        {canRestoreClientReport(user, report) && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleRestore(report.id)}
+                            disabled={pendingId === report.id}
+                          >
+                            <RotateCcw /> Restore
+                          </Button>
+                        )}
+                        {canPermanentlyDelete && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => setConfirmingDeleteId(report.id)}
+                            disabled={pendingId === report.id}
+                          >
+                            <Trash2 /> Delete forever
+                          </Button>
+                        )}
                       </>
                     )}
                   </div>

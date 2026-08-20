@@ -9,7 +9,14 @@ import { useClientReport } from "@/lib/data/hooks/use-client-reports";
 import { useCompanyLookups } from "@/lib/data/hooks/use-companies";
 import { useUnsavedChangesGuard } from "@/lib/data/hooks/use-unsaved-changes-guard";
 import { clientReportProvider } from "@/lib/data/providers";
-import { canReopenClientReport, isClientReportOwner, isEmployee } from "@/lib/data/permissions";
+import {
+  canEditOwnClientDraft,
+  canFinalizeClientReport,
+  canRestoreClientReport,
+  canTrashClientReport,
+  isClientReportOwner,
+  isEmployee,
+} from "@/lib/data/permissions";
 import type { ClientReportDepartmentSection, ClientReportLineItem } from "@/lib/data/types";
 import { visibleDepartments } from "@/lib/data/client-report-totals";
 import { findMentionedStaffNames } from "@/lib/data/client-report-name-scan";
@@ -58,10 +65,8 @@ export default function ClientReportDetailPage({ params }: { params: Promise<{ i
   const [isFinalizing, setIsFinalizing] = useState(false);
   const [isTrashing, setIsTrashing] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
-  const [isReopening, setIsReopening] = useState(false);
   const [confirmingFinalize, setConfirmingFinalize] = useState(false);
   const [confirmingTrash, setConfirmingTrash] = useState(false);
-  const [confirmingReopen, setConfirmingReopen] = useState(false);
   const [addSectionOpen, setAddSectionOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -75,7 +80,6 @@ export default function ClientReportDetailPage({ params }: { params: Promise<{ i
     setIsDirty(false);
     setConfirmingFinalize(false);
     setConfirmingTrash(false);
-    setConfirmingReopen(false);
   }, [report]);
 
   if (!user) return null;
@@ -100,9 +104,11 @@ export default function ClientReportDetailPage({ params }: { params: Promise<{ i
 
   const isOwner = isClientReportOwner(user, report);
   const isTrashed = report.deletedAt !== null;
-  const canEditEntries = isOwner && report.status === "draft" && !isTrashed;
+  const canEditEntries = canEditOwnClientDraft(user, report) && !isTrashed;
   const canComment = !isOwner && !isEmployee(user);
-  const canReopen = canReopenClientReport(user, report) && !isTrashed;
+  const canFinalize = canFinalizeClientReport(user, report, assignableStaff) && !isTrashed;
+  const canTrash = canTrashClientReport(user, report);
+  const canRestore = canRestoreClientReport(user, report);
   const departments = canEditEntries && draft ? draft : report.departments;
   const mentionedStaffNames = findMentionedStaffNames(departments, assignableStaff);
   // Plain locals, not `report` itself — TS won't narrow a nullable const across a hoisted function
@@ -234,11 +240,16 @@ export default function ClientReportDetailPage({ params }: { params: Promise<{ i
   }
 
   async function handleFinalize() {
-    if (!user || !draft) return;
+    if (!user) return;
     setError(null);
     setIsFinalizing(true);
     try {
-      await clientReportProvider.updateDraft(user, id, draft);
+      // Only the draft's own owner can save edits (updateDraft is owner-only) — a Supervisor/
+      // Superadmin finalizing someone else's draft skips straight to finalizeReport, which is
+      // deliberately not owner-restricted (see canFinalizeClientReport).
+      if (isOwner && draft && isDirty) {
+        await clientReportProvider.updateDraft(user, id, draft);
+      }
       await clientReportProvider.finalizeReport(user, id);
       setIsDirty(false);
       refresh();
@@ -275,21 +286,6 @@ export default function ClientReportDetailPage({ params }: { params: Promise<{ i
       setError(err instanceof Error ? err.message : "Unable to restore report.");
     } finally {
       setIsRestoring(false);
-    }
-  }
-
-  async function handleReopen() {
-    if (!user) return;
-    setError(null);
-    setIsReopening(true);
-    try {
-      await clientReportProvider.reopenReport(user, id);
-      refresh();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to reopen report.");
-    } finally {
-      setIsReopening(false);
-      setConfirmingReopen(false);
     }
   }
 
@@ -408,9 +404,11 @@ export default function ClientReportDetailPage({ params }: { params: Promise<{ i
 
       <div className="flex flex-wrap items-center justify-end gap-2 print:hidden">
         {isTrashed ? (
-          <Button variant="outline" disabled={isRestoring} onClick={handleRestore}>
-            <RotateCcw /> {isRestoring ? "Restoring…" : "Restore"}
-          </Button>
+          canRestore && (
+            <Button variant="outline" disabled={isRestoring} onClick={handleRestore}>
+              <RotateCcw /> {isRestoring ? "Restoring…" : "Restore"}
+            </Button>
+          )
         ) : confirmingTrash ? (
           <>
             <span className="text-sm text-muted-foreground">Move this report to Trash?</span>
@@ -424,8 +422,8 @@ export default function ClientReportDetailPage({ params }: { params: Promise<{ i
         ) : confirmingFinalize ? (
           <>
             <span className="max-w-md text-sm text-muted-foreground">
-              Finalizing freezes this report and marks it ready to send. Make sure no employee names appear
-              anywhere in the Details text before you continue.
+              Finalizing freezes this report permanently — it can never be reopened or edited again. Make sure
+              no employee names appear anywhere in the Details text before you continue.
             </span>
             <Button variant="outline" onClick={() => setConfirmingFinalize(false)}>
               Cancel
@@ -434,36 +432,19 @@ export default function ClientReportDetailPage({ params }: { params: Promise<{ i
               {isFinalizing ? "Finalizing…" : "Yes, finalize"}
             </Button>
           </>
-        ) : confirmingReopen ? (
-          <>
-            <span className="text-sm text-muted-foreground">
-              Reopen this report to edit it? It&apos;ll go back to draft until you finalize it again.
-            </span>
-            <Button variant="outline" onClick={() => setConfirmingReopen(false)}>
-              Cancel
-            </Button>
-            <Button disabled={isReopening} onClick={handleReopen}>
-              {isReopening ? "Reopening…" : "Yes, reopen"}
-            </Button>
-          </>
         ) : (
           <>
-            <Button variant="ghost" onClick={() => setConfirmingTrash(true)}>
-              <Trash2 /> Delete
-            </Button>
-            {canEditEntries && (
-              <>
-                <Button variant="outline" disabled={isSaving} onClick={handleSave}>
-                  {isSaving ? "Saving…" : "Save changes"}
-                </Button>
-                <Button onClick={() => setConfirmingFinalize(true)}>Finalize</Button>
-              </>
-            )}
-            {canReopen && (
-              <Button variant="outline" onClick={() => setConfirmingReopen(true)}>
-                <RotateCcw /> Reopen
+            {canTrash && (
+              <Button variant="ghost" onClick={() => setConfirmingTrash(true)}>
+                <Trash2 /> Delete
               </Button>
             )}
+            {canEditEntries && (
+              <Button variant="outline" disabled={isSaving} onClick={handleSave}>
+                {isSaving ? "Saving…" : "Save changes"}
+              </Button>
+            )}
+            {canFinalize && <Button onClick={() => setConfirmingFinalize(true)}>Finalize</Button>}
           </>
         )}
       </div>

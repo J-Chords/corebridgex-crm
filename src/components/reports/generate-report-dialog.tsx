@@ -123,15 +123,17 @@ export function GenerateReportDialog({ open, onOpenChange }: GenerateReportDialo
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Generate accomplishments report</DialogTitle>
+          <DialogTitle>Generate internal report</DialogTitle>
           <DialogDescription>
-            Auto-drafted from tracked work — you can edit everything before finalizing.
+            Auto-drafted from tracked work — you can edit everything before finalizing. Internal-only, fully
+            attributed — for the name-free document you can send to a client, use{" "}
+            <span className="font-medium text-foreground">Client Reports</span> instead.
           </DialogDescription>
         </DialogHeader>
 
         <div className="flex flex-col gap-4">
           <div className="flex flex-col gap-1.5">
-            <Label>Report for</Label>
+            <Label>Report type</Label>
             <div className="flex items-center gap-0.5 rounded-lg border p-0.5">
               <Button
                 type="button"
@@ -140,7 +142,7 @@ export function GenerateReportDialog({ open, onOpenChange }: GenerateReportDialo
                 className="flex-1"
                 onClick={() => setForm((p) => ({ ...p, kind: "person" }))}
               >
-                Person
+                Personal
               </Button>
               <Button
                 type="button"
@@ -149,7 +151,7 @@ export function GenerateReportDialog({ open, onOpenChange }: GenerateReportDialo
                 className="flex-1"
                 onClick={() => setForm((p) => ({ ...p, kind: "client" }))}
               >
-                Client
+                Internal Client Summary
               </Button>
             </div>
           </div>
@@ -160,6 +162,9 @@ export function GenerateReportDialog({ open, onOpenChange }: GenerateReportDialo
             </p>
           ) : (
             <div className="flex flex-col gap-1.5">
+              <p className="text-xs text-muted-foreground">
+                A fully-attributed internal summary of work on this client — not the client-facing report.
+              </p>
               <Label htmlFor="report-subject-client">Client</Label>
               <Select
                 items={Object.fromEntries(companies.map((c) => [c.id, c.name]))}

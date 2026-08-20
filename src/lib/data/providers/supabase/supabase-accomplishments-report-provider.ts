@@ -294,22 +294,20 @@ export const supabaseAccomplishmentsReportProvider: AccomplishmentsReportProvide
     }
     const brandSections = await buildBrandSections(entries, forceIncludeBrandId);
 
-    const { data, error } = await supabase
-      .from("accomplishments_reports")
-      .insert({
-        kind: input.kind,
-        subject_user_id: input.kind === "person" ? subjectId : null,
-        subject_company_id: input.kind === "client" ? subjectId : null,
-        subject_label: subjectLabel,
-        range_label: input.rangeLabel,
-        range_start: input.rangeStart,
-        range_end: input.rangeEnd,
-        brand_sections: brandSections,
-        generated_by: viewer.id,
-        generated_by_name: viewer.fullName,
-      })
-      .select("*")
-      .single();
+    // Phase 9B: the evidence-gathering above is unchanged — only the final write moves off a raw
+    // `.insert().select().single()` and onto `generate_accomplishments_report`, a SECURITY DEFINER
+    // RPC that independently re-validates authorization (person: always self; client: ordinary
+    // company access) and performs the insert itself, closing the same raw-insert/RETURNING-vs-
+    // RLS-visibility inconsistency fixed for Client Reports in this same slice.
+    const { data, error } = await supabase.rpc("generate_accomplishments_report", {
+      p_kind: input.kind,
+      p_subject_id: subjectId,
+      p_subject_label: subjectLabel,
+      p_range_label: input.rangeLabel,
+      p_range_start: input.rangeStart,
+      p_range_end: input.rangeEnd,
+      p_brand_sections: brandSections,
+    });
     if (error) throw new Error(error.message);
     const [hydrated] = await hydrate([data as ReportRow]);
     return hydrated;
