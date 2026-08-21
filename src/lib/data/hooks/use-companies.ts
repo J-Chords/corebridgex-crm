@@ -63,19 +63,23 @@ export function useCompanyLookups() {
   const [assignableStaff, setAssignableStaff] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
+  const refresh = useCallback(async () => {
     if (!user) return;
-    Promise.all([
+    const [brandsResult, serviceLinesResult, staffResult] = await Promise.all([
       companiesProvider.listBrands(),
       companiesProvider.listServiceLines(),
       companiesProvider.listAssignableStaff(user),
-    ]).then(([brandsResult, serviceLinesResult, staffResult]) => {
-      setBrands(brandsResult);
-      setServiceLines(serviceLinesResult);
-      setAssignableStaff(staffResult);
-      setIsLoading(false);
-    });
+    ]);
+    setBrands(brandsResult);
+    setServiceLines(serviceLinesResult);
+    setAssignableStaff(staffResult);
+    setIsLoading(false);
   }, [user]);
 
-  return { brands, serviceLines, assignableStaff, isLoading };
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    refresh();
+  }, [refresh]);
+
+  return { brands, serviceLines, assignableStaff, isLoading, refresh };
 }

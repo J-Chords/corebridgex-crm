@@ -75,6 +75,18 @@ export interface WeeklyReportDepartmentCatalogEntry {
   position: number;
 }
 
+/** One aggregate row per local visit date — already summed across every legitimate contributor by
+ * the caller (Phase 9F: the Supabase provider gets this pre-aggregated from
+ * `get_client_report_weekly_evidence`'s `visitEvidence`, grouped server-side by Visit Entries' own
+ * `visit_date`; the mock provider sums its own in-memory Visit Entries the same way). No contributor
+ * identity, no Agenda text — see `WeeklyReportTimeEvidenceInput`'s own doc comment for the identical
+ * rationale. */
+export interface WeeklyReportVisitEvidenceInput {
+  /** YYYY-MM-DD, the visiting user(s)' own local visit date. */
+  date: string;
+  minutes: number;
+}
+
 export interface ComputeWeeklyReportInput {
   /** Already Project-scoped by the caller (every Task here belongs to a Workstream of the target Project) — this module never re-derives or re-validates Project scope itself. */
   tasks: WeeklyReportTaskInput[];
@@ -82,6 +94,12 @@ export interface ComputeWeeklyReportInput {
   timeEvidence: WeeklyReportTimeEvidenceInput[];
   /** Every Task-backed entry from a CONFIRMED Daily Update whose `sourceTaskId` is one of the Tasks above — the caller does not need to pre-filter by date, only by "confirmed" and "belongs to one of these Tasks." */
   dailyUpdateEntries: WeeklyReportDailyUpdateEntryInput[];
+  /** Phase 9F — Daily Visit Hours evidence for this Project, already contributor-summed per local
+   * visit date. Optional so pre-9F callers/tests keep working unchanged; omitted (or `undefined`)
+   * means "Visit Hours were not computed for this generation," which the caller must then store as
+   * `dailyVisitMinutes: null` on the report snapshot, never a fabricated 0 — see
+   * `ComputeWeeklyReportResult.dailyVisitMinutes`. */
+  visitEvidence?: WeeklyReportVisitEvidenceInput[];
   activities: WeeklyReportActivityCatalogEntry[];
   departments: WeeklyReportDepartmentCatalogEntry[];
   /** Full names to scan candidate narrative text against before ever using it client-facing (Phase 9C Daily Update narrative can contain human-entered text/Handoff context that might name someone). */
@@ -96,6 +114,15 @@ export interface ComputeWeeklyReportResult {
   /** Internal-only generation notes (never rendered client-facing) — e.g. a completed Task with
    * zero legitimate tracked time in range, or a narrative discarded for containing a staff name. */
   warnings: string[];
+  /**
+   * Phase 9F — sum of `visitEvidence` filtered to the selected range, entirely separate from every
+   * Task-derived line item's minutes (Total Week Hours + Daily Visit Hours = Grand Total, never one
+   * number folded into the other). `null` when the caller omitted `visitEvidence` entirely (no Visit
+   * Hours were computed for this generation — see `ComputeWeeklyReportInput.visitEvidence`'s own doc
+   * comment); a legitimate zero (Visit Hours WERE computed, and there simply weren't any in range)
+   * is a real `0`, never conflated with `null`.
+   */
+  dailyVisitMinutes: number | null;
 }
 
 function inRange(dateKey: string, rangeStart: string, rangeEnd: string): boolean {
@@ -270,7 +297,14 @@ export function computeWeeklyReportSections(input: ComputeWeeklyReportInput): Co
     });
   }
 
-  return { departments, warnings };
+  // Phase 9F — Daily Visit Hours total, entirely separate from every Task-derived line item's
+  // minutes above (never summed together into one number here or anywhere downstream).
+  const dailyVisitMinutes =
+    input.visitEvidence === undefined
+      ? null
+      : input.visitEvidence.filter((v) => inRange(v.date, rangeStart, rangeEnd)).reduce((sum, v) => sum + v.minutes, 0);
+
+  return { departments, warnings, dailyVisitMinutes };
 }
 
 function splitKey(key: string): [string, string] {

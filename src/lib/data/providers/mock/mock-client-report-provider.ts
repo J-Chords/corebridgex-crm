@@ -2,6 +2,7 @@ import type { ClientReportProvider, GenerateClientReportInput } from "../client-
 import type { ClientReport, User } from "../../types";
 import {
   canCommentOnClientReport,
+  canEditClientReportWording,
   canEditOwnClientDraft,
   canFinalizeClientReport,
   canGenerateClientReport,
@@ -32,7 +33,14 @@ function projectMemberUserIds(projectId: string): string[] {
  * provider — mock has no RLS to route around, but producing the identical evidence shape keeps the
  * two providers' contract genuinely parity-tested, not just conveniently similar.
  */
-function generateWeeklyDepartments(viewer: User, projectId: string, rangeStart: string, rangeEnd: string) {
+/**
+ * Shared Tasks/TimeEntries/VisitEntries evidence gathering — used by BOTH manual generation (which
+ * layers confirmed Daily Update narrative + a real name-scan on top) and the Phase 9F scheduled
+ * generator (`mock-client-report-schedules-provider.ts`, which deliberately passes no Daily Update
+ * narrative at all — Section 36). One shared gathering path keeps the two generation modes'
+ * Task/Time/Visit evidence genuinely identical by construction, not by convention.
+ */
+export function gatherWeeklyEvidenceForProject(projectId: string) {
   const projectWorkstreamIds = new Set(db.workstreams.filter((w) => w.projectId === projectId).map((w) => w.id));
   const tasks = db.tasks.filter((t) => projectWorkstreamIds.has(t.workstreamId));
   const taskIds = new Set(tasks.map((t) => t.id));
@@ -49,6 +57,38 @@ function generateWeeklyDepartments(viewer: User, projectId: string, rangeStart: 
     return { taskId, date, minutes };
   });
 
+  // Phase 9F — Visit Entries aggregated by their own local visit_date (already the local calendar
+  // date at creation time, no dateKeyFromTimestamp bucketing needed), summed across every legitimate
+  // contributor for this Project. COMPLETED VISITS ONLY (Phase 9 final semantics fix) — a Planned
+  // Visit has no actual hours yet and must contribute zero reportable minutes. Mirrors
+  // get_client_report_weekly_evidence's own visitEvidence (`and v.status = 'completed'`).
+  const minutesByVisitDate = new Map<string, number>();
+  for (const v of db.visitEntries) {
+    if (v.projectId !== projectId || v.status !== "completed" || v.durationMinutes == null) continue;
+    minutesByVisitDate.set(v.visitDate, (minutesByVisitDate.get(v.visitDate) ?? 0) + v.durationMinutes);
+  }
+  const visitEvidence = Array.from(minutesByVisitDate.entries()).map(([date, minutes]) => ({ date, minutes }));
+
+  return { tasks, taskIds, timeEvidence, visitEvidence };
+}
+
+/**
+ * Phase 9D — the Weekly Client Report content generator. Gathers already-real Tasks/TimeEntries/
+ * confirmed-Daily-Update-entries/catalog data (Project-scoped exactly like the pre-9D algorithm:
+ * via each Task's own Workstream.projectId, never the whole Company) and hands it to the pure
+ * `computeWeeklyReportSections` in `client-report-weekly.ts`, which owns the actual qualifying-Task
+ * rule, aggregation, narrative precedence, and anti-double-counting contract — see that module's
+ * own doc comment.
+ *
+ * Phase 9D hotfix: Time Entries are aggregated into `WeeklyReportTimeEvidenceInput` (one row per
+ * Task/local-work-date, summed across every legitimate contributor) HERE, mirroring exactly what
+ * the hardened `get_client_report_weekly_evidence` RPC does server-side for the real Supabase
+ * provider — mock has no RLS to route around, but producing the identical evidence shape keeps the
+ * two providers' contract genuinely parity-tested, not just conveniently similar.
+ */
+function generateWeeklyDepartments(viewer: User, projectId: string, rangeStart: string, rangeEnd: string) {
+  const { tasks, taskIds, timeEvidence, visitEvidence } = gatherWeeklyEvidenceForProject(projectId);
+
   const dailyUpdateEntries = db.dailyUpdates
     .filter((u) => u.status === "confirmed")
     .flatMap((u) => u.entries.filter((e) => e.sourceTaskId && taskIds.has(e.sourceTaskId)).map((e) => ({ date: u.date, sourceTaskId: e.sourceTaskId, details: e.details })));
@@ -62,6 +102,7 @@ function generateWeeklyDepartments(viewer: User, projectId: string, rangeStart: 
     tasks,
     timeEvidence,
     dailyUpdateEntries,
+    visitEvidence,
     activities: db.activities,
     departments: db.departments,
     knownStaffNames,
@@ -98,8 +139,14 @@ function requireOwnerEdit(viewer: User, report: ClientReport) {
 }
 
 function requireFinalizeAccess(viewer: User, report: ClientReport) {
-  if (!canFinalizeClientReport(viewer, report, db.users)) {
+  if (!canFinalizeClientReport(viewer, report)) {
     throw new Error("You don't have permission to finalize this report.");
+  }
+}
+
+function requireWordingEditAccess(viewer: User, report: ClientReport) {
+  if (!canEditClientReportWording(viewer, report)) {
+    throw new Error("You don't have permission to edit this report's wording.");
   }
 }
 
@@ -162,7 +209,7 @@ export const mockClientReportProvider: ClientReportProvider = {
     const brand = db.brands.find((b) => b.id === company.brandId);
     if (!brand) throw new Error(`Company ${company.id} references unknown brand ${company.brandId}`);
 
-    const { departments, warnings } = generateWeeklyDepartments(viewer, project.id, input.rangeStart, input.rangeEnd);
+    const { departments, warnings, dailyVisitMinutes } = generateWeeklyDepartments(viewer, project.id, input.rangeStart, input.rangeEnd);
 
     const now = new Date().toISOString();
     const report: ClientReport = {
@@ -177,6 +224,8 @@ export const mockClientReportProvider: ClientReportProvider = {
       rangeEnd: input.rangeEnd,
       status: "draft",
       departments,
+      dailyVisitMinutes,
+      scheduleId: null,
       comments: [],
       history: buildGenerationWarningEvents(viewer, warnings),
       generatedById: viewer.id,
@@ -211,6 +260,27 @@ export const mockClientReportProvider: ClientReportProvider = {
     const existing = db.clientReports.find((r) => r.id === id);
     if (!existing) throw new Error("Report not found.");
     requireOwnerEdit(viewer, existing);
+
+    const updated: ClientReport = { ...existing, departments, updatedAt: new Date().toISOString() };
+    db.clientReports = db.clientReports.map((r) => (r.id === id ? updated : r));
+    return updated;
+  },
+
+  async updateDraftWording(viewer, id, edits) {
+    const existing = db.clientReports.find((r) => r.id === id);
+    if (!existing) throw new Error("Report not found.");
+    requireWordingEditAccess(viewer, existing);
+
+    const editsById = new Map(edits.map((e) => [e.id, e.details]));
+    const departments = existing.departments.map((dept) => ({
+      ...dept,
+      activities: dept.activities.map((activity) => ({
+        ...activity,
+        lineItems: activity.lineItems.map((item) =>
+          editsById.has(item.id) ? { ...item, details: editsById.get(item.id)! } : item
+        ),
+      })),
+    }));
 
     const updated: ClientReport = { ...existing, departments, updatedAt: new Date().toISOString() };
     db.clientReports = db.clientReports.map((r) => (r.id === id ? updated : r));

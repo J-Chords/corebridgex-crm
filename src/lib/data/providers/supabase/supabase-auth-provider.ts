@@ -22,6 +22,7 @@ interface ProfileRow {
   role: string;
   active: boolean;
   supervisor_id: string | null;
+  reporting_review_access: boolean;
   created_at: string;
 }
 
@@ -45,7 +46,7 @@ async function loadCurrentAppUser(): Promise<User | null> {
 
   const { data: profile, error: profileError } = await supabase
     .from("profiles")
-    .select("id, full_name, email, role, active, supervisor_id, created_at")
+    .select("id, full_name, email, role, active, supervisor_id, reporting_review_access, created_at")
     .eq("id", authUser.id)
     .maybeSingle<ProfileRow>();
 
@@ -78,6 +79,7 @@ async function loadCurrentAppUser(): Promise<User | null> {
     active: profile.active,
     supervisorId: profile.supervisor_id,
     assignedCompanyIds: (companyRows ?? []).map((row) => row.company_id as string),
+    reportingReviewAccess: profile.reporting_review_access,
     createdAt: profile.created_at,
   };
 }

@@ -50,4 +50,10 @@ export interface CompaniesProvider {
   listServiceLines(): Promise<ServiceLine[]>;
   /** Staff this viewer is allowed to assign to a company (their own team, or everyone for superadmin). */
   listAssignableStaff(viewer: User): Promise<User[]>;
+  /**
+   * Phase 9E — the only sanctioned way to grant/revoke the "Sparing Efficiency" reporting-review
+   * capability. Superadmin-only (enforced server-side by `set_reporting_review_access`, re-checked
+   * independently of whatever the client sends); never alters `role`/`supervisorId`/`active`.
+   */
+  setReportingReviewAccess(viewer: User, targetUserId: string, enabled: boolean): Promise<void>;
 }

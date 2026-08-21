@@ -29,6 +29,10 @@ import { mockClientReportProvider } from "./mock/mock-client-report-provider";
 import { supabaseClientReportProvider } from "./supabase/supabase-client-report-provider";
 import { mockProjectsProvider } from "./mock/mock-projects-provider";
 import { supabaseProjectsProvider } from "./supabase/supabase-projects-provider";
+import { mockVisitEntriesProvider } from "./mock/mock-visit-entries-provider";
+import { supabaseVisitEntriesProvider } from "./supabase/supabase-visit-entries-provider";
+import { mockClientReportSchedulesProvider } from "./mock/mock-client-report-schedules-provider";
+import { supabaseClientReportSchedulesProvider } from "./supabase/supabase-client-report-schedules-provider";
 
 /**
  * Single switch for the whole app's backend, driven by `NEXT_PUBLIC_DATA_PROVIDER` (see
@@ -71,3 +75,7 @@ export const clientReportProvider = usesSupabaseData ? supabaseClientReportProvi
 // Phase 8A — new, read-only this slice. Follows the same Phase 7D/7E provider-mode shape: mock
 // under supabase-core (unchanged transitional core), real only under full supabase.
 export const projectsProvider = usesSupabaseData ? supabaseProjectsProvider : mockProjectsProvider;
+// Phase 9F — Daily Visit Hours.
+export const visitEntriesProvider = usesSupabaseData ? supabaseVisitEntriesProvider : mockVisitEntriesProvider;
+// Phase 9F — recurring Client Report schedules.
+export const clientReportSchedulesProvider = usesSupabaseData ? supabaseClientReportSchedulesProvider : mockClientReportSchedulesProvider;

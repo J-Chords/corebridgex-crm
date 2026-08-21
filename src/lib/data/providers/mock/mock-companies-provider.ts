@@ -1,6 +1,6 @@
 import type { CompaniesProvider, CompanyWithRelations } from "../companies-provider";
 import type { ClientContact, Company, User } from "../../types";
-import { canAccessCompany, canManageCompanies, assignableStaffFor, visibleCompanyIds } from "../../permissions";
+import { canAccessCompany, canManageCompanies, isSuperadmin, assignableStaffFor, visibleCompanyIds } from "../../permissions";
 import { computeClientHealth } from "../../client-health";
 import { db } from "./mock-db";
 
@@ -171,5 +171,14 @@ export const mockCompaniesProvider: CompaniesProvider = {
 
   async listAssignableStaff(viewer) {
     return assignableStaffFor(viewer, db.users);
+  },
+
+  async setReportingReviewAccess(viewer, targetUserId, enabled) {
+    if (!isSuperadmin(viewer)) {
+      throw new Error("Only a superadmin can grant or revoke reporting review access.");
+    }
+    const target = db.users.find((u) => u.id === targetUserId);
+    if (!target) throw new Error(`Profile ${targetUserId} not found.`);
+    db.users = db.users.map((u) => (u.id === targetUserId ? { ...u, reportingReviewAccess: enabled } : u));
   },
 };

@@ -5,7 +5,7 @@ import Link from "next/link";
 import { CheckCircle2, ClipboardList, PencilLine, Plus, Search, Trash2 } from "lucide-react";
 import { useAuth } from "@/lib/auth/auth-context";
 import { useClientReports } from "@/lib/data/hooks/use-client-reports";
-import { canViewOthersClientReports, isClientReportOwner, isSuperadmin } from "@/lib/data/permissions";
+import { canViewOthersClientReports, hasReportingReviewAccess, isClientReportOwner, isSuperadmin } from "@/lib/data/permissions";
 import type { ClientReportStatus } from "@/lib/data/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,11 +13,12 @@ import { StatCard } from "@/components/ui/stat-card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { GenerateClientReportDialog } from "@/components/client-reports/generate-client-report-dialog";
 import { ClientReportsTable } from "@/components/client-reports/client-reports-table";
+import { ClientReportSchedulesPanel } from "@/components/client-reports/client-report-schedules-panel";
 import { ReportTypeTabs } from "@/components/reports/report-type-tabs";
 import { STAGGER_ITEM_CLASS, staggerDelay } from "@/lib/stagger";
 import { cn } from "@/lib/utils";
 
-type ClientReportsTab = "mine" | "others";
+type ClientReportsTab = "mine" | "others" | "review" | "schedules";
 type StatusFilter = "all" | ClientReportStatus;
 
 const STATUS_FILTER_ITEMS: Record<StatusFilter, string> = {
@@ -28,7 +29,7 @@ const STATUS_FILTER_ITEMS: Record<StatusFilter, string> = {
 
 export default function ClientReportsPage() {
   const { user } = useAuth();
-  const { reports, isLoading } = useClientReports();
+  const { reports, isLoading, refresh: refreshReports } = useClientReports();
   const [generateOpen, setGenerateOpen] = useState(false);
   const [tab, setTab] = useState<ClientReportsTab>("mine");
   const [search, setSearch] = useState("");
@@ -36,6 +37,13 @@ export default function ClientReportsPage() {
 
   const scoped = useMemo(() => {
     if (!user) return [];
+    if (tab === "schedules") return [];
+    if (tab === "review") {
+      // Org-wide Draft Client Reports awaiting human review (Phase 9E) — `listReports` already
+      // returns every report a reporting reviewer may view (`canViewClientReport`'s org-wide branch
+      // for `hasReportingReviewAccess`), so this is purely a status filter, not a new fetch.
+      return reports.filter((r) => r.status === "draft");
+    }
     const mine = reports.filter((r) => isClientReportOwner(user, r));
     const others = reports.filter((r) => !isClientReportOwner(user, r));
     return tab === "others" ? others : mine;
@@ -53,6 +61,7 @@ export default function ClientReportsPage() {
   if (!user) return null;
 
   const showOthersTab = canViewOthersClientReports(user);
+  const showReviewTab = hasReportingReviewAccess(user);
   const othersLabel = isSuperadmin(user) ? "All Client Reports" : "Team's Client Reports";
   const draftCount = scoped.filter((r) => r.status === "draft").length;
   const finalizedCount = scoped.filter((r) => r.status === "finalized").length;
@@ -79,59 +88,83 @@ export default function ClientReportsPage() {
         </div>
       </div>
 
-      <div className={cn("grid grid-cols-2 gap-3 sm:grid-cols-3", STAGGER_ITEM_CLASS)}>
-        <StatCard label="Total" value={String(scoped.length)} icon={ClipboardList} style={staggerDelay(0)} />
-        <StatCard label="Draft" value={String(draftCount)} icon={PencilLine} style={staggerDelay(1)} />
-        <StatCard label="Finalized" value={String(finalizedCount)} icon={CheckCircle2} style={staggerDelay(2)} />
-      </div>
+      {tab !== "schedules" && (
+        <div className={cn("grid grid-cols-2 gap-3 sm:grid-cols-3", STAGGER_ITEM_CLASS)}>
+          <StatCard label="Total" value={String(scoped.length)} icon={ClipboardList} style={staggerDelay(0)} />
+          <StatCard label="Draft" value={String(draftCount)} icon={PencilLine} style={staggerDelay(1)} />
+          <StatCard label="Finalized" value={String(finalizedCount)} icon={CheckCircle2} style={staggerDelay(2)} />
+        </div>
+      )}
 
-      {showOthersTab && (
+      {(showOthersTab || showReviewTab) && (
         <div className="flex w-fit items-center gap-0.5 rounded-lg border p-0.5">
           <Button size="sm" variant={tab === "mine" ? "secondary" : "ghost"} onClick={() => setTab("mine")}>
             My Reports
           </Button>
-          <Button size="sm" variant={tab === "others" ? "secondary" : "ghost"} onClick={() => setTab("others")}>
-            {othersLabel}
-          </Button>
+          {showOthersTab && (
+            <Button size="sm" variant={tab === "others" ? "secondary" : "ghost"} onClick={() => setTab("others")}>
+              {othersLabel}
+            </Button>
+          )}
+          {showReviewTab && (
+            <Button size="sm" variant={tab === "review" ? "secondary" : "ghost"} onClick={() => setTab("review")}>
+              Review Queue
+            </Button>
+          )}
+          {showReviewTab && (
+            <Button size="sm" variant={tab === "schedules" ? "secondary" : "ghost"} onClick={() => setTab("schedules")}>
+              Schedules
+            </Button>
+          )}
         </div>
       )}
 
-      <ClientReportsTable
-        reports={visible}
-        isLoading={isLoading}
-        emptyMessage={tab === "mine" ? "No client reports yet — generate your first one above." : `No ${othersLabel.toLowerCase()} yet.`}
-        filters={
-          <>
-            <div className="relative min-w-48 flex-1">
-              <Search
-                aria-hidden="true"
-                className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground"
-              />
-              <Input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search clients…"
-                className="pl-8"
-                aria-label="Search client reports"
-              />
-            </div>
-            <Select
-              items={STATUS_FILTER_ITEMS}
-              value={statusFilter}
-              onValueChange={(v) => setStatusFilter((v ?? "all") as StatusFilter)}
-            >
-              <SelectTrigger aria-label="Filter by status">
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All statuses</SelectItem>
-                <SelectItem value="draft">Draft</SelectItem>
-                <SelectItem value="finalized">Finalized</SelectItem>
-              </SelectContent>
-            </Select>
-          </>
-        }
-      />
+      {tab === "schedules" ? (
+        <ClientReportSchedulesPanel onReportGenerated={refreshReports} />
+      ) : (
+        <ClientReportsTable
+          reports={visible}
+          isLoading={isLoading}
+          emptyMessage={
+            tab === "mine"
+              ? "No client reports yet — generate your first one above."
+              : tab === "review"
+                ? "No Draft Client Reports awaiting review right now."
+                : `No ${othersLabel.toLowerCase()} yet.`
+          }
+          filters={
+            <>
+              <div className="relative min-w-48 flex-1">
+                <Search
+                  aria-hidden="true"
+                  className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground"
+                />
+                <Input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search clients…"
+                  className="pl-8"
+                  aria-label="Search client reports"
+                />
+              </div>
+              <Select
+                items={STATUS_FILTER_ITEMS}
+                value={statusFilter}
+                onValueChange={(v) => setStatusFilter((v ?? "all") as StatusFilter)}
+              >
+                <SelectTrigger aria-label="Filter by status">
+                  <SelectValue placeholder="Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All statuses</SelectItem>
+                  <SelectItem value="draft">Draft</SelectItem>
+                  <SelectItem value="finalized">Finalized</SelectItem>
+                </SelectContent>
+              </Select>
+            </>
+          }
+        />
+      )}
 
       <GenerateClientReportDialog open={generateOpen} onOpenChange={setGenerateOpen} />
     </div>

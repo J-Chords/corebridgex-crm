@@ -10,5 +10,16 @@ export interface User {
   supervisorId: string | null;
   /** Company IDs this user is scoped to — the primary visibility gate. */
   assignedCompanyIds: string[];
+  /**
+   * Phase 9E — an orthogonal capability, NOT a fourth role: Corebridge still has exactly Employee/
+   * Supervisor/Superadmin. Grants the narrow "Sparing Efficiency" Client Report review/finalization
+   * privileges (org-wide Client Report view, wording-only draft edits, finalize) regardless of role
+   * — an Employee with this set gets those privileges, a Supervisor without it does not, even for
+   * their own direct report's draft. Only a Superadmin may grant/revoke it
+   * (`set_reporting_review_access`); Superadmin itself is always treated as having every reviewer
+   * privilege, granted or not (`hasReportingReviewAccess`). Never inferred from role/title/department/
+   * email/name.
+   */
+  reportingReviewAccess: boolean;
   createdAt: string;
 }

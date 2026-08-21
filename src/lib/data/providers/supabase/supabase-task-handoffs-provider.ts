@@ -43,6 +43,9 @@ function toUser(row: ProfileRow): User {
     active: row.active,
     supervisorId: row.supervisor_id,
     assignedCompanyIds: [],
+    // Not authoritative — this is a lightweight display stand-in for a handoff participant, never
+    // checked against a permission. See profile-directory.ts's own note for the same convention.
+    reportingReviewAccess: false,
     createdAt: row.created_at,
   };
 }

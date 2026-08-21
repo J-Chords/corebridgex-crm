@@ -38,6 +38,10 @@ export async function resolveProfileDirectory(ids: string[]): Promise<User[]> {
     active: true,
     supervisorId: row.supervisor_id,
     assignedCompanyIds: [],
+    // Not authoritative — this directory exists only to hydrate a related-person display field
+    // (see the doc comment above), never to check a permission against. Real value is read fresh
+    // off the current viewer's own session (supabase-auth-provider.ts) whenever it actually matters.
+    reportingReviewAccess: false,
     createdAt: "",
   }));
 }

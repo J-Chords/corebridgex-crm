@@ -20,6 +20,19 @@ export function isEmployee(user: User): boolean {
   return user.role === "employee";
 }
 
+/**
+ * Phase 9E — the "Sparing Efficiency" reporting-review capability. Orthogonal to role: an Employee
+ * or Supervisor with `reportingReviewAccess` gets the same Client Report review/finalize privileges
+ * a Superadmin has for this one narrow feature, and a Supervisor without it gets none of them, even
+ * for their own direct report's draft. Superadmin is always treated as having it (administrative
+ * override) whether or not the flag itself is set. Never infer this from role/title/department/
+ * email/name — only the explicit `reportingReviewAccess` field (server-authoritative; see
+ * `set_reporting_review_access`) counts.
+ */
+export function hasReportingReviewAccess(user: User): boolean {
+  return isSuperadmin(user) || user.reportingReviewAccess === true;
+}
+
 /** True if `manager` is `target`'s direct supervisor, or superadmin (sees everyone's team). */
 export function managesUser(manager: User, target: User): boolean {
   if (isSuperadmin(manager)) return true;
@@ -297,11 +310,13 @@ export function isClientReportOwner(viewer: User, report: { generatedById: strin
  * View gate. Owner always sees their own report (this now includes an Employee viewing a Client
  * Report they themselves generated — the pre-9B version checked `isEmployee` first and returned
  * false unconditionally, which incorrectly hid an Employee-owner's own generated report from
- * themselves; owner-check now runs first). Otherwise: never an employee, and only a supervisor/
- * superadmin who manages the actual owner.
+ * themselves; owner-check now runs first). A reporting reviewer (Phase 9E — `hasReportingReviewAccess`,
+ * orthogonal to role) sees every Client Report org-wide, needed for the Review Queue. Otherwise:
+ * never an employee, and only a supervisor/superadmin who manages the actual owner.
  */
 export function canViewClientReport(viewer: User, report: { generatedById: string }, allUsers: User[]): boolean {
   if (isClientReportOwner(viewer, report)) return true;
+  if (hasReportingReviewAccess(viewer)) return true;
   if (isEmployee(viewer)) return false;
   const owner = allUsers.find((u) => u.id === report.generatedById);
   return !!owner && managesUser(viewer, owner);
@@ -319,35 +334,48 @@ export function canEditOwnClientDraft(
 }
 
 /**
- * Finalizing a true Client Report is deliberately kept conservative and NOT owner-based — an
- * Employee, even the report's own generator, can never finalize it themselves (Phase 9B locked
- * rule: "do not broaden finalize to all Employees"). A Supervisor/Superadmin may finalize a report
- * they can view, own or not, so an Employee-generated draft can be reviewed and finalized by
- * someone else without the Employee needing finalize rights.
- *
- * **Security hotfix (still Phase 9B)**: this previously read `isSupervisor(viewer) ||
- * isSuperadmin(viewer)` with no report-specific check at all — since the underlying
- * `finalize_client_report` RPC is `SECURITY DEFINER`, that made `is_supervisor()` alone an
- * unconditional, organization-wide finalize bypass at the server layer (any Supervisor could
- * finalize ANY report by id, not just their own team's) — directly violating the locked "Supervisor
- * = Employee + legitimate direct-report/team privileges, never organization-wide" rule. Fixed by
- * reusing the same `canViewClientReport` gate finalize always implied it was scoped by: Superadmin
- * stays unconditional; a Supervisor may finalize only a report they can legitimately *view* under
- * the existing owner-or-managed-generator rule (their own, or a direct report's). This is
- * intentionally NOT yet the full "Sparing Efficiency reviewer" concept (that's a future, narrower,
- * orthogonal capability — see docs/product-brief.md's Phase 9 notes); for 9B it's "Supervisor,
- * scoped to their legitimate team visibility, or Superadmin." The underlying RPC additionally
- * defends the Project dimension (`can_access_project`) as belt-and-suspenders — not mirrored here,
- * since this screen doesn't otherwise load the full Project record; the RPC remains authoritative.
+ * Phase 9E — a reporting reviewer's narrower "wording only" edit lane for a Draft they do NOT own:
+ * unlike `canEditOwnClientDraft` (full tree replace via `updateDraft`), this only ever permits
+ * changing a line item's `details` text (see `updateDraftWording`/`update_client_report_draft_wording`)
+ * — Task identity/Service/Activity/work date/Actual Duration/Service Total/Total Week Hours stay
+ * factual truth, never casually rewritten by a reviewer. If those are wrong, fix the operational
+ * source and regenerate a new Draft. Deliberately excludes the owner (who already has the fuller
+ * `canEditOwnClientDraft` lane) so there's exactly one edit path per (viewer, report) pair, never two
+ * competing ones.
+ */
+export function canEditClientReportWording(
+  viewer: User,
+  report: { generatedById: string; status: ClientReportStatus }
+): boolean {
+  if (report.status !== "draft") return false;
+  if (isClientReportOwner(viewer, report)) return false;
+  return hasReportingReviewAccess(viewer);
+}
+
+/**
+ * Finalizing a true Client Report (Phase 9E — replaces the Phase 9B interim rule). Deliberately
+ * capability-based, not role-based: a Superadmin may always finalize org-wide (administrative
+ * override); anyone else needs the explicit `reportingReviewAccess` capability
+ * (`hasReportingReviewAccess`), regardless of role — a Supervisor without it can never finalize,
+ * not even a direct report's own draft (closing the Phase 9B interim rule's "Supervisor,
+ * team-scoped" bypass now that a real orthogonal reviewer capability exists), and an Employee or
+ * Supervisor WITH it may finalize org-wide, same as Superadmin. The underlying
+ * `finalize_client_report` RPC mirrors this exactly (`has_reporting_review_access()`) and remains
+ * authoritative; this is the UI-facing mirror.
  */
 export function canFinalizeClientReport(
   viewer: User,
-  report: { generatedById: string; status: ClientReportStatus },
-  allUsers: User[]
+  report: { status: ClientReportStatus }
 ): boolean {
   if (report.status !== "draft") return false;
-  if (isSuperadmin(viewer)) return true;
-  return isSupervisor(viewer) && canViewClientReport(viewer, report, allUsers);
+  return hasReportingReviewAccess(viewer);
+}
+
+/** Phase 9E — only a reporting reviewer (or Superadmin) may create/update/pause/delete recurring
+ * Client Report schedules (Phase 9F). Ordinary manual generation is unaffected and open to anyone
+ * `canGenerateClientReport` already allows. */
+export function canManageClientReportSchedules(viewer: User): boolean {
+  return hasReportingReviewAccess(viewer);
 }
 
 /**
@@ -367,8 +395,11 @@ export function canCommentOnClientReport(
   report: { generatedById: string },
   allUsers: User[]
 ): boolean {
-  if (isEmployee(viewer)) return false;
   if (isClientReportOwner(viewer, report)) return false;
+  // A reporting reviewer (Phase 9E) may comment org-wide regardless of role — including an
+  // Employee-role reviewer, who `isEmployee` would otherwise unconditionally block below.
+  if (hasReportingReviewAccess(viewer)) return true;
+  if (isEmployee(viewer)) return false;
   return canViewClientReport(viewer, report, allUsers);
 }
 
@@ -459,6 +490,29 @@ export function canViewTimeForUser(viewer: User, targetUserId: string, allUsers:
   if (viewer.id === targetUserId) return true;
   const target = allUsers.find((u) => u.id === targetUserId);
   return !!target && managesUser(viewer, target);
+}
+
+/** Phase 9F — same visibility shape as `canViewTimeForUser`: a Supervisor may view a direct
+ * report's Visit Entries for team reporting (Section 23), Superadmin sees everyone, an Employee
+ * only their own. */
+export function canViewVisitEntriesForUser(viewer: User, targetUserId: string, allUsers: User[]): boolean {
+  return canViewTimeForUser(viewer, targetUserId, allUsers);
+}
+
+export function isVisitEntryOwner(viewer: User, entry: { userId: string }): boolean {
+  return entry.userId === viewer.id;
+}
+
+/** Create/edit is always self-service, regardless of role — a Supervisor's "same Employee-style own
+ * Visit workflow" is not manager-only (Section 23's own explicit instruction). */
+export function canEditVisitEntry(viewer: User, entry: { userId: string }): boolean {
+  return isVisitEntryOwner(viewer, entry);
+}
+
+/** Delete is owner OR Superadmin (Section 23's "current admin pattern") — never a Supervisor acting
+ * on a direct report's Visit Entry merely because they manage them. */
+export function canDeleteVisitEntry(viewer: User, entry: { userId: string }): boolean {
+  return isVisitEntryOwner(viewer, entry) || isSuperadmin(viewer);
 }
 
 /** Gates the "Team Time" nav item/page itself — same reasoning as `canViewTeamUpdatesPage`: nothing for an employee to browse (no one "below" them), and their own time already lives on My Day. */

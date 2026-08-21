@@ -115,6 +115,21 @@ export interface ClientReport {
   status: ClientReportStatus;
   /** Only departments with ≥1 activity section — see ClientReportDepartmentSection's own note. */
   departments: ClientReportDepartmentSection[];
+  /**
+   * Phase 9F — the report's own snapshotted Daily Visit Hours total (already summed across every
+   * legitimate contributor, contributor-free, computed once at generation time — never recomputed
+   * for a finalized historical report). `null` ONLY for a legacy report generated before Visit
+   * Hours existed — visit data was genuinely not captured in that historical snapshot, never
+   * retroactively invented as 0 (Section 27's own locked rule). A newly generated report always
+   * carries the real calculated value, including a legitimate 0. When non-null, the UI shows
+   * "Total Week Hours / Daily Visit Hours / Grand Total"; when null, it shows "Total Week Hours"
+   * only, exactly like every pre-9F report.
+   */
+  dailyVisitMinutes: number | null;
+  /** Phase 9F — set only for a Draft produced by a recurring schedule; `null` for every manually
+   * generated report. Deleting the schedule detaches this back to `null` — the report itself is
+   * never deleted (Section 41/49.Q). Internal bookkeeping only, never rendered client-facing. */
+  scheduleId: string | null;
   comments: ClientReportComment[];
   history: ClientReportHistoryEvent[];
   generatedById: string;

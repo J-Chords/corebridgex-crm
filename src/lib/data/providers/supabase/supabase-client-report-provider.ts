@@ -40,6 +40,8 @@ interface ReportRow {
   range_end: string;
   status: ClientReport["status"];
   departments: ClientReportDepartmentSection[];
+  daily_visit_minutes: number | null;
+  schedule_id: string | null;
   history: ClientReportHistoryEvent[];
   generated_by: string;
   generated_by_name: string;
@@ -63,6 +65,8 @@ function toReport(row: ReportRow, comments: ClientReportComment[]): ClientReport
     rangeEnd: row.range_end,
     status: row.status,
     departments: row.departments,
+    dailyVisitMinutes: row.daily_visit_minutes,
+    scheduleId: row.schedule_id,
     comments,
     history: row.history,
     generatedById: row.generated_by,
@@ -124,6 +128,7 @@ interface WeeklyEvidenceResponse {
   tasks: WeeklyEvidenceTask[];
   timeEvidence: { taskId: string; date: string; minutes: number }[];
   dailyUpdateEvidence: { taskId: string; date: string; details: string }[];
+  visitEvidence: { date: string; minutes: number }[];
 }
 
 /**
@@ -136,7 +141,11 @@ interface WeeklyEvidenceResponse {
  * doc comment. Mirrors `mock-client-report-provider.ts`'s own `generateWeeklyDepartments` in shape,
  * differing only in where the Task/Time/Daily-Update evidence itself comes from.
  */
-async function generateWeeklyDepartments(projectId: string, rangeStart: string, rangeEnd: string): Promise<{ departments: ClientReportDepartmentSection[]; warnings: string[] }> {
+async function generateWeeklyDepartments(
+  projectId: string,
+  rangeStart: string,
+  rangeEnd: string
+): Promise<{ departments: ClientReportDepartmentSection[]; warnings: string[]; dailyVisitMinutes: number | null }> {
   const supabase = createClient();
 
   // Postgres has no notion of "the browser's timezone" — the RPC buckets Time Entries into local
@@ -151,7 +160,7 @@ async function generateWeeklyDepartments(projectId: string, rangeStart: string, 
     p_timezone: timezone,
   });
   if (evidenceError) throw new Error(evidenceError.message);
-  const { tasks: taskRowsData, timeEvidence, dailyUpdateEvidence } = evidence as WeeklyEvidenceResponse;
+  const { tasks: taskRowsData, timeEvidence, dailyUpdateEvidence, visitEvidence } = evidence as WeeklyEvidenceResponse;
 
   const dailyUpdateEntries: WeeklyReportDailyUpdateEntryInput[] = dailyUpdateEvidence.map((ev) => ({
     date: ev.date,
@@ -182,17 +191,18 @@ async function generateWeeklyDepartments(projectId: string, rangeStart: string, 
   if (deptError) throw new Error(deptError.message);
   const departmentRows = (deptRows ?? []) as { id: string; name: string; position: number }[];
 
-  const { departments, warnings } = computeWeeklyReportSections({
+  const { departments, warnings, dailyVisitMinutes } = computeWeeklyReportSections({
     tasks: taskRowsData,
     timeEvidence,
     dailyUpdateEntries,
+    visitEvidence,
     activities: activities.map((a) => ({ id: a.id, name: a.name, departmentId: a.department_id, position: a.position })),
     departments: departmentRows,
     knownStaffNames,
     rangeStart,
     rangeEnd,
   });
-  return { departments, warnings };
+  return { departments, warnings, dailyVisitMinutes };
 }
 
 export const supabaseClientReportProvider: ClientReportProvider = {
@@ -203,7 +213,7 @@ export const supabaseClientReportProvider: ClientReportProvider = {
     // `generate_client_report`, a separate SECURITY DEFINER RPC that independently validates
     // Project access and derives Company/brand from the Project itself server-side (never trusting
     // a client-supplied company_id).
-    const { departments, warnings } = await generateWeeklyDepartments(input.projectId, input.rangeStart, input.rangeEnd);
+    const { departments, warnings, dailyVisitMinutes } = await generateWeeklyDepartments(input.projectId, input.rangeStart, input.rangeEnd);
     const history = buildGenerationWarningEvents(viewer, warnings);
 
     const { data, error } = await supabase.rpc("generate_client_report", {
@@ -213,6 +223,7 @@ export const supabaseClientReportProvider: ClientReportProvider = {
       p_range_end: input.rangeEnd,
       p_departments: departments,
       p_history: history,
+      p_daily_visit_minutes: dailyVisitMinutes,
     });
     if (error) throw new Error(error.message);
     const [hydrated] = await hydrate([data as ReportRow]);
@@ -245,6 +256,14 @@ export const supabaseClientReportProvider: ClientReportProvider = {
   async updateDraft(_viewer, id, departments) {
     const supabase = createClient();
     const { data, error } = await supabase.rpc("update_client_report_draft", { target_report_id: id, p_departments: departments });
+    if (error) throw new Error(error.message);
+    const [hydrated] = await hydrate([data as ReportRow]);
+    return hydrated;
+  },
+
+  async updateDraftWording(_viewer, id, edits) {
+    const supabase = createClient();
+    const { data, error } = await supabase.rpc("update_client_report_draft_wording", { target_report_id: id, p_line_edits: edits });
     if (error) throw new Error(error.message);
     const [hydrated] = await hydrate([data as ReportRow]);
     return hydrated;

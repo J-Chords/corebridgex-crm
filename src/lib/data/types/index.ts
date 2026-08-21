@@ -20,3 +20,5 @@ export * from "./accomplishments-report";
 export * from "./saved-view";
 export * from "./daily-update";
 export * from "./client-report";
+export * from "./visit-entry";
+export * from "./client-report-schedule";

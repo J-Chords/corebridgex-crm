@@ -34,13 +34,23 @@ export interface ClientReportProvider {
   /** Replaces the editable department tree wholesale — this is also how "+ Add section" and "+ Add line" persist. Owner-only; rejected once finalized. */
   updateDraft(viewer: User, id: string, departments: ClientReportDepartmentSection[]): Promise<ClientReport>;
   /**
+   * Phase 9E — a reporting reviewer's narrower "wording only" edit lane (`canEditClientReportWording`):
+   * only ever changes the `details` text of the named line items (matched by `ClientReportLineItem.id`)
+   * — Task identity, Service/Activity, work date, Actual Duration, and every total stay untouched,
+   * since only the operational source (Tasks/Time Entries) should ever change those. Rejected once
+   * finalized, same as `updateDraft`. Deliberately a separate method from `updateDraft` rather than a
+   * flag on it, so the two edit contracts (full tree vs. wording-only) can never be confused at a
+   * call site.
+   */
+  updateDraftWording(viewer: User, id: string, edits: { id: string; details: string }[]): Promise<ClientReport>;
+  /**
    * Freezes the report — status becomes "finalized", ready to export and send, and permanently
    * immutable (Phase 9B locked rule — a finalized true Client Report can never be reopened, unlike
-   * the internal Accomplishments Report). Owner OR a Supervisor/Superadmin reviewer may finalize —
-   * deliberately NOT owner-only anymore, so an Employee-generated draft can be reviewed and
-   * finalized by a Supervisor/Superadmin without the Employee needing finalize rights themselves
-   * (see `canFinalizeClientReport` — conservative on purpose, never broadened to Employee). Appends
-   * a history event.
+   * the internal Accomplishments Report). Phase 9E replaced the interim "Supervisor may finalize
+   * their team's" rule with a capability-based one: Superadmin always, or anyone with the explicit
+   * `reportingReviewAccess` capability, regardless of role — a Supervisor without it can never
+   * finalize, not even a direct report's own draft (see `canFinalizeClientReport`/
+   * `hasReportingReviewAccess`). Appends a history event.
    */
   finalizeReport(viewer: User, id: string): Promise<ClientReport>;
   /** Internal reviewer feedback — never rendered in the exported document. Supervisor (their reports' reports)/superadmin (any), never the owner. */

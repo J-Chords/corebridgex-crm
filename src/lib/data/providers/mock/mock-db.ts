@@ -23,7 +23,7 @@ import { seedAccomplishmentsReports } from "./seed-accomplishments-reports";
 import { seedSavedViews } from "./seed-saved-views";
 import { seedProjects } from "./seed-projects";
 import { seedProjectMembers } from "./seed-project-members";
-import type { ClientReport, DailyUpdate, TimeEntryCorrection } from "../../types";
+import type { ClientReport, ClientReportSchedule, DailyUpdate, TimeEntryCorrection, VisitEntry } from "../../types";
 
 /**
  * Single in-memory mock "database", shared by every mock provider so a
@@ -66,4 +66,10 @@ export const db = {
   // No seed rows — generated on demand from a company + date range, same as accomplishmentsReports
   // started before any were seeded.
   clientReports: [] as ClientReport[],
+  // Phase 9F — no seed rows, same rationale as dailyUpdates: every row is dated "today" at creation
+  // time, populated at runtime as people log a Visit from My Day.
+  visitEntries: [] as VisitEntry[],
+  // Phase 9F — no seed rows; created at runtime by a reporting reviewer/superadmin from the
+  // Schedules tab.
+  clientReportSchedules: [] as ClientReportSchedule[],
 };

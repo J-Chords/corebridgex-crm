@@ -23,7 +23,20 @@ function formatDate(value: string) {
 
 interface ClientReportViewProps {
   departments: ClientReportDepartmentSection[];
+  /** Phase 9F — `null` for a legacy report (Visit Hours weren't captured in that historical
+   * snapshot): shows "Total Week Hours" only, exactly like every pre-9F report. A real number
+   * (including a legitimate 0) shows the full "Total Week Hours / Daily Visit Hours / Grand Total"
+   * breakdown instead. */
+  dailyVisitMinutes: number | null;
   editable: boolean;
+  /**
+   * Phase 9E — a reporting reviewer's narrower lane, mutually exclusive with `editable` (a caller
+   * should never pass both true): only the Details text becomes an editable Textarea via
+   * `onLineChange`; Date/Duration stay plain text, and there's no Add line/Add section/Remove
+   * control at all — Task identity, Service/Activity, work date, and Actual Duration stay factual
+   * truth a reviewer never casually rewrites (`canEditClientReportWording`).
+   */
+  wordingEditable?: boolean;
   onLineChange?: (deptIndex: number, activityIndex: number, lineIndex: number, patch: Partial<ClientReportLineItem>) => void;
   onRemoveLine?: (deptIndex: number, activityIndex: number, lineIndex: number) => void;
   onAddLine?: (deptIndex: number, activityIndex: number) => void;
@@ -44,12 +57,15 @@ interface ClientReportViewProps {
  */
 export function ClientReportView({
   departments,
+  dailyVisitMinutes,
   editable,
+  wordingEditable = false,
   onLineChange,
   onRemoveLine,
   onAddLine,
   onRemoveSection,
 }: ClientReportViewProps) {
+  const detailsEditable = editable || wordingEditable;
   if (departments.length === 0) {
     return (
       <p className="text-sm text-muted-foreground">
@@ -127,7 +143,7 @@ export function ClientReportView({
                                 {!isMultiDay && group.taskLabel && (
                                   <p className="mb-1 text-xs font-medium text-muted-foreground">{group.taskLabel}</p>
                                 )}
-                                {editable ? (
+                                {detailsEditable ? (
                                   <Textarea
                                     value={item.details}
                                     onChange={(e) => onLineChange?.(deptIndex, activityIndex, lineIndex, { details: e.target.value })}
@@ -138,7 +154,7 @@ export function ClientReportView({
                                 ) : (
                                   <p className="text-sm whitespace-pre-wrap">{item.details || "—"}</p>
                                 )}
-                                {editable && (
+                                {detailsEditable && (
                                   <p className="hidden text-sm whitespace-pre-wrap text-foreground print:block">{item.details || "—"}</p>
                                 )}
                               </TableCell>
@@ -220,9 +236,19 @@ export function ClientReportView({
       ))}
 
       <Card className="print:break-inside-avoid print:border-black/20 print:shadow-none">
-        <CardFooter className="justify-end py-4 font-mono text-base font-bold">
-          Total Week Hours: {formatMinutes(sumAllDepartments(departments))}
-        </CardFooter>
+        {dailyVisitMinutes === null ? (
+          <CardFooter className="justify-end py-4 font-mono text-base font-bold">
+            Total Week Hours: {formatMinutes(sumAllDepartments(departments))}
+          </CardFooter>
+        ) : (
+          <CardFooter className="flex-col items-end gap-1 py-4 font-mono text-sm">
+            <span>Total Week Hours: {formatMinutes(sumAllDepartments(departments))}</span>
+            <span>Daily Visit Hours: {formatMinutes(dailyVisitMinutes)}</span>
+            <span className="text-base font-bold">
+              Grand Total: {formatMinutes(sumAllDepartments(departments) + dailyVisitMinutes)}
+            </span>
+          </CardFooter>
+        )}
       </Card>
     </div>
   );

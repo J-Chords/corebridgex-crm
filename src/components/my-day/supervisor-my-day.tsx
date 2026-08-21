@@ -26,6 +26,7 @@ import { STATUS_ORDER, EMPTY_BUCKET_COPY, StatusBucketButton } from "@/component
 import { BucketTaskGrid } from "@/components/my-day/bucket-task-grid";
 import { NeedsAttentionStrip } from "@/components/my-day/needs-attention-strip";
 import { TodayTimeCard } from "@/components/my-day/today-time-card";
+import { DailyVisitHoursCard } from "@/components/my-day/daily-visit-hours-card";
 import { DailyUpdateCard } from "@/components/my-day/daily-update-card";
 import { GreetingText } from "@/components/dashboard/greeting-heading";
 import { SearchTriggerBar } from "@/components/dashboard/search-trigger-bar";
@@ -164,6 +165,8 @@ export function SupervisorMyDay({ user }: SupervisorMyDayProps) {
         <TodayTimeCard className={STAGGER_ITEM_CLASS} style={staggerDelay(0)} />
         <UpcomingDeadlinesCard tasks={tasks} className={STAGGER_ITEM_CLASS} style={staggerDelay(1)} />
       </div>
+
+      <DailyVisitHoursCard className={STAGGER_ITEM_CLASS} style={staggerDelay(2)} />
 
       <SectionBreak num="02" label="Daily Update" />
 

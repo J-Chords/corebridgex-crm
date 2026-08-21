@@ -138,6 +138,7 @@ interface ProfileRow {
   role: Role;
   active: boolean;
   supervisor_id: string | null;
+  reporting_review_access: boolean;
   created_at: string;
 }
 
@@ -153,6 +154,7 @@ function toUserFromProfile(row: ProfileRow): User {
     // left empty here rather than re-fetching user_companies per staff member on every company
     // read (assignedStaff only ever needs to render name/role, per mock-companies-provider.ts).
     assignedCompanyIds: [],
+    reportingReviewAccess: row.reporting_review_access,
     createdAt: row.created_at,
   };
 }
@@ -319,6 +321,12 @@ export const supabaseCompaniesProvider: CompaniesProvider = {
     const { data, error } = await supabase.from("profiles").select("*").eq("active", true).order("full_name");
     if (error) throw new Error(error.message);
     return (data ?? []).map(toUserFromProfile);
+  },
+
+  async setReportingReviewAccess(_viewer, targetUserId, enabled) {
+    const supabase = createClient();
+    const { error } = await supabase.rpc("set_reporting_review_access", { target_user_id: targetUserId, enabled });
+    if (error) throw new Error(error.message);
   },
 };
 

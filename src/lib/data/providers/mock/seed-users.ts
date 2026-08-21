@@ -9,6 +9,7 @@ export const seedUsers: User[] = [
     active: true,
     supervisorId: null,
     assignedCompanyIds: [],
+    reportingReviewAccess: false,
     createdAt: "2025-01-06T09:00:00.000Z",
   },
   {
@@ -19,6 +20,7 @@ export const seedUsers: User[] = [
     active: true,
     supervisorId: null,
     assignedCompanyIds: ["company-1", "company-3"],
+    reportingReviewAccess: false,
     createdAt: "2025-01-13T09:00:00.000Z",
   },
   {
@@ -29,6 +31,7 @@ export const seedUsers: User[] = [
     active: true,
     supervisorId: null,
     assignedCompanyIds: ["company-5", "company-7"],
+    reportingReviewAccess: false,
     createdAt: "2025-01-13T09:00:00.000Z",
   },
   {
@@ -39,6 +42,7 @@ export const seedUsers: User[] = [
     active: true,
     supervisorId: "user-supervisor-1",
     assignedCompanyIds: ["company-1", "company-2"],
+    reportingReviewAccess: false,
     createdAt: "2025-02-03T09:00:00.000Z",
   },
   {
@@ -49,6 +53,7 @@ export const seedUsers: User[] = [
     active: true,
     supervisorId: "user-supervisor-1",
     assignedCompanyIds: ["company-3", "company-4"],
+    reportingReviewAccess: false,
     createdAt: "2025-02-10T09:00:00.000Z",
   },
   {
@@ -59,6 +64,11 @@ export const seedUsers: User[] = [
     active: true,
     supervisorId: "user-supervisor-2",
     assignedCompanyIds: ["company-5", "company-6"],
+    // Phase 9E demo seed: an Employee with the orthogonal "Sparing Efficiency" reporting-review
+    // capability — proves review/finalize is capability-driven, not role-driven, without requiring
+    // a manual grant step to exercise the mock provider. Marcus Webb (her own Supervisor) does NOT
+    // have this capability, demonstrating the reverse case in the same seed set.
+    reportingReviewAccess: true,
     createdAt: "2025-02-10T09:00:00.000Z",
   },
   {
@@ -69,6 +79,7 @@ export const seedUsers: User[] = [
     active: true,
     supervisorId: "user-supervisor-2",
     assignedCompanyIds: ["company-7", "company-8"],
+    reportingReviewAccess: false,
     createdAt: "2025-03-01T09:00:00.000Z",
   },
 ];

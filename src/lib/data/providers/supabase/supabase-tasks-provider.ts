@@ -88,6 +88,8 @@ function toUser(row: ProfileRow): User {
     active: row.active,
     supervisorId: row.supervisor_id,
     assignedCompanyIds: [],
+    // Not authoritative — see profile-directory.ts's own note for the same convention.
+    reportingReviewAccess: false,
     createdAt: row.created_at,
   };
 }

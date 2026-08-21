@@ -8,8 +8,19 @@ import type {
 import type { TimeEntry, TimeEntryCorrection, User } from "../../types";
 import { canAccessTask, canCorrectTimeEntry, canLogTime, canViewTimeForUser } from "../../permissions";
 import { INTERNAL_COMPANY_ID } from "../../constants";
+import { timeIntervalOverlapsVisit } from "./visit-time-overlap";
 import { db } from "./mock-db";
 import { mockTasksProvider } from "./mock-tasks-provider";
+
+/** Phase 9 final integrity hotfix — the reciprocal side of Visit/Time anti-double-counting: no
+ * persisted Task Time interval may overlap a Visit, regardless of which was created first. Every
+ * Time-write path below checks this BEFORE mutating anything (never partially finalize one entry
+ * and then fail to start/stop the next). */
+function requireNoVisitConflict(userId: string, start: string, end: string, message: string) {
+  if (timeIntervalOverlapsVisit(userId, start, end, db.visitEntries)) {
+    throw new Error(message);
+  }
+}
 
 function taskAssigneeIds(taskId: string): string[] {
   return db.taskAssignees.filter((ta) => ta.taskId === taskId).map((ta) => ta.userId);
@@ -79,11 +90,14 @@ function entriesForUserByRecency(userId: string): TimeEntry[] {
   return db.timeEntries.filter((te) => te.userId === userId).sort((a, b) => (a.startTime < b.startTime ? 1 : -1));
 }
 
-/** Finalizes whatever timer `userId` currently has running, on any task, as a *pause* (resumable) rather than a final stop — this is what "starting a new timer auto-pauses the previous one" means in practice. */
-function pauseAnyRunningTimer(userId: string) {
+/** Finalizes whatever timer `userId` currently has running, on any task, as a *pause* (resumable)
+ * rather than a final stop — this is what "starting a new timer auto-pauses the previous one" means
+ * in practice. `endTime` is passed in (never recomputed here) so the caller can check this exact
+ * finalized interval against Visits BEFORE calling this — the whole operation must never partially
+ * pause a timer and then fail the next step. */
+function pauseAnyRunningTimer(userId: string, endTime: string) {
   const running = db.timeEntries.find((te) => te.userId === userId && te.durationMinutes === null);
   if (!running) return;
-  const endTime = new Date().toISOString();
   const durationMinutes = minutesBetween(running.startTime, endTime);
   db.timeEntries = db.timeEntries.map((te) =>
     te.id === running.id ? { ...te, endTime, durationMinutes, pausedForResume: true } : te
@@ -129,13 +143,27 @@ export const mockTimeEntriesProvider: TimeEntriesProvider = {
 
   async startTimer(viewer, taskId) {
     const task = requireTaskAccess(viewer, taskId);
-    pauseAnyRunningTimer(viewer.id);
+    const now = new Date().toISOString();
+
+    // Reject BEFORE any mutation — never partially pause the prior timer and then fail to start
+    // the next one (Phase 9 final integrity hotfix, Section E.2).
+    requireNoVisitConflict(viewer.id, now, now, "You have a Visit logged for this time — pause/stop it or adjust the Visit before starting a timer.");
+    const running = db.timeEntries.find((te) => te.userId === viewer.id && te.durationMinutes === null);
+    if (running) {
+      requireNoVisitConflict(
+        viewer.id,
+        running.startTime,
+        now,
+        "Your running timer overlaps a logged Visit — resolve the conflict before starting a new one."
+      );
+    }
+    pauseAnyRunningTimer(viewer.id, now);
 
     const entry: TimeEntry = {
       id: crypto.randomUUID(),
       taskId,
       userId: viewer.id,
-      startTime: new Date().toISOString(),
+      startTime: now,
       endTime: null,
       durationMinutes: null,
       notes: null,
@@ -171,6 +199,14 @@ export const mockTimeEntriesProvider: TimeEntriesProvider = {
     if (entry.durationMinutes !== null) throw new Error("This timer isn't running.");
 
     const endTime = new Date().toISOString();
+    // The completed interval must not overlap a Visit — reject rather than silently changing/
+    // deleting Visit data (Phase 9 final integrity hotfix, Section E.4).
+    requireNoVisitConflict(
+      viewer.id,
+      entry.startTime,
+      endTime,
+      "This timer's interval overlaps a logged Visit — resolve the Visit conflict before stopping it."
+    );
     const updated: TimeEntry = {
       ...entry,
       endTime,
@@ -188,6 +224,14 @@ export const mockTimeEntriesProvider: TimeEntriesProvider = {
     if (entry.durationMinutes !== null) throw new Error("This timer isn't running.");
 
     const endTime = new Date().toISOString();
+    // Same requirement as stop — the finalized interval must not overlap a Visit (Phase 9 final
+    // integrity hotfix, Section E.5).
+    requireNoVisitConflict(
+      viewer.id,
+      entry.startTime,
+      endTime,
+      "This timer's interval overlaps a logged Visit — resolve the Visit conflict before pausing it."
+    );
     const updated: TimeEntry = {
       ...entry,
       endTime,
@@ -205,13 +249,24 @@ export const mockTimeEntriesProvider: TimeEntriesProvider = {
     if (!paused.pausedForResume) throw new Error("This entry isn't paused.");
     requireTaskAccess(viewer, paused.taskId);
 
-    pauseAnyRunningTimer(viewer.id);
+    const now = new Date().toISOString();
+    requireNoVisitConflict(viewer.id, now, now, "You have a Visit logged for this time — pause/stop it or adjust the Visit before resuming this timer.");
+    const running = db.timeEntries.find((te) => te.userId === viewer.id && te.durationMinutes === null);
+    if (running) {
+      requireNoVisitConflict(
+        viewer.id,
+        running.startTime,
+        now,
+        "Your running timer overlaps a logged Visit — resolve the conflict before resuming another one."
+      );
+    }
+    pauseAnyRunningTimer(viewer.id, now);
 
     const entry: TimeEntry = {
       id: crypto.randomUUID(),
       taskId: paused.taskId,
       userId: viewer.id,
-      startTime: new Date().toISOString(),
+      startTime: now,
       endTime: null,
       durationMinutes: null,
       notes: null,
@@ -225,6 +280,13 @@ export const mockTimeEntriesProvider: TimeEntriesProvider = {
 
   async createManualEntry(viewer, taskId, input: ManualTimeEntryInput) {
     requireTaskAccess(viewer, taskId);
+
+    // A duration-only manual entry (endTime left null — no specific clock range) still represents a
+    // real occupied span starting at startTime for durationMinutes minutes; that implied span, not
+    // an arbitrarily invented one, is what gets checked against Visits (Phase 9 final integrity
+    // hotfix, Section E.1).
+    const effectiveEnd = input.endTime ?? new Date(new Date(input.startTime).getTime() + input.durationMinutes * 60000).toISOString();
+    requireNoVisitConflict(viewer.id, input.startTime, effectiveEnd, "This time overlaps a logged Visit — resolve the Visit conflict before logging this entry.");
 
     const entry: TimeEntry = {
       id: crypto.randomUUID(),
