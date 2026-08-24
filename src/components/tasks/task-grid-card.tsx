@@ -6,6 +6,7 @@ import Link from "next/link";
 import { CheckCircle2, Flag, Play } from "lucide-react";
 import type { TaskWithRelations } from "@/lib/data/providers/tasks-provider";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
 import { TaskPriorityBadge } from "@/components/tasks/task-priority-badge";
 import { STATUS_COLOR_VAR, TASK_STATUS_SELECT_ITEMS } from "@/components/tasks/task-status-badge";
 import { ChecklistProgress } from "@/components/ui/checklist-progress";
@@ -100,14 +101,25 @@ export function TaskGridCard({ task, className, style, isFocusTask, onMarkDone, 
         <span className="sr-only">{TASK_STATUS_SELECT_ITEMS[task.status]}</span>
         <span className="min-w-0 flex-1 text-sm font-medium break-words group-hover/card:underline">
           {task.title}
+          {task.parentTaskId && (
+            <Badge variant="neutral" className="ml-1.5 align-middle text-[10px] no-underline">
+              SUBTASK
+            </Badge>
+          )}
         </span>
         <TaskPriorityBadge priority={task.priority} />
       </div>
 
       <p className="truncate text-xs text-muted-foreground">
-        {task.workstream.projectName && <>{task.workstream.projectName} · </>}
-        {task.workstream.name}
-        {task.activity && <> · {task.activity.name}</>}
+        {task.parentTask ? (
+          `Subtask of ${task.parentTask.title}`
+        ) : (
+          <>
+            {task.workstream.projectName && <>{task.workstream.projectName} · </>}
+            {task.workstream.name}
+            {task.activity && <> · {task.activity.name}</>}
+          </>
+        )}
       </p>
 
       <ChecklistProgress

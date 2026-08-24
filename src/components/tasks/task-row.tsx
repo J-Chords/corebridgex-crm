@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { TaskWithRelations } from "@/lib/data/providers/tasks-provider";
 import { Separator } from "@/components/ui/separator";
+import { Badge } from "@/components/ui/badge";
 import { TaskStatusBadge } from "@/components/tasks/task-status-badge";
 import { TaskPriorityBadge } from "@/components/tasks/task-priority-badge";
 import { ChecklistProgress } from "@/components/ui/checklist-progress";
@@ -20,9 +21,16 @@ export function TaskRow({ task, subtitle, onOpen }: TaskRowProps) {
   const content = (
     <>
       <div className="flex flex-col gap-1">
-        <span className="text-sm font-medium group-hover/row:underline">{task.title}</span>
+        <span className="flex items-center gap-1.5 text-sm font-medium group-hover/row:underline">
+          {task.title}
+          {task.parentTaskId && (
+            <Badge variant="neutral" className="text-[10px] no-underline">
+              SUBTASK
+            </Badge>
+          )}
+        </span>
         <span className="text-xs text-muted-foreground">
-          {subtitle ?? (task.assignees.map((a) => a.fullName).join(", ") || "Unassigned")}
+          {task.parentTask ? `Subtask of ${task.parentTask.title}` : subtitle ?? (task.assignees.map((a) => a.fullName).join(", ") || "Unassigned")}
         </span>
       </div>
       <div className="flex items-center gap-2">

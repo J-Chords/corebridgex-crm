@@ -4,6 +4,7 @@ import { Play } from "lucide-react";
 import type { TaskWithRelations } from "@/lib/data/providers/tasks-provider";
 import { TaskStatusBadge, STATUS_COLOR_VAR } from "@/components/tasks/task-status-badge";
 import { TaskPriorityBadge } from "@/components/tasks/task-priority-badge";
+import { Badge } from "@/components/ui/badge";
 import { formatExpectedTime } from "@/lib/data/expected-time";
 import { cn } from "@/lib/utils";
 import { getInitials as initials } from "@/lib/initials";
@@ -63,13 +64,24 @@ export function TaskSummaryItem({ task, onOpen, isRunning, variant = "row", show
         <span className="flex min-w-0 items-center gap-1.5 text-sm font-medium">
           {isRunning && <Play className="size-3 shrink-0" style={{ color: "var(--info)" }} aria-hidden="true" />}
           <span className="truncate">{task.title}</span>
+          {task.parentTaskId && (
+            <Badge variant="neutral" className="shrink-0 text-[10px]">
+              SUBTASK
+            </Badge>
+          )}
         </span>
         <TaskPriorityBadge priority={task.priority} />
       </div>
       <p className="truncate text-xs text-muted-foreground">
-        {task.workstream.projectName && <>{task.workstream.projectName} · </>}
-        {task.workstream.name}
-        {task.activity && <> · {task.activity.name}</>}
+        {task.parentTask ? (
+          `Subtask of ${task.parentTask.title}`
+        ) : (
+          <>
+            {task.workstream.projectName && <>{task.workstream.projectName} · </>}
+            {task.workstream.name}
+            {task.activity && <> · {task.activity.name}</>}
+          </>
+        )}
       </p>
       <div className="flex flex-wrap items-center gap-2">
         <TaskStatusBadge status={task.status} />

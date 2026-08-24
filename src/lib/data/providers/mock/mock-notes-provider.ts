@@ -1,6 +1,6 @@
 import type { NoteInput, NotesProvider, NoteWithAuthor } from "../notes-provider";
 import type { Note } from "../../types";
-import { canAccessCompany, canAccessTask } from "../../permissions";
+import { canAccessCompany, canAccessTask, canAccessTaskDirectly } from "../../permissions";
 import { db } from "./mock-db";
 
 function taskAssigneeIds(taskId: string): string[] {
@@ -38,7 +38,10 @@ export const mockNotesProvider: NotesProvider = {
     const task = db.tasks.find((t) => t.id === taskId);
     if (!task) throw new Error("Task not found.");
     const assigneeIds = taskAssigneeIds(taskId);
-    if (!canAccessTask(viewer, { assigneeIds, companyId: task.companyId }, db.users)) {
+    // Phase 10 hierarchy-authorization hardening — writing a Note requires DIRECT Task access, not
+    // hierarchy-only visibility (listNotesForTask above stays on canAccessTask; reads may remain
+    // hierarchy-visible).
+    if (!canAccessTaskDirectly(viewer, { assigneeIds, companyId: task.companyId }, db.users)) {
       throw new Error("You don't have access to this task.");
     }
 

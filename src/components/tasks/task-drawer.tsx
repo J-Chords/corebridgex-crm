@@ -6,6 +6,7 @@ import { useState } from "react";
 import { useAuth } from "@/lib/auth/auth-context";
 import { useTask } from "@/lib/data/hooks/use-tasks";
 import { canEditTask } from "@/lib/data/permissions";
+import { Badge } from "@/components/ui/badge";
 import { TaskStatusBadge } from "@/components/tasks/task-status-badge";
 import { TaskPriorityBadge } from "@/components/tasks/task-priority-badge";
 import { TaskDetailContent } from "@/components/tasks/task-detail-content";
@@ -44,6 +45,9 @@ export function TaskDrawer({ taskId, onOpenChange, onChanged, onTimerChanged }: 
   const { user } = useAuth();
   const { task, isLoading, notFound, refresh } = useTask(taskId ?? "");
   const [editOpen, setEditOpen] = useState(false);
+  // Phase 10 — a Subtask opened from this drawer's own "Subtasks" section stacks a second TaskDrawer
+  // on top, the same proven Sheet-on-Sheet pattern "Edit" already uses (see the doc comment above).
+  const [subtaskDrawerId, setSubtaskDrawerId] = useState<string | null>(null);
 
   function handleChanged() {
     refresh();
@@ -66,6 +70,22 @@ export function TaskDrawer({ taskId, onOpenChange, onChanged, onTimerChanged }: 
           <>
             <div className="flex flex-col gap-3 border-b bg-card px-6 py-5">
               <SheetDescription className="sr-only">Task details for &quot;{task.title}&quot;.</SheetDescription>
+              {task.parentTaskId && task.parentTask && (
+                <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                  <Badge variant="neutral" className="text-[10px]">
+                    SUBTASK
+                  </Badge>
+                  <span>
+                    Subtask of{" "}
+                    <Link
+                      href={`/dashboard/tasks/${task.parentTask.id}`}
+                      className="font-medium text-foreground underline underline-offset-2 hover:no-underline"
+                    >
+                      {task.parentTask.title}
+                    </Link>
+                  </span>
+                </div>
+              )}
               <div className="flex items-start justify-between gap-3 pr-8">
                 <SheetTitle className="font-heading text-xl font-semibold text-foreground">{task.title}</SheetTitle>
                 <TaskStatusBadge status={task.status} />
@@ -99,7 +119,12 @@ export function TaskDrawer({ taskId, onOpenChange, onChanged, onTimerChanged }: 
             </div>
 
             <div className="flex-1 px-6 py-5">
-              <TaskDetailContent task={task} onChanged={handleChanged} onTimerChanged={onTimerChanged} />
+              <TaskDetailContent
+                task={task}
+                onChanged={handleChanged}
+                onTimerChanged={onTimerChanged}
+                onOpenSubtask={setSubtaskDrawerId}
+              />
             </div>
 
             {canEditTask(user, task) && (
@@ -108,6 +133,16 @@ export function TaskDrawer({ taskId, onOpenChange, onChanged, onTimerChanged }: 
           </>
         )}
       </SheetContent>
+      {subtaskDrawerId != null && (
+        <TaskDrawer
+          taskId={subtaskDrawerId}
+          onOpenChange={(open) => {
+            if (!open) setSubtaskDrawerId(null);
+          }}
+          onChanged={handleChanged}
+          onTimerChanged={onTimerChanged}
+        />
+      )}
     </Sheet>
   );
 }

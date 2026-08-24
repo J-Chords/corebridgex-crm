@@ -6,7 +6,7 @@ import type {
   TimeEntryWithUserAndTask,
 } from "../time-entries-provider";
 import type { TimeEntry, TimeEntryCorrection, User } from "../../types";
-import { canAccessTask, canCorrectTimeEntry, canLogTime, canViewTimeForUser } from "../../permissions";
+import { canAccessTaskDirectly, canCorrectTimeEntry, canLogTime, canViewTimeForUser } from "../../permissions";
 import { INTERNAL_COMPANY_ID } from "../../constants";
 import { timeIntervalOverlapsVisit } from "./visit-time-overlap";
 import { db } from "./mock-db";
@@ -72,7 +72,10 @@ function requireTaskAccess(viewer: User, taskId: string) {
   const task = db.tasks.find((t) => t.id === taskId);
   if (!task) throw new Error("Task not found.");
   const assigneeIds = taskAssigneeIds(taskId);
-  if (!canAccessTask(viewer, { assigneeIds, companyId: task.companyId }, db.users)) {
+  // Phase 10 hierarchy-authorization hardening — canLogTime (assignment-only) remains the real,
+  // authoritative gate here; tightened alongside it so no mutation path rests on hierarchy-widened
+  // access even incidentally.
+  if (!canAccessTaskDirectly(viewer, { assigneeIds, companyId: task.companyId }, db.users)) {
     throw new Error("You don't have access to this task.");
   }
   if (!canLogTime(viewer, { assigneeIds })) {
@@ -109,7 +112,12 @@ export const mockTimeEntriesProvider: TimeEntriesProvider = {
     const task = db.tasks.find((t) => t.id === taskId);
     if (!task) return [];
     const assigneeIds = taskAssigneeIds(taskId);
-    if (!canAccessTask(viewer, { assigneeIds, companyId: task.companyId }, db.users)) return [];
+    // Phase 10 hierarchy-authorization hardening — this returns RAW Time Entry rows (with user
+    // identity), not an aggregate. On the hosted side `time_entries_select` RLS
+    // (`user_id = auth.uid() or manages_user(user_id)`) never depended on Task access at all, so it
+    // was never exposed to the hierarchy widening; this mock path was, and is tightened to match:
+    // hierarchy-only visibility must never surface a coworker's raw logged time.
+    if (!canAccessTaskDirectly(viewer, { assigneeIds, companyId: task.companyId }, db.users)) return [];
 
     return db.timeEntries
       .filter((te) => te.taskId === taskId)

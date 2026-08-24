@@ -1,6 +1,7 @@
 import { Play } from "lucide-react";
 import type { TaskWithRelations } from "@/lib/data/providers/tasks-provider";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
 import { TaskPriorityBadge } from "@/components/tasks/task-priority-badge";
 import { STATUS_COLOR_VAR } from "@/components/tasks/task-status-badge";
 import { ChecklistProgress } from "@/components/ui/checklist-progress";
@@ -27,16 +28,29 @@ export function TaskCard({ task, isRunning }: TaskCardProps) {
       style={{ borderLeftColor: STATUS_COLOR_VAR[task.status] }}
     >
       <div className="flex items-start justify-between gap-2">
-        <span className="text-sm font-medium">{task.title}</span>
+        <span className="flex items-center gap-1.5 text-sm font-medium">
+          {task.title}
+          {task.parentTaskId && (
+            <Badge variant="neutral" className="text-[10px]">
+              SUBTASK
+            </Badge>
+          )}
+        </span>
         <TaskPriorityBadge priority={task.priority} />
       </div>
       <span className="truncate text-xs text-muted-foreground">
-        {task.workstream.projectName ?? task.company.name} <span className="text-muted-foreground/60">·</span>{" "}
-        {task.workstream.name}
-        {task.activity && (
+        {task.parentTask ? (
+          `Parent: ${task.parentTask.title}`
+        ) : (
           <>
-            {" "}
-            <span className="text-muted-foreground/60">·</span> {task.activity.name}
+            {task.workstream.projectName ?? task.company.name} <span className="text-muted-foreground/60">·</span>{" "}
+            {task.workstream.name}
+            {task.activity && (
+              <>
+                {" "}
+                <span className="text-muted-foreground/60">·</span> {task.activity.name}
+              </>
+            )}
           </>
         )}
       </span>

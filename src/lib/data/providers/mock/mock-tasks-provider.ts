@@ -5,6 +5,7 @@ import {
   canAccessProject,
   canAccessWorkstream,
   canAccessTask,
+  canAccessTaskDirectly,
   canEditTask,
   canProgressTask,
   isEmployee,
@@ -16,6 +17,22 @@ import { db } from "./mock-db";
 
 function taskAssigneeIds(taskId: string): string[] {
   return db.taskAssignees.filter((ta) => ta.taskId === taskId).map((ta) => ta.userId);
+}
+
+/** Phase 10 — one-hop hierarchy assignee ids for `canAccessTask`'s `hierarchyAssigneeIds` param:
+ * the parent's assignees (when `task` is a Subtask) plus every direct child's assignees (when
+ * `task` is a parent). Never recurses further — one-level nesting means there's nothing deeper. */
+function hierarchyAssigneeIds(task: Task): string[] {
+  const ids: string[] = [];
+  if (task.parentTaskId) ids.push(...taskAssigneeIds(task.parentTaskId));
+  for (const child of db.tasks.filter((t) => t.parentTaskId === task.id)) {
+    ids.push(...taskAssigneeIds(child.id));
+  }
+  return ids;
+}
+
+function taskAccessArgs(task: Task) {
+  return { assigneeIds: taskAssigneeIds(task.id), companyId: task.companyId, hierarchyAssigneeIds: hierarchyAssigneeIds(task) };
 }
 
 function workstreamTeamIds(workstreamId: string): string[] {
@@ -154,12 +171,28 @@ function toTaskWithRelations(task: Task, viewer: User): TaskWithRelations {
   const done = checklistItems.filter((ci) => ci.isDone).length;
   const progressPercent = total === 0 ? 0 : Math.round((done / total) * 100);
 
-  return { ...task, company, workstream, activity, assignees, checklistItems, createdBy, statusChangedBy, progressPercent };
+  const parentTask = task.parentTaskId
+    ? (() => {
+        const p = db.tasks.find((t) => t.id === task.parentTaskId);
+        return p ? { id: p.id, title: p.title } : null;
+      })()
+    : null;
+
+  return { ...task, company, workstream, activity, assignees, checklistItems, createdBy, statusChangedBy, progressPercent, parentTask };
 }
 
 function requireAccess(viewer: User, task: Task) {
-  if (!canAccessTask(viewer, { assigneeIds: taskAssigneeIds(task.id), companyId: task.companyId }, db.users)) {
+  if (!canAccessTask(viewer, taskAccessArgs(task), db.users)) {
     throw new Error("You don't have access to this task.");
+  }
+}
+
+/** Phase 10 hierarchy-authorization hardening — for MUTATION/side-effect paths only (creating a
+ * Subtask, the parent time roll-up): being visible to a viewer only through hierarchy read must
+ * never satisfy this. */
+function requireDirectAccess(viewer: User, task: Task) {
+  if (!canAccessTaskDirectly(viewer, { assigneeIds: taskAssigneeIds(task.id), companyId: task.companyId }, db.users)) {
+    throw new Error("You do not have access to that Task.");
   }
 }
 
@@ -290,16 +323,14 @@ function syncChecklistItems(taskId: string, items: { id?: string; description: s
 
 export const mockTasksProvider: TasksProvider = {
   async listTasks(viewer) {
-    const tasks = db.tasks.filter((t) =>
-      canAccessTask(viewer, { assigneeIds: taskAssigneeIds(t.id), companyId: t.companyId }, db.users)
-    );
+    const tasks = db.tasks.filter((t) => canAccessTask(viewer, taskAccessArgs(t), db.users));
     return tasks.map((t) => toTaskWithRelations(t, viewer));
   },
 
   async getTask(viewer, id) {
     const task = db.tasks.find((t) => t.id === id);
     if (!task) return null;
-    if (!canAccessTask(viewer, { assigneeIds: taskAssigneeIds(id), companyId: task.companyId }, db.users)) {
+    if (!canAccessTask(viewer, taskAccessArgs(task), db.users)) {
       return null;
     }
     return toTaskWithRelations(task, viewer);
@@ -333,6 +364,7 @@ export const mockTasksProvider: TasksProvider = {
       selfAdded,
       templateId: input.templateId ?? null,
       activityId: input.activityId ?? null,
+      parentTaskId: null,
       relatedContactId: null,
       recurrenceRule: null,
       statusChangedById: null,
@@ -363,6 +395,26 @@ export const mockTasksProvider: TasksProvider = {
     if (!canEditTask(viewer, existing)) {
       throw new Error("You don't have permission to edit this task.");
     }
+    const nextActivityId = input.activityId ?? null;
+
+    // Phase 10 — a Subtask's context is inherited and read-only: it can never independently change
+    // Workstream/Activity away from its parent's own.
+    if (existing.parentTaskId) {
+      if (input.workstreamId !== existing.workstreamId || nextActivityId !== existing.activityId) {
+        throw new Error("A Subtask's Service/Workstream/Activity is inherited from its parent Task and cannot be changed independently.");
+      }
+    }
+    // Phase 10 — a top-level Task with existing Subtasks can't change context out from under them
+    // (Section 8's safe V1 rule: block, never silently leave children in a stale context).
+    if (db.tasks.some((t) => t.parentTaskId === id)) {
+      if (input.workstreamId !== existing.workstreamId) {
+        throw new Error("This Task has Subtasks — its Service/Workstream cannot be changed. Remove or reassign the Subtasks first.");
+      }
+      if (nextActivityId !== existing.activityId) {
+        throw new Error("This Task has Subtasks — its Activity cannot be changed. Remove or reassign the Subtasks first.");
+      }
+    }
+
     const workstream = db.workstreams.find((e) => e.id === input.workstreamId);
     if (!workstream) throw new Error("Workstream not found.");
     requireWorkstreamAccess(viewer, workstream);
@@ -450,10 +502,14 @@ export const mockTasksProvider: TasksProvider = {
     // task reverts it to In progress — "someone reopened this, it's being worked again," not back
     // to To do, which would misrepresent work already done on it.
     const items = db.checklistItems.filter((ci) => ci.taskId === taskId);
+    // Phase 10 — a Task with open Subtasks must never be silently auto-completed by its own
+    // checklist while children remain open. The reverse (unticking an item on an already-done
+    // Task) is unaffected — that direction was never restricted by this rule.
+    const hasOpenSubtasks = db.tasks.some((t) => t.parentTaskId === taskId && t.status !== "done");
     let updatedTask = task;
     if (items.length > 0) {
       const allDone = items.every((ci) => ci.isDone);
-      if (allDone && task.status !== "done") {
+      if (allDone && task.status !== "done" && !hasOpenSubtasks) {
         updatedTask = {
           ...task,
           status: "done",
@@ -481,13 +537,83 @@ export const mockTasksProvider: TasksProvider = {
     return toTaskWithRelations(updatedTask, viewer);
   },
 
+  async listSubtasks(viewer, parentTaskId) {
+    const subtasks = db.tasks.filter((t) => t.parentTaskId === parentTaskId && canAccessTask(viewer, taskAccessArgs(t), db.users));
+    return subtasks.map((t) => toTaskWithRelations(t, viewer));
+  },
+
+  async createSubtask(viewer, parentTaskId, input) {
+    const parent = db.tasks.find((t) => t.id === parentTaskId);
+    if (!parent) throw new Error("Parent Task not found.");
+    requireDirectAccess(viewer, parent);
+    if (parent.parentTaskId) {
+      throw new Error("Cannot create a Subtask under another Subtask — one level of nesting only.");
+    }
+
+    const assigneeIds =
+      input.allowUnassigned && input.assigneeIds.length === 0
+        ? []
+        : resolveAssigneeIds(viewer, input.assigneeIds);
+    const selfAdded = isEmployee(viewer);
+    const id = crypto.randomUUID();
+    const now = new Date().toISOString();
+
+    const task: Task = {
+      id,
+      title: input.title,
+      description: input.description,
+      companyId: parent.companyId,
+      workstreamId: parent.workstreamId,
+      status: input.status,
+      priority: input.priority,
+      dueDate: input.dueDate,
+      expectedMinutes: input.expectedMinutes ?? null,
+      createdById: viewer.id,
+      selfAdded,
+      templateId: null,
+      activityId: parent.activityId,
+      parentTaskId,
+      relatedContactId: null,
+      recurrenceRule: null,
+      statusChangedById: null,
+      statusChangedAt: null,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    db.tasks = [...db.tasks, task];
+    db.taskAssignees = [...db.taskAssignees, ...assigneeIds.map((userId) => ({ taskId: id, userId }))];
+    syncChecklistItems(id, input.checklistItems);
+
+    notifyOfAssignment(task, assigneeIds, viewer);
+    if (selfAdded) notifyOfSelfAddedTask(task, viewer);
+
+    return toTaskWithRelations(task, viewer);
+  },
+
+  async getTaskTimeRollup(viewer, taskId) {
+    const task = db.tasks.find((t) => t.id === taskId);
+    if (!task) throw new Error("Task not found.");
+    requireDirectAccess(viewer, task);
+
+    const ownMinutes = db.timeEntries
+      .filter((te) => te.taskId === taskId && te.durationMinutes != null)
+      .reduce((sum, te) => sum + (te.durationMinutes ?? 0), 0);
+    const childIds = db.tasks.filter((t) => t.parentTaskId === taskId).map((t) => t.id);
+    const subtasksMinutes = db.timeEntries
+      .filter((te) => childIds.includes(te.taskId) && te.durationMinutes != null)
+      .reduce((sum, te) => sum + (te.durationMinutes ?? 0), 0);
+
+    return { ownMinutes, subtasksMinutes };
+  },
+
   async listPastTasksForActivity(viewer, activityId, excludeTaskId) {
     const candidates = db.tasks.filter(
       (t) =>
         t.activityId === activityId &&
         t.status === "done" &&
         t.id !== excludeTaskId &&
-        canAccessTask(viewer, { assigneeIds: taskAssigneeIds(t.id), companyId: t.companyId }, db.users)
+        canAccessTask(viewer, taskAccessArgs(t), db.users)
     );
     const sorted = [...candidates].sort((a, b) =>
       (b.statusChangedAt ?? b.updatedAt).localeCompare(a.statusChangedAt ?? a.updatedAt)

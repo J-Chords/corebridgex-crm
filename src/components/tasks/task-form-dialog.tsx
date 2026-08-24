@@ -6,6 +6,7 @@ import { AlertCircle, History, Plus, X } from "lucide-react";
 import { useAuth } from "@/lib/auth/auth-context";
 import { useCompanies, useCompanyLookups } from "@/lib/data/hooks/use-companies";
 import { useProjects } from "@/lib/data/hooks/use-projects";
+import { useSubtasks } from "@/lib/data/hooks/use-tasks";
 import { useWorkstreams } from "@/lib/data/hooks/use-workstreams";
 import { useWorkstreamActivities } from "@/lib/data/hooks/use-workstream-activities";
 import { useActivityCatalog } from "@/lib/data/hooks/use-activity-catalog";
@@ -240,6 +241,16 @@ export function TaskFormDialog({
   // an existing task should always allow retagging/removing its activity.
   const activityLocked = mode === "create" && Boolean(defaultActivityId);
 
+  // Phase 10 hierarchy-authorization hardening (Section 12/17) — a Subtask's Client/Project/Service/
+  // Activity are inherited from its parent and read-only (enforced server-side by
+  // enforce_task_invariants); a top-level Task that already HAS Subtasks can't change Service/
+  // Activity either, same trigger. Shown as fixed read-only context here rather than offering
+  // editable selectors and waiting for the database to reject the change.
+  const isEditingSubtask = mode === "edit" && Boolean(task?.parentTaskId);
+  const { subtasks: existingChildTasksForLock } = useSubtasks(mode === "edit" && task && !task.parentTaskId ? task.id : null);
+  const hasSubtasks = existingChildTasksForLock.length > 0;
+  const contextLocked = isEditingSubtask || hasSubtasks;
+
   // Phase 8C — "+ Add another Activity to this Service": the full catalog for this Service's own
   // service line, minus what's already configured, is what a Service lead may enable in-context
   // during Task creation. `create_task`/mock createTask enable it and create the Task atomically —
@@ -396,6 +407,29 @@ export function TaskFormDialog({
 
             <div className="flex flex-col gap-4 px-6 py-4">
               <FormSection label="Where it belongs">
+                {contextLocked ? (
+                  <div className="flex flex-col gap-1.5">
+                    <Label>Client / Project / Service{selectedActivityLabel ? " / Activity" : ""}</Label>
+                    <p className="rounded-md border bg-muted/40 px-3 py-2 text-sm">
+                      {selectedWorkstream?.company.name ?? "—"}
+                      {(() => {
+                        const projectName = selectedWorkstream?.projectId
+                          ? (projects.find((p) => p.id === selectedWorkstream.projectId)?.name ?? null)
+                          : null;
+                        return projectName ? ` — ${projectName}` : "";
+                      })()}
+                      {" — "}
+                      {selectedWorkstream?.name ?? "—"}
+                      {selectedActivityLabel ? ` — ${selectedActivityLabel}` : ""}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {isEditingSubtask
+                        ? "Inherited from the parent Task — cannot be changed independently."
+                        : "This Task has Subtasks. Service and Activity cannot be changed."}
+                    </p>
+                  </div>
+                ) : (
+                  <>
                 <div className="flex flex-col gap-1.5">
                   <Label htmlFor="task-project">Project</Label>
                   <Select
@@ -608,6 +642,8 @@ export function TaskFormDialog({
                     </Button>
                   )}
                 </div>
+                  </>
+                )}
               </FormSection>
 
               <FormSection label="Details">

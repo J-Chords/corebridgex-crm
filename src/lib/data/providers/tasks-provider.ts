@@ -24,6 +24,20 @@ export interface TaskWithRelations extends Task {
   statusChangedBy: User | null;
   /** Rounded 0-100, derived from checklistItems. 0 when there are no checklist items. */
   progressPercent: number;
+  /** Phase 10 — populated only when `parentTaskId` is set: a light reference (never the full
+   * TaskWithRelations, avoids re-fetching/duplicating the parent) for a "Subtask of <title>"
+   * breadcrumb. Null for a top-level Task. */
+  parentTask: { id: string; title: string } | null;
+}
+
+/** Phase 10 — the smallest safe aggregate for "parent inclusive effort": two minute sums, never raw
+ * Time Entry rows/notes/user ids. `ownMinutes` is this Task's own logged time; `subtasksMinutes`
+ * sums every direct Subtask's logged time (0 for a Task with no Subtasks, and always 0 on a
+ * Subtask itself, since a Subtask can't have children). Presentation-only — never stored/derived
+ * back into a Time Entry, never fed into Client Report arithmetic (see client-report-weekly.ts). */
+export interface TaskTimeRollup {
+  ownMinutes: number;
+  subtasksMinutes: number;
 }
 
 export interface TaskChecklistItemInput {
@@ -69,12 +83,34 @@ export interface TaskInput {
 }
 
 /**
+ * Phase 10 — a Subtask's create input. Deliberately lighter than `TaskInput`: no `workstreamId`/
+ * `activityId`/`templateId` at all, since a Subtask always inherits those from its parent Task
+ * server-side (the Employee never reselects Client/Project/Service/Activity for a Subtask). Every
+ * other field a Subtask can carry (it's a full Task) is identical to `TaskInput`.
+ */
+export interface SubtaskInput {
+  title: string;
+  description: string;
+  assigneeIds: string[];
+  status: TaskStatus;
+  priority: TaskPriority;
+  dueDate: string | null;
+  expectedMinutes?: number | null;
+  checklistItems: TaskChecklistItemInput[];
+  allowUnassigned?: boolean;
+}
+
+/**
  * Contract every provider (mock, Supabase, future AWS) must implement.
  * Every method takes the requesting `viewer` and enforces the task
  * visibility gate (src/lib/data/permissions.ts) itself, so screens never
  * need to re-derive who's allowed to see or act on what.
  */
 export interface TasksProvider {
+  /** Every Task the viewer can see, top-level AND Subtasks flattened together (each carrying its
+   * own `parentTaskId`) — Task Center/My Day/Planner/Project workspace all derive parent/child
+   * grouping client-side from this one list rather than the provider embedding nested arrays or
+   * requiring a query per parent row. */
   listTasks(viewer: User): Promise<TaskWithRelations[]>;
   getTask(viewer: User, id: string): Promise<TaskWithRelations | null>;
   createTask(viewer: User, input: TaskInput): Promise<TaskWithRelations>;
@@ -93,4 +129,14 @@ export interface TasksProvider {
    * so a task never lists itself.
    */
   listPastTasksForActivity(viewer: User, activityId: string, excludeTaskId?: string): Promise<TaskReuseCandidate[]>;
+  /** Phase 10 — a parent Task's own direct Subtasks (never grandchildren — one level only), for the
+   * Task drawer's "Subtasks" section. Same visibility gate as listTasks/getTask. */
+  listSubtasks(viewer: User, parentTaskId: string): Promise<TaskWithRelations[]>;
+  /** Phase 10 — the one hardened creation path for a Subtask. Context (Company/Workstream/Activity)
+   * is derived from `parentTaskId` server-side and is never accepted from `input`. Rejects if the
+   * parent doesn't exist, isn't accessible, or is itself a Subtask. */
+  createSubtask(viewer: User, parentTaskId: string, input: SubtaskInput): Promise<TaskWithRelations>;
+  /** Phase 10 — "parent inclusive effort," the smallest safe aggregate (see `TaskTimeRollup`). Works
+   * on any Task id — a Subtask's own `subtasksMinutes` is always 0, since it can't have children. */
+  getTaskTimeRollup(viewer: User, taskId: string): Promise<TaskTimeRollup>;
 }

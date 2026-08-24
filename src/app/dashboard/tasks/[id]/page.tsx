@@ -6,6 +6,7 @@ import { ArrowLeft, Pencil } from "lucide-react";
 import { useAuth } from "@/lib/auth/auth-context";
 import { useTask } from "@/lib/data/hooks/use-tasks";
 import { canEditTask } from "@/lib/data/permissions";
+import { Badge } from "@/components/ui/badge";
 import { TaskPriorityBadge } from "@/components/tasks/task-priority-badge";
 import { TaskFormDialog } from "@/components/tasks/task-form-dialog";
 import { TaskDetailContent } from "@/components/tasks/task-detail-content";
@@ -50,6 +51,19 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
         </Link>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="flex flex-col gap-2">
+            {task.parentTaskId && task.parentTask && (
+              <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                <Badge variant="neutral" className="text-[10px]">
+                  SUBTASK
+                </Badge>
+                <span>
+                  Subtask of{" "}
+                  <Link href={`/dashboard/tasks/${task.parentTask.id}`} className="font-medium text-foreground underline underline-offset-2 hover:no-underline">
+                    {task.parentTask.title}
+                  </Link>
+                </span>
+              </div>
+            )}
             <h1 className="font-heading text-2xl font-semibold">{task.title}</h1>
             <div className="flex flex-wrap items-center gap-2">
               <TaskPriorityBadge priority={task.priority} />

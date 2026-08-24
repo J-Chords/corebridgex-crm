@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { useState } from "react";
 import {
   DndContext,
   PointerSensor,
@@ -18,6 +19,7 @@ import { canProgressTask } from "@/lib/data/permissions";
 import { tasksProvider } from "@/lib/data/providers";
 import { TaskCard } from "@/components/tasks/task-card";
 import { STATUS_COLOR_VAR, TASK_STATUS_SELECT_ITEMS } from "@/components/tasks/task-status-badge";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { cn } from "@/lib/utils";
 
 const COLUMNS: { key: TaskStatus; label: string }[] = [
@@ -128,9 +130,18 @@ interface TaskBoardProps {
 export function TaskBoard({ user, tasks, onChanged, runningTaskId = null, onOpenTask }: TaskBoardProps) {
   const router = useRouter();
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
+  // Section 22 — dragging a parent Task with open Subtasks into Done needs the same confirmation the
+  // drawer's status Select shows. Derived from the already-fetched `tasks` list (no extra fetch —
+  // Section 49's N+1 avoidance), never stored.
+  const [pendingDoneTaskId, setPendingDoneTaskId] = useState<string | null>(null);
 
   const grouped = new Map<TaskStatus, TaskWithRelations[]>(COLUMNS.map((c) => [c.key, []]));
   for (const task of tasks) grouped.get(task.status)?.push(task);
+
+  async function applyStatusChange(taskId: string, newStatus: TaskStatus) {
+    await tasksProvider.updateTaskStatus(user, taskId, newStatus);
+    onChanged();
+  }
 
   async function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event;
@@ -140,9 +151,15 @@ export function TaskBoard({ user, tasks, onChanged, runningTaskId = null, onOpen
     const task = tasks.find((t) => t.id === taskId);
     if (!task || task.status === newStatus) return;
     if (!canProgressTask(user, { assigneeIds: task.assignees.map((a) => a.id) })) return;
-    await tasksProvider.updateTaskStatus(user, taskId, newStatus);
-    onChanged();
+    if (newStatus === "done" && !task.parentTaskId && tasks.some((t) => t.parentTaskId === taskId && t.status !== "done")) {
+      setPendingDoneTaskId(taskId);
+      return;
+    }
+    await applyStatusChange(taskId, newStatus);
   }
+
+  const pendingDoneTask = pendingDoneTaskId ? tasks.find((t) => t.id === pendingDoneTaskId) : undefined;
+  const pendingOpenSubtaskCount = pendingDoneTaskId ? tasks.filter((t) => t.parentTaskId === pendingDoneTaskId && t.status !== "done").length : 0;
 
   const navigate = onOpenTask ?? ((taskId: string) => router.push(`/dashboard/tasks/${taskId}`));
 
@@ -161,6 +178,18 @@ export function TaskBoard({ user, tasks, onChanged, runningTaskId = null, onOpen
           />
         ))}
       </div>
+      <ConfirmDialog
+        open={pendingDoneTaskId !== null}
+        onOpenChange={(open) => {
+          if (!open) setPendingDoneTaskId(null);
+        }}
+        title="Subtasks are still open"
+        description={`${pendingOpenSubtaskCount} Subtask${pendingOpenSubtaskCount === 1 ? " is" : "s are"} still open. Mark "${pendingDoneTask?.title ?? "this Task"}" Done anyway?`}
+        confirmLabel="Mark Done"
+        onConfirm={() => {
+          if (pendingDoneTaskId) void applyStatusChange(pendingDoneTaskId, "done");
+        }}
+      />
     </DndContext>
   );
 }

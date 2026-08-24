@@ -1,6 +1,6 @@
 import type { TaskHandoffsProvider, TaskHandoffWithUsers } from "../task-handoffs-provider";
 import type { TaskHandoff, User } from "../../types";
-import { canAccessTask, canAcknowledgeHandoff, canCreateHandoff, usersWhoCanReceiveHandoff } from "../../permissions";
+import { canAccessTask, canAccessTaskDirectly, canAcknowledgeHandoff, canCreateHandoff, usersWhoCanReceiveHandoff } from "../../permissions";
 import { db } from "./mock-db";
 
 function taskAssigneeIds(taskId: string): string[] {
@@ -53,7 +53,9 @@ export const mockTaskHandoffsProvider: TaskHandoffsProvider = {
     const task = db.tasks.find((t) => t.id === taskId);
     if (!task) return [];
     const assigneeIds = taskAssigneeIds(taskId);
-    if (!canAccessTask(viewer, { assigneeIds, companyId: task.companyId }, db.users)) return [];
+    // Phase 10 hierarchy-authorization hardening — listing candidates feeds directly into initiating
+    // a handoff, so the caller needs the same DIRECT access createHandoff itself requires.
+    if (!canAccessTaskDirectly(viewer, { assigneeIds, companyId: task.companyId }, db.users)) return [];
     return usersWhoCanReceiveHandoff({ assigneeIds, companyId: task.companyId }, db.users, viewer.id);
   },
 

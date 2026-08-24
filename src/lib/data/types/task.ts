@@ -17,6 +17,15 @@ export interface Task {
   companyId: string;
   /** Every task belongs to a workstream; companyId above is a denormalized copy of workstream.companyId, synced by the provider — never independently editable. */
   workstreamId: string;
+  /**
+   * Phase 10 — null for a normal top-level Task; another Task's id for a Subtask, nested exactly
+   * one level under it (never deeper — a Task whose own `parentTaskId` is set can never itself be a
+   * parent). Immutable once set (or left null) at creation: never re-parented, promoted to
+   * top-level, or converted from an existing top-level Task afterward. A Subtask always inherits
+   * its parent's `companyId`/`workstreamId`/`activityId` exactly — enforced server-side, never
+   * independently editable on a Subtask.
+   */
+  parentTaskId: string | null;
   status: TaskStatus;
   priority: TaskPriority;
   dueDate: string | null;

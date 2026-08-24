@@ -1,12 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth/auth-context";
 import { tasksProvider } from "@/lib/data/providers";
 import { canProgressTask } from "@/lib/data/permissions";
 import { formatExpectedTime } from "@/lib/data/expected-time";
+import { formatMinutes } from "@/lib/format-minutes";
+import { useSubtasks } from "@/lib/data/hooks/use-tasks";
 import type { TaskStatus } from "@/lib/data/types";
-import type { TaskWithRelations } from "@/lib/data/providers/tasks-provider";
+import type { TaskTimeRollup, TaskWithRelations } from "@/lib/data/providers/tasks-provider";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
@@ -20,11 +22,13 @@ import { TaskStatusBadge, TASK_STATUS_SELECT_ITEMS } from "@/components/tasks/ta
 import { TaskChecklist } from "@/components/tasks/task-checklist";
 import { TaskTimeTracking } from "@/components/tasks/task-time-tracking";
 import { TaskHandoffSection } from "@/components/tasks/task-handoff-section";
+import { TaskSubtasksSection } from "@/components/tasks/task-subtasks-section";
 import { useTaskHandoffs } from "@/lib/data/hooks/use-task-handoffs";
 import { NotesSection } from "@/components/notes/notes-section";
 import { useTaskNotes } from "@/lib/data/hooks/use-notes";
 import { notesProvider } from "@/lib/data/providers";
 import { getInitials as initials } from "@/lib/initials";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 
 function formatDate(value: string | null) {
   if (!value) return "Not set";
@@ -49,6 +53,11 @@ interface TaskDetailContentProps {
    * Optional: the full `/dashboard/tasks/[id]` route has no separate "Running" derived view to
    * invalidate, so it simply omits this; TaskDrawer (Task Center) passes its own. */
   onTimerChanged?: () => void;
+  /** Phase 10 — opens the given Subtask's own drawer, stacked on top of this one (TaskDrawer passes
+   * its own). Omitted by the full `/dashboard/tasks/[id]` route, whose Subtasks section rows then
+   * fall back to normal `Link` navigation instead — same optional-callback convention `TaskRow`
+   * already uses everywhere else. */
+  onOpenSubtask?: (subtaskId: string) => void;
 }
 
 /**
@@ -59,26 +68,57 @@ interface TaskDetailContentProps {
  * component only supplies the Details/Assignees layout around them. No fake tabs — every section
  * here is backed by a real, already-shipped provider capability.
  */
-export function TaskDetailContent({ task, onChanged, onTimerChanged }: TaskDetailContentProps) {
+export function TaskDetailContent({ task, onChanged, onTimerChanged, onOpenSubtask }: TaskDetailContentProps) {
   const { user } = useAuth();
   const { handoffs, refresh: refreshHandoffs } = useTaskHandoffs(task.id);
   const { notes, refresh: refreshNotes } = useTaskNotes(task.id);
   const [statusPending, setStatusPending] = useState(false);
+  const [confirmDoneOpen, setConfirmDoneOpen] = useState(false);
+  const [timeRollup, setTimeRollup] = useState<TaskTimeRollup | null>(null);
+
+  // Only a top-level Task can have Subtasks — this fetch (and the "mark Done with open Subtasks"
+  // warning below) is a no-op for a Subtask itself, per useSubtasks(null).
+  const { subtasks } = useSubtasks(task.parentTaskId ? null : task.id);
+  const openSubtaskCount = subtasks.filter((s) => s.status !== "done").length;
+
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    tasksProvider.getTaskTimeRollup(user, task.id).then((rollup) => {
+      if (!cancelled) setTimeRollup(rollup);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [user, task.id, task.updatedAt]);
 
   if (!user) return null;
 
   const assigneeIds = task.assignees.map((a) => a.id);
   const canProgress = canProgressTask(user, { assigneeIds });
 
-  async function handleStatusChange(status: string | null) {
-    if (!status || !user) return;
+  async function applyStatusChange(status: TaskStatus) {
+    if (!user) return;
     setStatusPending(true);
     try {
-      await tasksProvider.updateTaskStatus(user, task.id, status as TaskStatus);
+      await tasksProvider.updateTaskStatus(user, task.id, status);
       onChanged();
     } finally {
       setStatusPending(false);
     }
+  }
+
+  async function handleStatusChange(status: string | null) {
+    if (!status) return;
+    // Section 22 — a warning, never a hard block: manually marking a parent Task Done while
+    // Subtasks remain open still succeeds if the user confirms. Status independence (Section 21)
+    // means this is the ONLY place completing a Subtask could ever indirectly touch the parent's
+    // status, and only via this explicit, user-initiated, confirmable action — never automatically.
+    if (status === "done" && !task.parentTaskId && openSubtaskCount > 0) {
+      setConfirmDoneOpen(true);
+      return;
+    }
+    await applyStatusChange(status as TaskStatus);
   }
 
   return (
@@ -205,7 +245,18 @@ export function TaskDetailContent({ task, onChanged, onTimerChanged }: TaskDetai
         <CardHeader>
           <CardTitle className="text-base">Time Tracking</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="flex flex-col gap-4">
+          {!task.parentTaskId && timeRollup && timeRollup.subtasksMinutes > 0 && (
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-md border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+              <span>
+                Own time: <span className="font-medium text-foreground">{formatMinutes(timeRollup.ownMinutes)}</span>
+              </span>
+              <span>
+                Including Subtasks:{" "}
+                <span className="font-medium text-foreground">{formatMinutes(timeRollup.ownMinutes + timeRollup.subtasksMinutes)}</span>
+              </span>
+            </div>
+          )}
           <TaskTimeTracking
             taskId={task.id}
             companyId={task.companyId}
@@ -216,6 +267,10 @@ export function TaskDetailContent({ task, onChanged, onTimerChanged }: TaskDetai
           />
         </CardContent>
       </Card>
+
+      {!task.parentTaskId && (
+        <TaskSubtasksSection parentTask={task} onOpenSubtask={onOpenSubtask} onChanged={onChanged} />
+      )}
 
       <TaskHandoffSection taskId={task.id} handoffs={handoffs} onChanged={refreshHandoffs} />
 
@@ -228,6 +283,15 @@ export function TaskDetailContent({ task, onChanged, onTimerChanged }: TaskDetai
           await notesProvider.createTaskNote(user, task.id, input);
           refreshNotes();
         }}
+      />
+
+      <ConfirmDialog
+        open={confirmDoneOpen}
+        onOpenChange={setConfirmDoneOpen}
+        title="Subtasks are still open"
+        description={`${openSubtaskCount} Subtask${openSubtaskCount === 1 ? " is" : "s are"} still open. Mark this Task Done anyway?`}
+        confirmLabel="Mark Done"
+        onConfirm={() => applyStatusChange("done")}
       />
     </div>
   );

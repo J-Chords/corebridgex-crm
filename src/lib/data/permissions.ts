@@ -106,10 +106,18 @@ export function canGenerateClientFacingReport(
  * Task visibility gate. Employee -> tasks where they're an assignee AND the
  * task's company is one they can access. Supervisor -> tasks where ANY
  * assignee is on their team. Superadmin -> everything.
+ *
+ * Phase 10 — `hierarchyAssigneeIds` (optional) carries the combined assignee ids of this Task's
+ * ONE-HOP hierarchy relation: its parent's assignees (when this Task is a Subtask) plus its
+ * Subtasks' assignees (when this Task is a parent). Being in that set grants READ visibility only —
+ * enough to see "Subtask of <parent>"/"2 of 4 Subtasks done" context — never edit/progress/time-log
+ * rights, which stay on the fully separate `canEditTask`/`canProgressTask`/`canLogTime` predicates.
+ * Always a single hop (never recursive), since nesting is capped at one level by the data model
+ * itself. Omitting the field preserves the exact pre-Phase-10 behavior for every existing call site.
  */
 export function canAccessTask(
   viewer: User,
-  task: { assigneeIds: string[]; companyId: string },
+  task: { assigneeIds: string[]; companyId: string; hierarchyAssigneeIds?: string[] },
   allUsers: User[]
 ): boolean {
   if (isSuperadmin(viewer)) return true;
@@ -118,6 +126,30 @@ export function canAccessTask(
     if (task.assigneeIds.some((id) => teamIds.has(id))) return true;
     // Unassigned tasks (e.g. freshly created from a template) are visible to any supervisor
     // who can access the underlying company, so they can be triaged instead of vanishing from view.
+    if (task.assigneeIds.length === 0 && canAccessCompany(viewer, task.companyId, allUsers)) return true;
+  } else if (task.assigneeIds.includes(viewer.id) && canAccessCompany(viewer, task.companyId, allUsers)) {
+    return true;
+  }
+  return Boolean(task.hierarchyAssigneeIds?.includes(viewer.id)) && canAccessCompany(viewer, task.companyId, allUsers);
+}
+
+/**
+ * Phase 10 hierarchy-authorization hardening — pure pre-Phase-10 `canAccessTask` semantics, with NO
+ * `hierarchyAssigneeIds` branch. Use this (never `canAccessTask`) as the authorization gate for any
+ * MUTATION or side-effect on a Task — creating a Subtask, a Note, a Handoff, logging time, or the
+ * parent time roll-up. `canAccessTask` remains the READ-only hierarchy-visibility helper for list/
+ * detail screens and SELECT-shaped queries; being visible to a viewer through a parent/child
+ * relationship must never, by itself, grant operating authority over that row.
+ */
+export function canAccessTaskDirectly(
+  viewer: User,
+  task: { assigneeIds: string[]; companyId: string },
+  allUsers: User[]
+): boolean {
+  if (isSuperadmin(viewer)) return true;
+  if (isSupervisor(viewer)) {
+    const teamIds = new Set(allUsers.filter((u) => managesUser(viewer, u)).map((u) => u.id));
+    if (task.assigneeIds.some((id) => teamIds.has(id))) return true;
     return task.assigneeIds.length === 0 && canAccessCompany(viewer, task.companyId, allUsers);
   }
   return task.assigneeIds.includes(viewer.id) && canAccessCompany(viewer, task.companyId, allUsers);
@@ -154,23 +186,29 @@ export function canLogTime(viewer: User, task: { assigneeIds: string[] }): boole
   return task.assigneeIds.includes(viewer.id);
 }
 
-/** Creating a handoff — same rule as viewing the task itself, named for readability at handoff call sites. */
+/**
+ * Creating a handoff — requires DIRECT Task access (Phase 10 hierarchy-authorization hardening):
+ * being able to see a Task only because you're assigned to its parent/child must never let you
+ * initiate a handoff on it.
+ */
 export function canCreateHandoff(
   viewer: User,
   task: { assigneeIds: string[]; companyId: string },
   allUsers: User[]
 ): boolean {
-  return canAccessTask(viewer, task, allUsers);
+  return canAccessTaskDirectly(viewer, task, allUsers);
 }
 
-/** Who a handoff on this task can be handed to: anyone (other than the given user) who can already access it. */
+/** Who a handoff on this task can be handed to: anyone (other than the given user) with DIRECT
+ * access to it — recipient eligibility represents legitimate independent Task access, never
+ * hierarchy-only visibility (Phase 10 hierarchy-authorization hardening). */
 export function usersWhoCanReceiveHandoff(
   task: { assigneeIds: string[]; companyId: string },
   allUsers: User[],
   excludeUserId?: string
 ): User[] {
   return allUsers.filter(
-    (u) => u.active && u.id !== excludeUserId && canAccessTask(u, task, allUsers)
+    (u) => u.active && u.id !== excludeUserId && canAccessTaskDirectly(u, task, allUsers)
   );
 }
 

@@ -1,4 +1,4 @@
-import type { TasksProvider, TaskWithRelations, TaskReuseCandidate } from "../tasks-provider";
+import type { TasksProvider, TaskWithRelations, TaskReuseCandidate, SubtaskInput, TaskTimeRollup } from "../tasks-provider";
 import type { Task, TaskPriority, TaskStatus, User, Role, ChecklistItem } from "../../types";
 import { assignableStaffFor } from "../../permissions";
 import { createClient } from "@/lib/supabase/client";
@@ -29,6 +29,7 @@ interface TaskRow {
   description: string;
   company_id: string;
   workstream_id: string;
+  parent_task_id: string | null;
   status: TaskStatus;
   priority: TaskPriority;
   due_date: string | null;
@@ -52,6 +53,7 @@ function toTask(row: TaskRow): Task {
     description: row.description,
     companyId: row.company_id,
     workstreamId: row.workstream_id,
+    parentTaskId: row.parent_task_id,
     status: row.status,
     priority: row.priority,
     dueDate: row.due_date,
@@ -130,6 +132,15 @@ async function hydrate(tasks: Task[]): Promise<TaskWithRelations[]> {
     ? await supabase.from("departments").select("id, name").in("id", departmentIds)
     : { data: [] as { id: string; name: string }[] };
 
+  // Phase 10 — light parent-Task reference (id/title only) for a "Subtask of <title>" breadcrumb.
+  // A separate small SELECT rather than embedding the full parent row, matching the same
+  // "light reference, not the full record" convention already used for workstream/activity above.
+  const parentTaskIds = Array.from(new Set(tasks.map((t) => t.parentTaskId).filter((x): x is string => x != null)));
+  const parentTasksRes = parentTaskIds.length
+    ? await supabase.from("tasks").select("id, title").in("id", parentTaskIds)
+    : { data: [] as { id: string; title: string }[] };
+  const parentTasks = (parentTasksRes.data ?? []) as { id: string; title: string }[];
+
   const workstreamRowsForProjects = (workstreamsRes.data ?? []) as { id: string; name: string; project_id: string | null }[];
   const projectIds = Array.from(new Set(workstreamRowsForProjects.map((w) => w.project_id).filter((x): x is string => x != null)));
   const projectsRes = projectIds.length
@@ -186,9 +197,11 @@ async function hydrate(tasks: Task[]): Promise<TaskWithRelations[]> {
     const total = checklistItems.length;
     const done = checklistItems.filter((ci) => ci.isDone).length;
     const progressPercent = total === 0 ? 0 : Math.round((done / total) * 100);
+    const parentTask = task.parentTaskId ? (parentTasks.find((p) => p.id === task.parentTaskId) ?? null) : null;
 
     return {
       ...task,
+      parentTask,
       company: {
         id: companyRow.id,
         name: companyRow.name,
@@ -341,6 +354,40 @@ export const supabaseTasksProvider: TasksProvider = {
     if (error) throw new Error(error.message);
     const [hydrated] = await hydrate([toTask(data as TaskRow)]);
     return hydrated;
+  },
+
+  async listSubtasks(_viewer, parentTaskId) {
+    const supabase = createClient();
+    const { data, error } = await supabase.from("tasks").select("*").eq("parent_task_id", parentTaskId).order("created_at", { ascending: true });
+    if (error) throw new Error(error.message);
+    return hydrate((data ?? []).map(toTask));
+  },
+
+  async createSubtask(_viewer, parentTaskId, input: SubtaskInput) {
+    const supabase = createClient();
+    const { data, error } = await supabase.rpc("create_subtask", {
+      p_parent_task_id: parentTaskId,
+      p_title: input.title,
+      p_description: input.description,
+      p_assignee_ids: input.assigneeIds,
+      p_allow_unassigned: input.allowUnassigned ?? false,
+      p_status: input.status,
+      p_priority: input.priority,
+      p_due_date: input.dueDate,
+      p_expected_minutes: input.expectedMinutes ?? null,
+      p_checklist_items: input.checklistItems.map((item) => item.description),
+    });
+    if (error) throw new Error(error.message);
+    const [hydrated] = await hydrate([toTask(data)]);
+    return hydrated;
+  },
+
+  async getTaskTimeRollup(_viewer, taskId): Promise<TaskTimeRollup> {
+    const supabase = createClient();
+    const { data, error } = await supabase.rpc("get_task_time_rollup", { target_task_id: taskId });
+    if (error) throw new Error(error.message);
+    const row = (data as { own_minutes: number; subtasks_minutes: number }[] | null)?.[0];
+    return { ownMinutes: row?.own_minutes ?? 0, subtasksMinutes: row?.subtasks_minutes ?? 0 };
   },
 
   async listPastTasksForActivity(_viewer, activityId, excludeTaskId): Promise<TaskReuseCandidate[]> {

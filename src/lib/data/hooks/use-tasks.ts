@@ -71,6 +71,34 @@ export function useMyTasks() {
   return { tasks: myTasks, isLoading, refresh };
 }
 
+/** Phase 10 — a parent Task's own direct Subtasks, for the Task drawer's "Subtasks" section. Pass
+ * null for a Subtask itself (which can't have children) or while no task is open yet — skips the
+ * fetch and returns an empty list rather than erroring. */
+export function useSubtasks(parentTaskId: string | null) {
+  const { user } = useAuth();
+  const [subtasks, setSubtasks] = useState<TaskWithRelations[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const refresh = useCallback(async () => {
+    if (!user || !parentTaskId) {
+      setSubtasks([]);
+      setIsLoading(false);
+      return;
+    }
+    setIsLoading(true);
+    const result = await tasksProvider.listSubtasks(user, parentTaskId);
+    setSubtasks(result);
+    setIsLoading(false);
+  }, [user, parentTaskId]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    refresh();
+  }, [refresh]);
+
+  return { subtasks, isLoading, refresh };
+}
+
 /** "Reuse from past" candidates for the given activity — pass null to skip the fetch (no activity tagged yet). */
 export function useTaskReuseCandidates(activityId: string | null, excludeTaskId?: string) {
   const { user } = useAuth();
