@@ -59,14 +59,17 @@ function emptyForm() {
 }
 
 /**
- * Generates a new client-facing report — Client, Project, then date range (Phase 9B: a Client can
- * have several annual Projects, e.g. "...2025-2026"/"...2026-2027", so the Project the report is
- * scoped to must be picked explicitly whenever more than one exists — never inferred/guessed). No
- * Person/Client toggle like the internal report's dialog, since this report is always
- * Company/Project-scoped. `useProjects()` already returns only Projects the viewer can legitimately
- * access, so the Client list here is naturally restricted to Clients with at least one such
- * Project — an Employee sees only their own accessible Projects' Clients, never the full Company
- * directory.
+ * Generates a new client-facing report — Client, then reporting period. The backend reporting
+ * boundary is still Project-scoped (Phase 9B: a Client can have several annual Projects, e.g.
+ * "...2025-2026"/"...2026-2027", and evidence must never mix across them), but Phase 12A removed
+ * "Project" as a second thing the employee has to think about: picking a Client silently resolves
+ * to its one accessible Project in the common case (auto-selected the moment exactly one exists),
+ * and only shows a subtle secondary disambiguation control — never labeled "Project" — when a
+ * Client genuinely has more than one accessible Project to choose between. `useProjects()` already
+ * returns only Projects the viewer can legitimately access, so the Client list here is naturally
+ * restricted to Clients with at least one such Project — an Employee sees only their own accessible
+ * Projects' Clients, never the full Company directory. No Person/Client toggle like the internal
+ * report's dialog, since this report is always Client-scoped.
  */
 export function GenerateClientReportDialog({ open, onOpenChange }: GenerateClientReportDialogProps) {
   const { user } = useAuth();
@@ -179,46 +182,37 @@ export function GenerateClientReportDialog({ open, onOpenChange }: GenerateClien
             </Select>
             {companies.length === 0 && (
               <p className="text-xs text-muted-foreground">
-                No accessible Project yet — ask your supervisor if you need one to report against.
+                No accessible client yet — ask your supervisor if you need access to report against one.
               </p>
             )}
           </div>
 
-          {form.companyId && (
+          {form.companyId && projectsForCompany.length > 1 && (
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="client-report-project">Project</Label>
-              {projectsForCompany.length <= 1 ? (
-                <p className="rounded-md border bg-muted/40 px-3 py-2 text-sm">
-                  {projectsForCompany[0]?.name ?? "No accessible Project for this client."}
-                </p>
-              ) : (
-                <Select
-                  items={Object.fromEntries(projectsForCompany.map((p) => [p.id, p.name]))}
-                  value={form.projectId}
-                  onValueChange={(v) => setForm((p) => ({ ...p, projectId: v ?? "" }))}
-                >
-                  <SelectTrigger id="client-report-project" className="w-full">
-                    <SelectValue placeholder="Select a Project" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {projectsForCompany.map((p) => (
-                      <SelectItem key={p.id} value={p.id}>
-                        {p.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
-              {projectsForCompany.length > 1 && (
-                <p className="text-xs text-muted-foreground">
-                  This client has more than one Project — pick the one this report is for.
-                </p>
-              )}
+              <p className="text-xs text-muted-foreground">
+                This client has more than one active engagement — pick which one this report covers.
+              </p>
+              <Select
+                items={Object.fromEntries(projectsForCompany.map((p) => [p.id, p.name]))}
+                value={form.projectId}
+                onValueChange={(v) => setForm((p) => ({ ...p, projectId: v ?? "" }))}
+              >
+                <SelectTrigger id="client-report-project" className="w-full" aria-label="Select which engagement this report covers">
+                  <SelectValue placeholder="Select one" />
+                </SelectTrigger>
+                <SelectContent>
+                  {projectsForCompany.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           )}
 
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="client-report-range">Range</Label>
+            <Label htmlFor="client-report-range">Reporting Period</Label>
             <Select
               items={RANGE_LABEL_ITEMS}
               value={form.rangeLabel}

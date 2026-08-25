@@ -10,7 +10,6 @@ import { canPermanentlyDeleteClientReport, canRestoreClientReport } from "@/lib/
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ClientReportStatusBadge } from "@/components/client-reports/client-report-status-badge";
 import { STAGGER_ITEM_CLASS, staggerDelay } from "@/lib/stagger";
 
 function formatDate(value: string) {
@@ -76,16 +75,15 @@ export default function ClientReportsTrashPage() {
           <TableHeader>
             <TableRow>
               <TableHead className="font-mono text-xs tracking-wide text-muted-foreground uppercase">Client</TableHead>
-              <TableHead className="font-mono text-xs tracking-wide text-muted-foreground uppercase">Range</TableHead>
-              <TableHead className="font-mono text-xs tracking-wide text-muted-foreground uppercase">Status</TableHead>
+              <TableHead className="font-mono text-xs tracking-wide text-muted-foreground uppercase">Reporting Period</TableHead>
               <TableHead className="font-mono text-xs tracking-wide text-muted-foreground uppercase">Deleted</TableHead>
-              <TableHead className="font-mono text-xs tracking-wide text-muted-foreground uppercase" />
+              <TableHead className="font-mono text-xs tracking-wide text-muted-foreground uppercase">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {!isLoading && sorted.length === 0 && (
               <TableRow>
-                <TableCell colSpan={5} className="py-10 text-center text-sm text-muted-foreground">
+                <TableCell colSpan={4} className="py-10 text-center text-sm text-muted-foreground">
                   Trash is empty.
                 </TableCell>
               </TableRow>
@@ -94,9 +92,6 @@ export default function ClientReportsTrashPage() {
               <TableRow key={report.id} className={STAGGER_ITEM_CLASS} style={staggerDelay(i)}>
                 <TableCell className="font-medium">{report.companyLabel}</TableCell>
                 <TableCell className="text-muted-foreground">{formatRange(report.rangeStart, report.rangeEnd)}</TableCell>
-                <TableCell>
-                  <ClientReportStatusBadge status={report.status} />
-                </TableCell>
                 <TableCell className="text-muted-foreground">
                   {report.deletedAt ? formatDate(report.deletedAt) : "—"}
                 </TableCell>

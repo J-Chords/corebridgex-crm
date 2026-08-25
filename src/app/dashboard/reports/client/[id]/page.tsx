@@ -7,7 +7,6 @@ import { AlertCircle, ArrowLeft, Download, Plus, Printer, RotateCcw, Trash2 } fr
 import { useAuth } from "@/lib/auth/auth-context";
 import { useClientReport } from "@/lib/data/hooks/use-client-reports";
 import { useCompanyLookups } from "@/lib/data/hooks/use-companies";
-import { useProject } from "@/lib/data/hooks/use-projects";
 import { useUnsavedChangesGuard } from "@/lib/data/hooks/use-unsaved-changes-guard";
 import { clientReportProvider } from "@/lib/data/providers";
 import {
@@ -27,7 +26,6 @@ import { Button } from "@/components/ui/button";
 import { Alert, AlertTitle } from "@/components/ui/alert";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToastManager } from "@/components/ui/toast";
-import { ClientReportStatusBadge } from "@/components/client-reports/client-report-status-badge";
 import { ClientReportKpiBand } from "@/components/client-reports/client-report-kpi-band";
 import { ClientReportRail } from "@/components/client-reports/client-report-rail";
 import { ClientReportView } from "@/components/client-reports/client-report-view";
@@ -59,11 +57,6 @@ export default function ClientReportDetailPage({ params }: { params: Promise<{ i
   const { user } = useAuth();
   const { report, isLoading, notFound, refresh } = useClientReport(id);
   const { assignableStaff } = useCompanyLookups();
-  // Live lookup, not a stored snapshot field — Section 27's "clearly communicate Client, Project,
-  // Period, Status" only needs the Project's current name displayed, so this avoids a migration
-  // purely for presentation (unlike companyLabel/brandLabel, which snapshot for a real historical-
-  // accuracy reason elsewhere). A legacy report's `projectId` is null, so `project` is simply null.
-  const { project } = useProject(report?.projectId ?? "");
   const toastManager = useToastManager();
   const router = useRouter();
 
@@ -344,17 +337,13 @@ export default function ClientReportDetailPage({ params }: { params: Promise<{ i
           <div className="flex flex-col gap-2">
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="font-heading text-2xl font-semibold">{report.companyLabel}</h1>
-              <ClientReportStatusBadge status={report.status} />
               {isTrashed && <span className="text-xs text-destructive">In Trash</span>}
             </div>
             <p className="text-sm text-muted-foreground">
               {report.brandLabel}
-              {project ? ` · ${project.name}` : report.projectId === null ? " · Legacy report (no Project on file)" : ""}
               {" · "}
               {formatRange(report.rangeStart, report.rangeEnd)}
-              {report.status === "finalized" && report.finalizedAt
-                ? ` · Finalized ${formatDateTime(report.finalizedAt)}`
-                : ` · Generated ${formatDateTime(report.generatedAt)} by ${report.generatedByName}`}
+              {` · Generated ${formatDateTime(report.generatedAt)} by ${report.generatedByName}`}
             </p>
             {!isOwner && !isTrashed && canEditWording && (
               <p className="text-xs text-muted-foreground">
@@ -386,7 +375,6 @@ export default function ClientReportDetailPage({ params }: { params: Promise<{ i
         <h1 className="font-heading text-xl font-semibold">{report.companyLabel}</h1>
         <p className="text-sm text-muted-foreground">
           {report.brandLabel} accomplishments · {formatRange(report.rangeStart, report.rangeEnd)}
-          {report.status === "finalized" && report.finalizedAt ? ` · Finalized ${formatDate(report.finalizedAt)}` : ""}
         </p>
       </div>
 
