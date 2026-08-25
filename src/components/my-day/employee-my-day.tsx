@@ -22,7 +22,6 @@ import { UpcomingDeadlinesCard } from "@/components/dashboard/upcoming-deadlines
 import { STATUS_ORDER, EMPTY_BUCKET_COPY, StatusBucketButton } from "@/components/my-day/status-bucket-button";
 import { BucketTaskGrid } from "@/components/my-day/bucket-task-grid";
 import { TodayTimeCard } from "@/components/my-day/today-time-card";
-import { DailyVisitHoursCard } from "@/components/my-day/daily-visit-hours-card";
 import { DailyUpdateCard } from "@/components/my-day/daily-update-card";
 import { GreetingText } from "@/components/dashboard/greeting-heading";
 import { SearchTriggerBar } from "@/components/dashboard/search-trigger-bar";
@@ -142,8 +141,6 @@ export function EmployeeMyDay({ user }: EmployeeMyDayProps) {
         <TodayTimeCard className={STAGGER_ITEM_CLASS} style={staggerDelay(0)} />
         <UpcomingDeadlinesCard tasks={tasks} className={STAGGER_ITEM_CLASS} style={staggerDelay(1)} />
       </div>
-
-      <DailyVisitHoursCard className={STAGGER_ITEM_CLASS} style={staggerDelay(2)} />
 
       <SectionBreak num="02" label="Daily Update" />
 

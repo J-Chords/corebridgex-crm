@@ -15,7 +15,7 @@ export const NAV_SHORTCUTS: NavShortcut[] = [
   { key: "m", href: "/dashboard/my-day", label: "My Day" },
   { key: "c", href: "/dashboard/companies", label: "Companies" },
   { key: "t", href: "/dashboard/tasks", label: "Tasks", isVisible: canManageTasks },
-  { key: "r", href: "/dashboard/reports", label: "Reports" },
+  { key: "r", href: "/dashboard/reports/client", label: "Reports" },
 ];
 
 export interface ActionShortcut {

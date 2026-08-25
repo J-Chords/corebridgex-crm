@@ -5,7 +5,6 @@ import Link from "next/link";
 import type { User } from "@/lib/data/types";
 import type { TaskWithRelations } from "@/lib/data/providers/tasks-provider";
 import { computeWorkload, type WorkloadLevel } from "@/lib/data/workload";
-import { formatExpectedTime } from "@/lib/data/expected-time";
 import { Card, CardContent, CardHeader, CardTitle, CardAction } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -29,7 +28,7 @@ interface TeamWorkloadCardProps {
   tasks: TaskWithRelations[];
 }
 
-/** Per-person active-task load across a team — doubles as a lightweight capacity view. Real data only: no invented capacity target, just active task counts and their own expected-hours estimates. */
+/** Per-person active-task load across a team — doubles as a lightweight capacity view. Real data only: no invented capacity target, just active task counts. */
 export function TeamWorkloadCard({ members, tasks }: TeamWorkloadCardProps) {
   const [drawerOpen, setDrawerOpen] = useState(false);
 
@@ -37,14 +36,13 @@ export function TeamWorkloadCard({ members, tasks }: TeamWorkloadCardProps) {
     const activeTasks = tasks.filter(
       (t) => t.status !== "done" && t.assignees.some((a) => a.id === member.id)
     );
-    const expectedMinutes = activeTasks.reduce((sum, t) => sum + (t.expectedMinutes ?? 0), 0);
-    return { member, activeCount: activeTasks.length, expectedMinutes, workload: computeWorkload(activeTasks.length) };
+    return { member, activeCount: activeTasks.length, workload: computeWorkload(activeTasks.length) };
   });
 
   const maxCount = Math.max(1, ...rows.map((r) => r.activeCount));
   const overflow = rows.length - MAX_ROWS;
 
-  function renderRow({ member, activeCount, expectedMinutes, workload }: (typeof rows)[number], i: number) {
+  function renderRow({ member, activeCount, workload }: (typeof rows)[number], i: number) {
     const pct = Math.round((activeCount / maxCount) * 100);
     return (
       <Link
@@ -62,11 +60,7 @@ export function TeamWorkloadCard({ members, tasks }: TeamWorkloadCardProps) {
         <div className="min-w-0 flex-1">
           <div className="flex items-center justify-between gap-2">
             <span className="truncate text-sm font-medium">{member.fullName}</span>
-            <span className="shrink-0 font-mono text-xs text-muted-foreground">
-              {expectedMinutes > 0
-                ? `${activeCount} active · ${formatExpectedTime(expectedMinutes)} est.`
-                : `${activeCount} active`}
-            </span>
+            <span className="shrink-0 font-mono text-xs text-muted-foreground">{activeCount} active</span>
           </div>
           <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-muted">
             <div

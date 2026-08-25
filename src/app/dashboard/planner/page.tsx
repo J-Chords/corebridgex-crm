@@ -2,7 +2,8 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, CalendarDays, Grid3x3, LayoutList, Users } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { ArrowLeft, CalendarDays, Grid3x3, LayoutList, Sun, Users } from "lucide-react";
 import { useAuth } from "@/lib/auth/auth-context";
 import { useTasks } from "@/lib/data/hooks/use-tasks";
 import { useCompanies, useCompanyLookups } from "@/lib/data/hooks/use-companies";
@@ -20,7 +21,6 @@ import { todayDateOnly, formatDateOnly, startOfWeekMonday } from "@/lib/planner-
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { TaskFilterBar, type TaskFilterField } from "@/components/tasks/task-filter-bar";
-import { TaskDrawer } from "@/components/tasks/task-drawer";
 import { PlannerDayView } from "@/components/planner/planner-day-view";
 import { PlannerWeekView } from "@/components/planner/planner-week-view";
 import { PlannerMonthView } from "@/components/planner/planner-month-view";
@@ -31,11 +31,12 @@ type PlannerView = "day" | "week" | "month" | "group";
 
 export default function PlannerPage() {
   const { user } = useAuth();
-  const { tasks, isLoading, refresh } = useTasks();
+  const { tasks, isLoading } = useTasks();
   const { companies } = useCompanies();
   const { workstreams } = useWorkstreams();
   const { assignableStaff } = useCompanyLookups();
-  const { runningTimer, refresh: refreshRunningTimer } = useRunningTimer();
+  const { runningTimer } = useRunningTimer();
+  const router = useRouter();
 
   const [view, setView] = useState<PlannerView>("day");
   const [selectedDate, setSelectedDate] = useState(() => todayDateOnly());
@@ -43,9 +44,14 @@ export default function PlannerPage() {
   const [monthAnchor, setMonthAnchor] = useState(() => todayDateOnly());
   const [groupBy, setGroupBy] = useState<TaskGroupBy>("project");
   const [teamScope, setTeamScope] = useState(false);
-  const [drawerTaskId, setDrawerTaskId] = useState<string | null>(null);
 
   const { filters, patch } = useTaskFilters();
+
+  // Phase 11B — Planner is a dedicated work surface: clicking a Task/Subtask calendar item always
+  // navigates straight to its full page now, never opens the (Dashboard-only) Quick View Drawer.
+  function openTask(taskId: string) {
+    router.push(`/dashboard/tasks/${taskId}`);
+  }
 
   // Supervisor is an Employee first — Planner opens on their own operational planning by default.
   // "Team" is an explicit, additional scope they opt into, never the default; Employee has no team
@@ -131,6 +137,11 @@ export default function PlannerPage() {
               </Button>
             ))}
           </div>
+          {/* Phase 11B Section 7 — a dedicated link to My Day, distinct from "Today" (which keeps its
+           * conventional calendar meaning: jump this Planner view to today's date). */}
+          <Button size="sm" variant="outline" nativeButton={false} render={<Link href="/dashboard/my-day" />}>
+            <Sun /> Open My Day
+          </Button>
         </div>
       </div>
 
@@ -156,7 +167,7 @@ export default function PlannerPage() {
                 selectedDate={selectedDate}
                 onSelectedDateChange={setSelectedDate}
                 tasks={filteredTasks}
-                onOpen={setDrawerTaskId}
+                onOpen={openTask}
                 runningTaskId={runningTaskId}
                 showAssignee={showAssignee}
               />
@@ -167,7 +178,7 @@ export default function PlannerPage() {
                 onAnchorDateChange={setWeekAnchor}
                 onOpenDay={openDay}
                 tasks={filteredTasks}
-                onOpen={setDrawerTaskId}
+                onOpen={openTask}
                 runningTaskId={runningTaskId}
               />
             )}
@@ -177,7 +188,7 @@ export default function PlannerPage() {
                 onAnchorDateChange={setMonthAnchor}
                 onOpenDay={openDay}
                 tasks={filteredTasks}
-                onOpen={setDrawerTaskId}
+                onOpen={openTask}
                 runningTaskId={runningTaskId}
               />
             )}
@@ -186,7 +197,7 @@ export default function PlannerPage() {
                 groupBy={groupBy}
                 onGroupByChange={setGroupBy}
                 tasks={filteredTasks}
-                onOpen={setDrawerTaskId}
+                onOpen={openTask}
                 runningTaskId={runningTaskId}
                 showAssignee={showAssignee}
                 allowAssigneeGrouping={!employeeView}
@@ -194,18 +205,11 @@ export default function PlannerPage() {
             )}
 
             {view !== "group" && (
-              <PlannerUnscheduledPanel tasks={filteredTasks} onOpen={setDrawerTaskId} runningTaskId={runningTaskId} />
+              <PlannerUnscheduledPanel tasks={filteredTasks} onOpen={openTask} runningTaskId={runningTaskId} />
             )}
           </>
         )}
       </Card>
-
-      <TaskDrawer
-        taskId={drawerTaskId}
-        onOpenChange={(open) => !open && setDrawerTaskId(null)}
-        onChanged={refresh}
-        onTimerChanged={refreshRunningTimer}
-      />
     </div>
   );
 }

@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { CheckCircle2, ClipboardList, PencilLine, Plus, Search, Trash2 } from "lucide-react";
+import { ArrowLeft, CheckCircle2, ClipboardList, PencilLine, Search, Trash2 } from "lucide-react";
 import { useAuth } from "@/lib/auth/auth-context";
 import { useAccomplishmentsReports } from "@/lib/data/hooks/use-accomplishments-reports";
 import { isAccomplishmentsReportOwner, isSuperadmin, isSupervisor } from "@/lib/data/permissions";
@@ -11,7 +11,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { StatCard } from "@/components/ui/stat-card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { GenerateReportDialog } from "@/components/reports/generate-report-dialog";
 import { ReportsTable } from "@/components/reports/reports-table";
 import { ReportTypeTabs } from "@/components/reports/report-type-tabs";
 import { STAGGER_ITEM_CLASS, staggerDelay } from "@/lib/stagger";
@@ -29,7 +28,6 @@ const STATUS_FILTER_ITEMS: Record<StatusFilter, string> = {
 export default function ReportsPage() {
   const { user } = useAuth();
   const { reports, isLoading } = useAccomplishmentsReports();
-  const [generateOpen, setGenerateOpen] = useState(false);
   const [tab, setTab] = useState<ReportsTab>("mine");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
@@ -56,6 +54,26 @@ export default function ReportsPage() {
 
   if (!user) return null;
 
+  // Phase 11C — Internal (Accomplishments) Reports are no longer part of the normal Employee/
+  // Supervisor workflow; the sidebar "Reports" entry now goes straight to Client Reports. This
+  // legacy route/data/RLS is deliberately left fully intact for compatibility and history — only
+  // direct navigation here is now Superadmin-only, per the locked Phase 11C decision. Phase 11D
+  // additionally retired the ability to generate a NEW report from this page — it is now a
+  // Superadmin-only historical archive, viewing/finalizing/exporting existing reports only.
+  if (!isSuperadmin(user)) {
+    return (
+      <div className="flex flex-col items-start gap-3">
+        <Link href="/dashboard/reports/client" className="text-sm text-muted-foreground hover:underline">
+          <ArrowLeft className="mr-1 inline size-3.5" aria-hidden="true" />
+          Back to reports
+        </Link>
+        <p className="text-sm text-muted-foreground">
+          Internal Reports have moved — use Client Reports for the normal reporting workflow.
+        </p>
+      </div>
+    );
+  }
+
   const othersLabel = isSuperadmin(user) ? "All Reports" : "Team Reports";
   const draftCount = scoped.filter((r) => r.status === "draft").length;
   const finalizedCount = scoped.filter((r) => r.status === "finalized").length;
@@ -66,18 +84,16 @@ export default function ReportsPage() {
 
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="font-heading text-3xl font-semibold tracking-tight">Internal Reports</h1>
+          <h1 className="font-heading text-3xl font-semibold tracking-tight">Legacy Internal Reports</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Fully-attributed, internal-only — auto-drafted from tracked work, generate one, refine it, then
-            finalize. For the client-facing document, use Client Reports instead.
+            Historical archive only — the fully-attributed internal reporting workflow that Client Reports
+            has replaced. No new reports are generated here; existing reports remain viewable, exportable,
+            and (while still draft) editable.
           </p>
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" nativeButton={false} render={<Link href="/dashboard/reports/trash" />}>
             <Trash2 /> Trash
-          </Button>
-          <Button onClick={() => setGenerateOpen(true)}>
-            <Plus /> Generate report
           </Button>
         </div>
       </div>
@@ -139,8 +155,6 @@ export default function ReportsPage() {
           </>
         }
       />
-
-      <GenerateReportDialog open={generateOpen} onOpenChange={setGenerateOpen} />
     </div>
   );
 }

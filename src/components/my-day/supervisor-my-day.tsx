@@ -5,8 +5,6 @@ import { Plus } from "lucide-react";
 import type { User, TaskStatus } from "@/lib/data/types";
 import { useMyTasks, useTasks } from "@/lib/data/hooks/use-tasks";
 import { useCompanyLookups } from "@/lib/data/hooks/use-companies";
-import { useAccomplishmentsReports } from "@/lib/data/hooks/use-accomplishments-reports";
-import { isAccomplishmentsReportOwner } from "@/lib/data/permissions";
 import {
   useTaskFilters,
   filterTasks,
@@ -26,7 +24,6 @@ import { STATUS_ORDER, EMPTY_BUCKET_COPY, StatusBucketButton } from "@/component
 import { BucketTaskGrid } from "@/components/my-day/bucket-task-grid";
 import { NeedsAttentionStrip } from "@/components/my-day/needs-attention-strip";
 import { TodayTimeCard } from "@/components/my-day/today-time-card";
-import { DailyVisitHoursCard } from "@/components/my-day/daily-visit-hours-card";
 import { DailyUpdateCard } from "@/components/my-day/daily-update-card";
 import { GreetingText } from "@/components/dashboard/greeting-heading";
 import { SearchTriggerBar } from "@/components/dashboard/search-trigger-bar";
@@ -47,8 +44,7 @@ interface SupervisorMyDayProps {
  * status buckets, task-card grid, timer panel, Upcoming strip; supervisors do their own work too),
  * plus a small "Needs my attention" strip near the top surfacing team-level heads-up items. The
  * personal section is scoped to the supervisor's own tasks (`useMyTasks`); the attention strip is
- * scoped to their team (`useTasks` — already team-scoped by the existing task-visibility gate — and
- * `useAccomplishmentsReports`'s team partition, same as the Supervisor dashboard).
+ * scoped to their team (`useTasks` — already team-scoped by the existing task-visibility gate).
  */
 export function SupervisorMyDay({ user }: SupervisorMyDayProps) {
   const { tasks, isLoading: tasksLoading, refresh: refreshTasks } = useMyTasks();
@@ -60,12 +56,10 @@ export function SupervisorMyDay({ user }: SupervisorMyDayProps) {
 
   // Team-level data for the "Needs my attention" strip only — same sources/gates the Supervisor
   // dashboard already uses (useTasks() is team-scoped for a supervisor via the existing
-  // task-visibility gate; assignableStaff/reports are the same team partitions used there).
+  // task-visibility gate; assignableStaff is the same team partition used there).
   const { tasks: teamTasks } = useTasks();
   const { assignableStaff } = useCompanyLookups();
-  const { reports } = useAccomplishmentsReports();
   const teamMembers = assignableStaff.filter((u) => u.id !== user.id);
-  const teamReports = reports.filter((r) => !isAccomplishmentsReportOwner(user, r));
 
   const today = todayDateString();
 
@@ -105,7 +99,6 @@ export function SupervisorMyDay({ user }: SupervisorMyDayProps) {
       <NeedsAttentionStrip
         teamMembers={teamMembers}
         teamTasks={teamTasks}
-        teamReports={teamReports}
         className={STAGGER_ITEM_CLASS}
         style={staggerDelay(0)}
       />
@@ -165,8 +158,6 @@ export function SupervisorMyDay({ user }: SupervisorMyDayProps) {
         <TodayTimeCard className={STAGGER_ITEM_CLASS} style={staggerDelay(0)} />
         <UpcomingDeadlinesCard tasks={tasks} className={STAGGER_ITEM_CLASS} style={staggerDelay(1)} />
       </div>
-
-      <DailyVisitHoursCard className={STAGGER_ITEM_CLASS} style={staggerDelay(2)} />
 
       <SectionBreak num="02" label="Daily Update" />
 

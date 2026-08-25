@@ -9,9 +9,7 @@ import { useCompanies, useCompanyLookups } from "@/lib/data/hooks/use-companies"
 import { useWorkstreams } from "@/lib/data/hooks/use-workstreams";
 import { useMyTimeEntries } from "@/lib/data/hooks/use-time-entries";
 import { useElapsedSeconds } from "@/lib/data/hooks/use-elapsed-seconds";
-import { useAccomplishmentsReports } from "@/lib/data/hooks/use-accomplishments-reports";
 import { useRecentHandoffs } from "@/lib/data/hooks/use-task-handoffs";
-import { isAccomplishmentsReportOwner } from "@/lib/data/permissions";
 import { timeEntriesProvider } from "@/lib/data/providers";
 import { formatMinutes } from "@/lib/format-minutes";
 import { GreetingText } from "@/components/dashboard/greeting-heading";
@@ -29,7 +27,6 @@ import { TaskFormDialog } from "@/components/tasks/task-form-dialog";
 import { TaskStatusDonut } from "@/components/tasks/task-status-donut";
 import { TeamWorkloadCard } from "@/components/dashboard/team-workload-card";
 import { ClientHealthOverviewCard } from "@/components/dashboard/client-health-overview-card";
-import { ReportsAwaitingReviewCard } from "@/components/dashboard/reports-awaiting-review-card";
 import { RecurringWorkDueCard } from "@/components/dashboard/recurring-work-due-card";
 import { TeamActivityCard } from "@/components/dashboard/team-activity-card";
 import { UpcomingDeadlinesCard } from "@/components/dashboard/upcoming-deadlines-card";
@@ -67,7 +64,6 @@ export function SupervisorDashboard({ user }: { user: User }) {
   const { companies } = useCompanies();
   const { workstreams } = useWorkstreams();
   const { assignableStaff } = useCompanyLookups();
-  const { reports } = useAccomplishmentsReports();
   const { handoffs } = useRecentHandoffs();
   const [taskDialogOpen, setTaskDialogOpen] = useState(false);
   const [isStopping, setIsStopping] = useState(false);
@@ -77,7 +73,6 @@ export function SupervisorDashboard({ user }: { user: User }) {
   const [taskStatusFocusOpen, setTaskStatusFocusOpen] = useState(false);
 
   const teamMembers = assignableStaff.filter((u) => u.id !== user.id);
-  const teamReports = reports.filter((r) => !isAccomplishmentsReportOwner(user, r));
 
   const today = todayDateString();
   const sevenDaysAgoIso = new Date(new Date().getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
@@ -412,7 +407,6 @@ export function SupervisorDashboard({ user }: { user: User }) {
           <TeamActivityCard tasks={tasks} handoffs={handoffs} />
         </div>
         <div className={cn("flex flex-col gap-4", STAGGER_ITEM_CLASS)} style={staggerDelay(1)}>
-          <ReportsAwaitingReviewCard reports={teamReports} />
           <RecurringWorkDueCard workstreams={workstreams} />
           <UpcomingDeadlinesCard tasks={tasks} />
         </div>

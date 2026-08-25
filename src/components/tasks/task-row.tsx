@@ -11,7 +11,10 @@ interface TaskRowProps {
   task: TaskWithRelations;
   /** Defaults to the assignee names joined — pass e.g. the company name when that's more useful for the list's context. */
   subtitle?: string;
-  /** When provided, the row opens this handler (e.g. the Task Center's drawer) instead of navigating to the full Task route — every other embedding (dashboards, Company/Project/Workstream pages) omits this and keeps its original Link-navigate behavior unchanged. */
+  /** Phase 11B — when provided, the row opens this handler (Dashboard/Home's Quick View Drawer)
+   * instead of navigating to the full Task route. Every dedicated work surface (Tasks module,
+   * Subtasks section, Company/Project/Workstream pages) omits this and keeps its Link-navigate
+   * default per the locked navigation rule. */
   onOpen?: (taskId: string) => void;
 }
 

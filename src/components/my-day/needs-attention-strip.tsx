@@ -3,8 +3,8 @@
 import { useState } from "react";
 import type { CSSProperties } from "react";
 import Link from "next/link";
-import { AlertTriangle, Building2, ChevronDown, FileText, Sparkles } from "lucide-react";
-import type { User, AccomplishmentsReport } from "@/lib/data/types";
+import { AlertTriangle, Building2, ChevronDown, Sparkles } from "lucide-react";
+import type { User } from "@/lib/data/types";
 import type { TaskWithRelations } from "@/lib/data/providers/tasks-provider";
 import type { CompanyWithRelations } from "@/lib/data/providers/companies-provider";
 import { badgeVariants } from "@/components/ui/badge";
@@ -83,24 +83,9 @@ function buildStaffCategory(teamMembers: User[], teamTasks: TaskWithRelations[])
   };
 }
 
-function buildReportsCategory(teamReports: AccomplishmentsReport[]): AttentionCategory | null {
-  const items = [...teamReports]
-    .sort((a, b) => b.generatedAt.localeCompare(a.generatedAt))
-    .map((report) => ({ id: `report-${report.id}`, message: `${report.subjectLabel} report awaiting review`, href: `/dashboard/reports/${report.id}` }));
-  if (items.length === 0) return null;
-  return {
-    key: "reports",
-    icon: FileText,
-    tone: "neutral",
-    chipLabel: `${items.length} report${items.length === 1 ? "" : "s"} to review`,
-    items,
-  };
-}
-
 interface NeedsAttentionStripProps {
   teamMembers: User[];
   teamTasks: TaskWithRelations[];
-  teamReports: AccomplishmentsReport[];
   /** Org-wide-only signal (Superadmin) — omit for Supervisor, whose attention strip has no client-health scope. */
   atRiskCompanies?: CompanyWithRelations[];
   className?: string;
@@ -109,17 +94,20 @@ interface NeedsAttentionStripProps {
 
 /**
  * Compact, scalable heads-up strip for a Supervisor's or Superadmin's My Day — teammates (or org-wide
- * staff) with blocked/overdue work, reports awaiting review, and (Superadmin only) at-risk clients.
- * Collapsed by default to a row of small count chips ("3 at-risk clients · 5 teammates need
- * attention · 2 reports to review") regardless of how many items are behind each count — clicking a
- * chip expands just that category inline; the individual rows within still link out, same as before.
- * A single slim bar, never a full Card with its own header — this stays a quiet accent on an
- * otherwise personal-focused page, not a second dashboard.
+ * staff) with blocked/overdue work, and (Superadmin only) at-risk clients. Phase 11C removed the
+ * legacy Internal/Accomplishments Report "reports to review" category — that report type is no
+ * longer part of normal Employee/Supervisor workflow. Phase 11D: Client Report reviewers now locate
+ * Drafts via the ordinary Recent Reports Status filter on /dashboard/reports/client (there is no
+ * dedicated Review Queue anymore), so this strip never gained a Client Report category either.
+ * Collapsed by default to a row of small count chips regardless
+ * of how many items are behind each count — clicking a chip expands just that category inline; the
+ * individual rows within still link out, same as before. A single slim bar, never a full Card with
+ * its own header — this stays a quiet accent on an otherwise personal-focused page, not a second
+ * dashboard.
  */
 export function NeedsAttentionStrip({
   teamMembers,
   teamTasks,
-  teamReports,
   atRiskCompanies,
   className,
   style,
@@ -129,7 +117,6 @@ export function NeedsAttentionStrip({
   const categories = [
     buildAtRiskCategory(atRiskCompanies ?? []),
     buildStaffCategory(teamMembers, teamTasks),
-    buildReportsCategory(teamReports),
   ].filter((c): c is AttentionCategory => c !== null);
 
   if (categories.length === 0) {

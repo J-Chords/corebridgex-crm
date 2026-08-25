@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ArrowLeft, RotateCcw, Trash2 } from "lucide-react";
 import { useAuth } from "@/lib/auth/auth-context";
 import { useTrashedAccomplishmentsReports } from "@/lib/data/hooks/use-accomplishments-reports";
+import { isSuperadmin } from "@/lib/data/permissions";
 import { accomplishmentsReportProvider } from "@/lib/data/providers";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -20,8 +21,6 @@ import {
 import { ReportStatusBadge } from "@/components/reports/report-status-badge";
 import { STAGGER_ITEM_CLASS, staggerDelay } from "@/lib/stagger";
 
-const PURGE_AFTER_DAYS = 30;
-
 function formatDate(value: string) {
   return new Date(value).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
@@ -30,17 +29,27 @@ function formatRange(start: string, end: string) {
   return start === end ? formatDate(start) : `${formatDate(start)} – ${formatDate(end)}`;
 }
 
-function purgeDate(deletedAt: string) {
-  const d = new Date(deletedAt);
-  d.setDate(d.getDate() + PURGE_AFTER_DAYS);
-  return d.toISOString();
-}
-
 export default function TrashPage() {
   const { user } = useAuth();
   const { reports, isLoading, refresh } = useTrashedAccomplishmentsReports();
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null);
+
+  // Phase 11C — Internal (Accomplishments) Report Trash is legacy/history-only now; direct
+  // navigation here is Superadmin-only (soft-delete data/RLS untouched — UI-exposure gate only).
+  if (user && !isSuperadmin(user)) {
+    return (
+      <div className="flex flex-col items-start gap-3">
+        <Link href="/dashboard/reports/client" className="text-sm text-muted-foreground hover:underline">
+          <ArrowLeft className="mr-1 inline size-3.5" aria-hidden="true" />
+          Back to reports
+        </Link>
+        <p className="text-sm text-muted-foreground">
+          Internal Reports have moved — use Client Reports for the normal reporting workflow.
+        </p>
+      </div>
+    );
+  }
 
   const sorted = [...reports].sort((a, b) => (b.deletedAt ?? "").localeCompare(a.deletedAt ?? ""));
 
@@ -77,8 +86,8 @@ export default function TrashPage() {
         <div>
           <h1 className="font-heading text-2xl font-semibold">Trash</h1>
           <p className="text-sm text-muted-foreground">
-            Deleted reports stay here for {PURGE_AFTER_DAYS} days before they&apos;re permanently removed. Restore
-            a report to bring it back to the main list.
+            Deleted reports stay here until restored or permanently deleted. Restore a report to bring
+            it back to the main list.
           </p>
         </div>
       </div>
@@ -91,7 +100,7 @@ export default function TrashPage() {
               <TableHead className="font-mono text-xs tracking-wide text-muted-foreground uppercase">Kind</TableHead>
               <TableHead className="font-mono text-xs tracking-wide text-muted-foreground uppercase">Range</TableHead>
               <TableHead className="font-mono text-xs tracking-wide text-muted-foreground uppercase">Status</TableHead>
-              <TableHead className="font-mono text-xs tracking-wide text-muted-foreground uppercase">Auto-deletes</TableHead>
+              <TableHead className="font-mono text-xs tracking-wide text-muted-foreground uppercase">Deleted</TableHead>
               <TableHead className="font-mono text-xs tracking-wide text-muted-foreground uppercase" />
             </TableRow>
           </TableHeader>
@@ -116,7 +125,7 @@ export default function TrashPage() {
                   <ReportStatusBadge status={report.status} />
                 </TableCell>
                 <TableCell className="text-muted-foreground">
-                  {report.deletedAt ? formatDate(purgeDate(report.deletedAt)) : "—"}
+                  {report.deletedAt ? formatDate(report.deletedAt) : "—"}
                 </TableCell>
                 <TableCell>
                   <div className="flex items-center justify-end gap-2">

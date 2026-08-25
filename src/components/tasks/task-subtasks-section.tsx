@@ -13,21 +13,20 @@ import { AddSubtaskDialog } from "@/components/tasks/add-subtask-dialog";
 
 interface TaskSubtasksSectionProps {
   parentTask: TaskWithRelations;
-  /** Opens the given Subtask's own drawer, stacked on top of this one — see `TaskDrawer`'s doc
-   * comment for the reused Sheet-on-Sheet pattern. Omitted falls back to normal `Link` navigation
-   * (see `TaskRow`). */
-  onOpenSubtask?: (subtaskId: string) => void;
   onChanged: () => void;
 }
 
 /**
- * Phase 10 — the "Subtasks" section inside a TOP-LEVEL Task's drawer/detail page (Section 18). Never
- * rendered for a Subtask itself (a Subtask can't have children — see `TaskDrawer`, which only
- * mounts this when `task.parentTaskId` is null). Reuses `TaskRowList`/`TaskRow` verbatim — the same
- * shared row shape every other "list of tasks" surface in the app already uses — rather than a new
- * nested-tree component. Progress ("2/4 done") is derived here, never stored.
+ * Phase 10 — the "Subtasks" section inside a TOP-LEVEL Task's full detail page. Never rendered for a
+ * Subtask itself (a Subtask can't have children — see `TaskDetailContent`, which only mounts this
+ * when `task.parentTaskId` is null). Reuses `TaskRowList`/`TaskRow` verbatim — the same shared row
+ * shape every other "list of tasks" surface in the app already uses — rather than a new nested-tree
+ * component. Phase 11B: clicking a Subtask row here always navigates directly to that Subtask's own
+ * full page (`TaskRow`'s default `Link` behavior, `onOpen` omitted) — the old Sheet-on-Sheet nested
+ * Drawer pattern is gone now that the Drawer is Quick View only. Progress ("2/4 done") is derived
+ * here, never stored.
  */
-export function TaskSubtasksSection({ parentTask, onOpenSubtask, onChanged }: TaskSubtasksSectionProps) {
+export function TaskSubtasksSection({ parentTask, onChanged }: TaskSubtasksSectionProps) {
   const { user } = useAuth();
   const { subtasks, isLoading, refresh } = useSubtasks(parentTask.id);
   const [addOpen, setAddOpen] = useState(false);
@@ -69,12 +68,7 @@ export function TaskSubtasksSection({ parentTask, onOpenSubtask, onChanged }: Ta
         )}
       </CardHeader>
       <CardContent>
-        <TaskRowList
-          tasks={subtasks}
-          isLoading={isLoading}
-          emptyMessage="No Subtasks yet."
-          onOpen={onOpenSubtask}
-        />
+        <TaskRowList tasks={subtasks} isLoading={isLoading} emptyMessage="No Subtasks yet." />
       </CardContent>
       {canAddSubtask && (
         <AddSubtaskDialog open={addOpen} onOpenChange={setAddOpen} parentTask={parentTask} onCreated={handleCreated} />

@@ -32,9 +32,15 @@ type VisitFormState = { mode: "create" } | { mode: "edit"; visit: VisitEntry } |
  * actual hours yet and contributes zero, matching the Client Report evidence rule exactly. Both
  * Planned and Completed Visits are listed with their Agenda always visible (multi-line preserved via
  * `whitespace-pre-wrap` — it's a list of questions/items, not a paragraph); "+ Plan Client Visit" is
- * the primary action, mirrored verbatim for Employee and Supervisor (Section 23 — same self-service
- * Visit workflow for both). A Planned Visit exposes both "Record hours" and "Edit" (date/Agenda,
- * Project locked) — `AddVisitDialog` handles both planning and editing through one shared form.
+ * the primary action. A Planned Visit exposes both "Record hours" and "Edit" (date/Agenda, Project
+ * locked) — `AddVisitDialog` handles both planning and editing through one shared form.
+ *
+ * Phase 11D: this card is now rendered ONLY on Superadmin's My Day — Client Visits are a temporary
+ * v1 product policy of Superadmin-only, not a role Employee/Supervisor happen to lack access to at
+ * the data layer (`canEditVisitEntry`/`canViewVisitEntriesForUser` in `permissions.ts` are unchanged
+ * and remain ownership/team-scoped for any role). Superadmin keeps this exact self-service Plan/
+ * Complete workflow so it stays testable and the backend isn't orphaned, pending a future Account
+ * Manager capability design.
  */
 export function DailyVisitHoursCard({ className, style }: DailyVisitHoursCardProps) {
   const { entries, isLoading, refresh } = useMyVisitEntries();

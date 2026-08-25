@@ -1,267 +1,122 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
-import { Play, Pause, Square, Plus, Clock } from "lucide-react";
-import { useAuth } from "@/lib/auth/auth-context";
-import { useTaskTimeEntries, useRunningTimer, usePausedTimer } from "@/lib/data/hooks/use-time-entries";
-import { useElapsedSeconds } from "@/lib/data/hooks/use-elapsed-seconds";
-import { sumChainMinutes } from "@/lib/data/time-entry-chain";
-import { computeWorkstreamBudget } from "@/lib/data/time-budget";
-import { timeEntriesProvider } from "@/lib/data/providers";
-import { canLogTime } from "@/lib/data/permissions";
+import type { TaskTimerState } from "@/lib/data/hooks/use-task-timer";
 import { formatMinutes } from "@/lib/format-minutes";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
-import { BudgetBar } from "@/components/ui/budget-bar";
-import { ManualTimeEntryDialog } from "@/components/tasks/manual-time-entry-dialog";
 import { TimeEntryCorrectionInfo } from "@/components/time-entries/time-entry-correction-info";
 
 import { getInitials as initials } from "@/lib/initials";
 
+/** Collapsed-by-default row count — see Section 7A: a Task with many entries must not become a long page by default. */
+const COLLAPSED_COUNT = 3;
+
 function formatEntryWhen(startTime: string, endTime: string | null) {
   const start = new Date(startTime);
   if (!endTime) {
-    return start.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+    return start.toLocaleDateString("en-US", { month: "short", day: "numeric" });
   }
   const end = new Date(endTime);
   const sameDay = start.toDateString() === end.toDateString();
+  const dateFmt: Intl.DateTimeFormatOptions = { month: "short", day: "numeric" };
   const timeFmt: Intl.DateTimeFormatOptions = { hour: "numeric", minute: "2-digit" };
-  const dateFmt: Intl.DateTimeFormatOptions = { month: "short", day: "numeric", year: "numeric" };
   if (sameDay) {
-    return `${start.toLocaleDateString("en-US", dateFmt)}, ${start.toLocaleTimeString("en-US", timeFmt)}–${end.toLocaleTimeString("en-US", timeFmt)}`;
+    return `${start.toLocaleDateString("en-US", dateFmt)}   ${start.toLocaleTimeString("en-US", timeFmt)}–${end.toLocaleTimeString("en-US", timeFmt)}`;
   }
   return `${start.toLocaleString("en-US", { ...dateFmt, ...timeFmt })} – ${end.toLocaleString("en-US", { ...dateFmt, ...timeFmt })}`;
 }
 
-function formatElapsed(seconds: number) {
-  const m = Math.floor(seconds / 60);
-  const s = seconds % 60;
-  return `${m}:${String(s).padStart(2, "0")}`;
-}
-
 interface TaskTimeTrackingProps {
-  taskId: string;
-  companyId: string;
-  assigneeIds: string[];
-  /** Normalized to minutes — see `src/lib/data/expected-time.ts`. Null when this task has no estimate set, in which case a plain total (no budget bar) still shows. */
-  expectedMinutes: number | null;
-  /** Starting a timer can flip a Todo task to In Progress server-side — call this afterward so the parent page's own copy of the task (its status badge) doesn't go stale until the next full reload. Optional since not every embedding context needs it. */
-  onTaskChanged?: () => void;
-  /**
-   * Fires after every successful Start/Pause/Resume/Stop — separate from `onTaskChanged` because a
-   * parent can care about "the running-timer state changed" (e.g. the Task Center's own `Running`
-   * quick filter, which reads a *different* `useRunningTimer()` instance than this component's own
-   * local one) without caring whether the Task's own fields changed. This component's own timer
-   * controls already refresh correctly via its local `refreshRunningTimer` regardless of whether a
-   * caller passes this — it exists purely to let an ancestor invalidate its own separate copy of
-   * "is anything running" derived state. Optional since not every embedding context has one.
-   */
-  onTimerChanged?: () => void;
+  /** The ONE shared timer instance the page owns (`useTaskTimer`) — this component never calls
+   * `useTaskTimeEntries`/`useRunningTimer`/`usePausedTimer` itself, so it can never race or disagree
+   * with the `TaskTimerControl` cluster in the page header reading the same object. */
+  timer: TaskTimerState;
 }
 
-export function TaskTimeTracking({ taskId, companyId, assigneeIds, expectedMinutes, onTaskChanged, onTimerChanged }: TaskTimeTrackingProps) {
-  const { user } = useAuth();
-  const { entries, isLoading, refresh } = useTaskTimeEntries(taskId);
-  const { runningTimer, refresh: refreshRunningTimer } = useRunningTimer();
-  const { pausedTimer, refresh: refreshPausedTimer } = usePausedTimer();
-  const [manualDialogOpen, setManualDialogOpen] = useState(false);
-  const [isBusy, setIsBusy] = useState(false);
+/**
+ * "Time Activity" — history/read-only presentation only. Every primary time ACTION (Start/Pause/
+ * Resume/Stop, Log time, the live clock, and the cross-task running/paused-elsewhere notices) lives
+ * exclusively in the header's `TaskTimerControl` cluster now — this section never duplicates any of
+ * that operational UI, it only reflects the underlying Time Entry history. Collapsed to the latest
+ * `COLLAPSED_COUNT` entries by default (Section 7A/7G) — the rest render only once "View all" is
+ * clicked, so a Task with a long history doesn't cost extra DOM/render weight until asked for.
+ */
+export function TaskTimeTracking({ timer }: TaskTimeTrackingProps) {
+  const { entries, isLoading, totalMinutes, billableMinutes, nonBillableMinutes, isRunningHere } = timer;
+  const [showAll, setShowAll] = useState(false);
 
-  const isRunningHere = runningTimer?.taskId === taskId;
-  // Entries are sorted newest-first, so this task's own latest entry (if any) tells us whether it has
-  // a resumable pause — a running entry never has `pausedForResume: true`, so this can't collide with
-  // `isRunningHere`.
-  const latestForTask = entries[0] ?? null;
-  const isPausedHere = latestForTask?.pausedForResume === true;
-  const baseSeconds = isRunningHere ? sumChainMinutes(entries, runningTimer.continuesFromEntryId) * 60 : 0;
-  const elapsedSeconds = useElapsedSeconds(isRunningHere ? runningTimer.startTime : null, baseSeconds);
-
-  if (!user) return null;
-  const canLog = canLogTime(user, { assigneeIds });
-
-  async function refreshAll() {
-    await Promise.all([refresh(), refreshRunningTimer(), refreshPausedTimer()]);
-  }
-
-  async function handleStart() {
-    if (!user) return;
-    setIsBusy(true);
-    try {
-      await timeEntriesProvider.startTimer(user, taskId);
-      await refreshAll();
-      onTaskChanged?.();
-      onTimerChanged?.();
-    } finally {
-      setIsBusy(false);
-    }
-  }
-
-  async function handleStop() {
-    if (!user || !runningTimer) return;
-    setIsBusy(true);
-    try {
-      await timeEntriesProvider.stopTimer(user, runningTimer.id);
-      await refreshAll();
-      onTaskChanged?.();
-      onTimerChanged?.();
-    } finally {
-      setIsBusy(false);
-    }
-  }
-
-  async function handlePause() {
-    if (!user || !runningTimer) return;
-    setIsBusy(true);
-    try {
-      await timeEntriesProvider.pauseTimer(user, runningTimer.id);
-      await refreshAll();
-      onTaskChanged?.();
-      onTimerChanged?.();
-    } finally {
-      setIsBusy(false);
-    }
-  }
-
-  async function handleResume(entryId: string) {
-    if (!user) return;
-    setIsBusy(true);
-    try {
-      await timeEntriesProvider.resumeTimer(user, entryId);
-      await refreshAll();
-      onTaskChanged?.();
-      onTimerChanged?.();
-    } finally {
-      setIsBusy(false);
-    }
-  }
-
-  const completed = entries.filter((e) => e.durationMinutes !== null);
-  const totalMinutes = completed.reduce((sum, e) => sum + (e.durationMinutes ?? 0), 0);
-  const billableMinutes = completed.filter((e) => e.billable).reduce((sum, e) => sum + (e.durationMinutes ?? 0), 0);
-  const nonBillableMinutes = totalMinutes - billableMinutes;
-  const budget = computeWorkstreamBudget({ expectedMinutes, actualMinutes: totalMinutes, billableMinutes, nonBillableMinutes });
+  const distinctContributorIds = new Set(entries.map((e) => e.user.id));
+  const showContributorNames = distinctContributorIds.size > 1;
+  const visibleEntries = showAll ? entries : entries.slice(0, COLLAPSED_COUNT);
+  const hiddenCount = entries.length - visibleEntries.length;
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-col gap-3 rounded-lg border bg-muted/20 p-4">
-        <span className="font-mono text-[10px] tracking-wider text-muted-foreground uppercase">Timer</span>
-        <div className="flex flex-wrap items-center gap-3">
-          {canLog &&
-            (isRunningHere ? (
-              <>
-                <Button variant="outline" onClick={handlePause} disabled={isBusy}>
-                  <Pause /> Pause
-                </Button>
-                <Button variant="destructive" onClick={handleStop} disabled={isBusy}>
-                  <Square /> Stop
-                </Button>
-                <span className="font-mono text-sm text-muted-foreground">{formatElapsed(elapsedSeconds)}</span>
-              </>
-            ) : isPausedHere ? (
-              <Button onClick={() => handleResume(latestForTask!.id)} disabled={isBusy}>
-                <Play /> Resume
-              </Button>
-            ) : (
-              <Button onClick={handleStart} disabled={isBusy}>
-                <Play /> Start timer
-              </Button>
-            ))}
-          {canLog && !isRunningHere && !isPausedHere && runningTimer && (
+    <div className="flex flex-col gap-3">
+      {totalMinutes > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <span className="text-sm">
+            Total <span className="font-medium text-foreground">{formatMinutes(totalMinutes)}</span>
+          </span>
+          {!isRunningHere && (
             <span className="text-xs text-muted-foreground">
-              You have a timer running on <span className="font-medium text-foreground">{runningTimer.task.title}</span> —
-              starting one here will pause it.
+              {formatMinutes(billableMinutes)} billable
+              {nonBillableMinutes > 0 ? ` · ${formatMinutes(nonBillableMinutes)} non-billable` : ""}
             </span>
           )}
-          {canLog && !isRunningHere && !isPausedHere && !runningTimer && pausedTimer && pausedTimer.taskId !== taskId && (
-            <span className="flex items-center gap-2 text-xs text-muted-foreground">
-              <span className="font-medium text-foreground">{pausedTimer.task.title}</span> is paused (
-              {formatMinutes(pausedTimer.durationMinutes ?? 0)} so far) —{" "}
-              <Link href={`/dashboard/tasks/${pausedTimer.taskId}`} className="text-primary hover:underline">
-                go resume it
-              </Link>
-            </span>
-          )}
-          {canLog && (
-            <Button variant="outline" onClick={() => setManualDialogOpen(true)}>
-              <Plus /> Log time
-            </Button>
-          )}
-        </div>
-        {expectedMinutes == null && (
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Clock className="size-3.5" aria-hidden="true" />
-            {totalMinutes > 0 ? (
-              <>
-                <span className="font-medium text-foreground">Actual: {formatMinutes(totalMinutes)}</span>
-                <span>
-                  ({formatMinutes(billableMinutes)} billable
-                  {nonBillableMinutes > 0 ? `, ${formatMinutes(nonBillableMinutes)} non-billable` : ""})
-                </span>
-              </>
-            ) : (
-              <span>No time logged yet.</span>
-            )}
-          </div>
-        )}
-      </div>
-
-      {expectedMinutes != null && (
-        <div className="flex flex-col gap-3 rounded-lg border bg-muted/20 p-4">
-          <span className="font-mono text-[10px] tracking-wider text-muted-foreground uppercase">Estimate vs. actual</span>
-          <BudgetBar budget={budget} />
         </div>
       )}
 
-      <div className="flex flex-col gap-3">
-        <span className="font-mono text-[10px] tracking-wider text-muted-foreground uppercase">Time entries</span>
-        {!isLoading && entries.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No time logged on this task yet.</p>
-        ) : (
-        <ul className="flex flex-col gap-1">
-          {entries.map((entry, i) => (
-            <li key={entry.id}>
-              {i > 0 && <Separator className="my-3" />}
-              <div className="flex items-start gap-3">
-                <Avatar className="size-7 shrink-0">
-                  <AvatarFallback className="text-[10px]">{initials(entry.user.fullName)}</AvatarFallback>
-                </Avatar>
-                <div className="flex flex-1 flex-col gap-0.5">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-sm font-medium">{entry.user.fullName}</span>
-                    {entry.durationMinutes === null ? (
-                      <Badge variant="info">Running…</Badge>
-                    ) : entry.pausedForResume ? (
-                      <Badge variant="warning">Paused — {formatMinutes(entry.durationMinutes)}</Badge>
-                    ) : (
-                      <span className="text-sm text-muted-foreground">{formatMinutes(entry.durationMinutes)}</span>
-                    )}
-                    <Badge variant={entry.billable ? "neutral" : "warning"}>
-                      {entry.billable ? "Billable" : "Non-billable"}
-                    </Badge>
+      {!isLoading && entries.length === 0 ? (
+        <p className="text-sm text-muted-foreground">No time logged on this task yet.</p>
+      ) : (
+        <>
+          <ul className="flex flex-col gap-1">
+            {visibleEntries.map((entry, i) => (
+              <li key={entry.id}>
+                {i > 0 && <Separator className="my-2" />}
+                <div className="flex items-start gap-2">
+                  {showContributorNames && (
+                    <Avatar className="size-6 shrink-0">
+                      <AvatarFallback className="text-[10px]">{initials(entry.user.fullName)}</AvatarFallback>
+                    </Avatar>
+                  )}
+                  <div className="flex flex-1 flex-col gap-0.5">
+                    <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-sm">
+                      {showContributorNames && <span className="font-medium">{entry.user.fullName}</span>}
+                      <span className="text-muted-foreground">{formatEntryWhen(entry.startTime, entry.endTime)}</span>
+                      {entry.durationMinutes === null ? (
+                        <Badge variant="info">Running…</Badge>
+                      ) : entry.pausedForResume ? (
+                        <Badge variant="warning">Paused — {formatMinutes(entry.durationMinutes)}</Badge>
+                      ) : (
+                        <span className="font-medium">{formatMinutes(entry.durationMinutes)}</span>
+                      )}
+                      <Badge variant={entry.billable ? "neutral" : "warning"}>
+                        {entry.billable ? "Billable" : "Non-billable"}
+                      </Badge>
+                    </div>
+                    {entry.notes && <p className="text-xs text-muted-foreground">{entry.notes}</p>}
+                    <TimeEntryCorrectionInfo timeEntryId={entry.id} correctionCount={entry.correctionCount} />
                   </div>
-                  <span className="text-xs text-muted-foreground">
-                    {formatEntryWhen(entry.startTime, entry.endTime)}
-                  </span>
-                  {entry.notes && <p className="mt-1 text-sm text-foreground">{entry.notes}</p>}
-                  <TimeEntryCorrectionInfo timeEntryId={entry.id} correctionCount={entry.correctionCount} />
                 </div>
-              </div>
-            </li>
-          ))}
-        </ul>
-        )}
-      </div>
-
-      <ManualTimeEntryDialog
-        open={manualDialogOpen}
-        onOpenChange={setManualDialogOpen}
-        taskId={taskId}
-        companyId={companyId}
-        onSaved={refreshAll}
-      />
+              </li>
+            ))}
+          </ul>
+          {hiddenCount > 0 && (
+            <Button variant="ghost" size="sm" className="w-fit" onClick={() => setShowAll(true)}>
+              View all {entries.length} entries
+            </Button>
+          )}
+          {showAll && entries.length > COLLAPSED_COUNT && (
+            <Button variant="ghost" size="sm" className="w-fit" onClick={() => setShowAll(false)}>
+              View fewer
+            </Button>
+          )}
+        </>
+      )}
     </div>
   );
 }

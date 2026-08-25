@@ -8,7 +8,7 @@ import { useAuth } from "@/lib/auth/auth-context";
 import { useAccomplishmentsReport } from "@/lib/data/hooks/use-accomplishments-reports";
 import { useUnsavedChangesGuard } from "@/lib/data/hooks/use-unsaved-changes-guard";
 import { accomplishmentsReportProvider } from "@/lib/data/providers";
-import { canReopenAccomplishmentsReport, isAccomplishmentsReportOwner, isEmployee } from "@/lib/data/permissions";
+import { canReopenAccomplishmentsReport, isAccomplishmentsReportOwner, isEmployee, isSuperadmin } from "@/lib/data/permissions";
 import { visibleBrandSections } from "@/lib/data/accomplishments-report-totals";
 import type { AccomplishmentsReportActivityLine, AccomplishmentsReportBrandSection } from "@/lib/data/types";
 import { Button } from "@/components/ui/button";
@@ -84,6 +84,22 @@ export default function ReportDetailPage({ params }: { params: Promise<{ id: str
   }, [report]);
 
   if (!user) return null;
+
+  // Phase 11C — Internal (Accomplishments) Report detail is legacy/history-only now; direct
+  // navigation here is Superadmin-only (data/RLS untouched — this is a UI-exposure gate only).
+  if (!isSuperadmin(user)) {
+    return (
+      <div className="flex flex-col items-start gap-3">
+        <Link href="/dashboard/reports/client" className="text-sm text-muted-foreground hover:underline">
+          <ArrowLeft className="mr-1 inline size-3.5" aria-hidden="true" />
+          Back to reports
+        </Link>
+        <p className="text-sm text-muted-foreground">
+          Internal Reports have moved — use Client Reports for the normal reporting workflow.
+        </p>
+      </div>
+    );
+  }
 
   if (isLoading) {
     return <p className="text-sm text-muted-foreground">Loading…</p>;

@@ -5,8 +5,6 @@ import { Plus } from "lucide-react";
 import type { User, TaskStatus } from "@/lib/data/types";
 import { useMyTasks, useTasks } from "@/lib/data/hooks/use-tasks";
 import { useCompanies, useCompanyLookups } from "@/lib/data/hooks/use-companies";
-import { useAccomplishmentsReports } from "@/lib/data/hooks/use-accomplishments-reports";
-import { isAccomplishmentsReportOwner } from "@/lib/data/permissions";
 import {
   useTaskFilters,
   filterTasks,
@@ -26,6 +24,7 @@ import { STATUS_ORDER, EMPTY_BUCKET_COPY, StatusBucketButton } from "@/component
 import { BucketTaskGrid } from "@/components/my-day/bucket-task-grid";
 import { NeedsAttentionStrip } from "@/components/my-day/needs-attention-strip";
 import { TodayTimeCard } from "@/components/my-day/today-time-card";
+import { DailyVisitHoursCard } from "@/components/my-day/daily-visit-hours-card";
 import { DailyUpdateCard } from "@/components/my-day/daily-update-card";
 import { GreetingText } from "@/components/dashboard/greeting-heading";
 import { SearchTriggerBar } from "@/components/dashboard/search-trigger-bar";
@@ -45,10 +44,9 @@ interface SuperadminMyDayProps {
  * Superadmin's redesigned My Day — the same personal "today" hub as `EmployeeMyDay`/`SupervisorMyDay`
  * (superadmins do their own work too), plus the same "Needs my attention" strip pattern Supervisor
  * introduced, fed org-wide data instead of team-scoped data: every active staff member (not just
- * direct reports), org-wide tasks, every non-owned report (the same "All Reports" partition
- * `/dashboard/reports` already uses), and — Superadmin-only — at-risk clients from the existing
- * Client Health Score. No new visibility rules: every source here is exactly what the Superadmin
- * dashboard already fetches, since a superadmin's existing gates already resolve to "everything."
+ * direct reports), org-wide tasks, and — Superadmin-only — at-risk clients from the existing Client
+ * Health Score. No new visibility rules: every source here is exactly what the Superadmin dashboard
+ * already fetches, since a superadmin's existing gates already resolve to "everything."
  */
 export function SuperadminMyDay({ user }: SuperadminMyDayProps) {
   const { tasks, isLoading: tasksLoading, refresh: refreshTasks } = useMyTasks();
@@ -63,9 +61,7 @@ export function SuperadminMyDay({ user }: SuperadminMyDayProps) {
   const { tasks: orgTasks } = useTasks();
   const { companies } = useCompanies();
   const { assignableStaff } = useCompanyLookups();
-  const { reports } = useAccomplishmentsReports();
   const staff = assignableStaff.filter((u) => u.id !== user.id);
-  const otherReports = reports.filter((r) => !isAccomplishmentsReportOwner(user, r));
 
   const today = todayDateString();
 
@@ -105,7 +101,6 @@ export function SuperadminMyDay({ user }: SuperadminMyDayProps) {
       <NeedsAttentionStrip
         teamMembers={staff}
         teamTasks={orgTasks}
-        teamReports={otherReports}
         atRiskCompanies={companies}
         className={STAGGER_ITEM_CLASS}
         style={staggerDelay(0)}
@@ -166,6 +161,12 @@ export function SuperadminMyDay({ user }: SuperadminMyDayProps) {
         <TodayTimeCard className={STAGGER_ITEM_CLASS} style={staggerDelay(0)} />
         <UpcomingDeadlinesCard tasks={tasks} className={STAGGER_ITEM_CLASS} style={staggerDelay(1)} />
       </div>
+
+      {/* Phase 11D — Client Visits are temporarily Superadmin-only (Employee/Supervisor product
+       * policy, not a server-side restriction — see permissions.ts). Superadmin keeps this exact
+       * self-service Plan/Complete workflow so the feature stays testable and reusable for a future
+       * Account Manager capability, rather than being orphaned. */}
+      <DailyVisitHoursCard className={STAGGER_ITEM_CLASS} style={staggerDelay(2)} />
 
       <SectionBreak num="02" label="Daily Update" />
 

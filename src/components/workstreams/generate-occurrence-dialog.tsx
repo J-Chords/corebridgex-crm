@@ -9,7 +9,6 @@ import { workstreamsProvider, tasksProvider } from "@/lib/data/providers";
 import type { WorkstreamWithRelations } from "@/lib/data/providers/workstreams-provider";
 import type { TaskWithRelations } from "@/lib/data/providers/tasks-provider";
 import { addDaysToDateString, daysBetween, formatPeriodLabel, formatRecurrenceDate } from "@/lib/data/recurrence";
-import { formatExpectedTime } from "@/lib/data/expected-time";
 import {
   Dialog,
   DialogContent,
@@ -183,7 +182,6 @@ export function GenerateOccurrenceDialog({
   }
 
   const canPreview = Boolean(form.name.trim() && form.leadUserId && form.startDate);
-  const totalExpectedMinutes = sourceTasks.reduce((sum, t) => sum + (t.expectedMinutes ?? 0), 0);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -301,7 +299,7 @@ export function GenerateOccurrenceDialog({
 
               <div>
                 <p className="mb-2 text-sm font-medium">
-                  {`${sourceTasks.length} task${sourceTasks.length === 1 ? "" : "s"} will be created, reusing this workstream's current tasks and assignees${totalExpectedMinutes > 0 ? ` · ${formatExpectedTime(totalExpectedMinutes)} expected total` : ""}`}
+                  {`${sourceTasks.length} task${sourceTasks.length === 1 ? "" : "s"} will be created, reusing this workstream's current tasks and assignees`}
                 </p>
                 {sourceTasks.length === 0 ? (
                   <p className="text-xs text-muted-foreground">
@@ -319,7 +317,6 @@ export function GenerateOccurrenceDialog({
                             <span className="text-xs text-muted-foreground">
                               {task.checklistItems.length} checklist item{task.checklistItems.length === 1 ? "" : "s"}
                               {dueDate && ` · Due ${formatRecurrenceDate(dueDate)}`}
-                              {task.expectedMinutes != null && ` · ${formatExpectedTime(task.expectedMinutes)}`}
                               {task.assignees.length > 0 &&
                                 ` · ${task.assignees.map((a) => a.fullName).join(", ")}`}
                             </span>

@@ -4,21 +4,15 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth/auth-context";
 import { tasksProvider } from "@/lib/data/providers";
 import { canProgressTask } from "@/lib/data/permissions";
-import { formatExpectedTime } from "@/lib/data/expected-time";
 import { formatMinutes } from "@/lib/format-minutes";
 import { useSubtasks } from "@/lib/data/hooks/use-tasks";
+import type { TaskTimerState } from "@/lib/data/hooks/use-task-timer";
 import type { TaskStatus } from "@/lib/data/types";
 import type { TaskTimeRollup, TaskWithRelations } from "@/lib/data/providers/tasks-provider";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { TaskStatusBadge, TASK_STATUS_SELECT_ITEMS } from "@/components/tasks/task-status-badge";
+import { TaskPriorityBadge } from "@/components/tasks/task-priority-badge";
+import { TaskStatusRail } from "@/components/tasks/task-status-rail";
 import { TaskChecklist } from "@/components/tasks/task-checklist";
 import { TaskTimeTracking } from "@/components/tasks/task-time-tracking";
 import { TaskHandoffSection } from "@/components/tasks/task-handoff-section";
@@ -49,26 +43,24 @@ function formatDateTime(value: string | null) {
 interface TaskDetailContentProps {
   task: TaskWithRelations;
   onChanged: () => void;
-  /** Forwarded straight to TaskTimeTracking's own onTimerChanged — see that prop's doc comment.
-   * Optional: the full `/dashboard/tasks/[id]` route has no separate "Running" derived view to
-   * invalidate, so it simply omits this; TaskDrawer (Task Center) passes its own. */
-  onTimerChanged?: () => void;
-  /** Phase 10 — opens the given Subtask's own drawer, stacked on top of this one (TaskDrawer passes
-   * its own). Omitted by the full `/dashboard/tasks/[id]` route, whose Subtasks section rows then
-   * fall back to normal `Link` navigation instead — same optional-callback convention `TaskRow`
-   * already uses everywhere else. */
-  onOpenSubtask?: (subtaskId: string) => void;
+  /** The ONE shared timer instance the full page owns (`useTaskTimer`) — also read by the page's
+   * own `TaskTimerControl` in the header, so the two can never race or disagree. */
+  timer: TaskTimerState;
 }
 
 /**
- * The real Task detail body — Details/Status/Checklist, Assignees, Time Tracking, Handoffs, Notes —
- * shared verbatim between the full `/dashboard/tasks/[id]` route and the Task Center's drawer
- * (Phase 8C), so the two never diverge. Each embedded section (TaskChecklist/TaskTimeTracking/
- * TaskHandoffSection/NotesSection) already owns its own data fetching and Card chrome; this
- * component only supplies the Details/Assignees layout around them. No fake tabs — every section
- * here is backed by a real, already-shipped provider capability.
+ * The real Task detail body for the full `/dashboard/tasks/[id]` route. Phase 11B split this off
+ * from the Task Drawer, which is now its own separate, much lighter Quick View (`task-drawer.tsx`)
+ * — the two intentionally no longer share this component. Phase 11A redesign: the old large
+ * Details+Assignees two-card grid is now one compact metadata rail (status rail, priority, due
+ * date, activity, checklist progress, and a compact assignee summary — hidden entirely when the
+ * only assignee is the viewer themselves, since ownership is then obvious from context) directly
+ * under the header. The full Checklist gets its own card lower down. Each embedded section
+ * (TaskChecklist/TaskTimeTracking/TaskHandoffSection/NotesSection) already owns its own data
+ * fetching and Card chrome. No fake tabs — every section here is backed by a real, already-shipped
+ * provider capability.
  */
-export function TaskDetailContent({ task, onChanged, onTimerChanged, onOpenSubtask }: TaskDetailContentProps) {
+export function TaskDetailContent({ task, onChanged, timer }: TaskDetailContentProps) {
   const { user } = useAuth();
   const { handoffs, refresh: refreshHandoffs } = useTaskHandoffs(task.id);
   const { notes, refresh: refreshNotes } = useTaskNotes(task.id);
@@ -121,129 +113,71 @@ export function TaskDetailContent({ task, onChanged, onTimerChanged, onOpenSubta
     await applyStatusChange(status as TaskStatus);
   }
 
+  const checklistTotal = task.checklistItems.length;
+  const checklistDone = task.checklistItems.filter((ci) => ci.isDone).length;
+  const isSelfOnlyAssignee = task.assignees.length === 1 && task.assignees[0].id === user.id;
+
   return (
     <div className="flex flex-col gap-4">
-      <div className="grid gap-4 lg:grid-cols-3">
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle className="text-base">Details</CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-4">
-            <p className="text-sm text-muted-foreground whitespace-pre-wrap">
-              {task.description || "No description provided."}
-            </p>
+      <Card>
+        <CardContent className="flex flex-col gap-4 pt-6">
+          <TaskStatusRail
+            status={task.status}
+            onChange={canProgress ? handleStatusChange : undefined}
+            disabled={statusPending}
+          />
 
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div>
-                <span className="font-mono text-xs tracking-wide text-muted-foreground uppercase">Status</span>
-                <div className="mt-1.5">
-                  {canProgress ? (
-                    <Select
-                      items={TASK_STATUS_SELECT_ITEMS}
-                      value={task.status}
-                      onValueChange={handleStatusChange}
-                      disabled={statusPending}
-                    >
-                      <SelectTrigger aria-label="Change status" className="w-full">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="todo">To do</SelectItem>
-                        <SelectItem value="in-progress">In progress</SelectItem>
-                        <SelectItem value="blocked">Blocked</SelectItem>
-                        <SelectItem value="waiting-on-client">Waiting on client</SelectItem>
-                        <SelectItem value="done">Done</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  ) : (
-                    <TaskStatusBadge status={task.status} />
-                  )}
-                </div>
-              </div>
-              <div>
-                <span className="font-mono text-xs tracking-wide text-muted-foreground uppercase">Due date</span>
-                <p className="mt-1.5 text-sm">{formatDate(task.dueDate)}</p>
-              </div>
-              <div>
-                <span className="font-mono text-xs tracking-wide text-muted-foreground uppercase">Activity</span>
-                <p className="mt-1.5 text-sm">
-                  {task.activity ? (
-                    `${task.activity.departmentName}: ${task.activity.name}`
-                  ) : (
-                    <span className="text-muted-foreground">Not tagged</span>
-                  )}
-                </p>
-              </div>
-              <div>
-                <span className="font-mono text-xs tracking-wide text-muted-foreground uppercase">Expected time</span>
-                <p className="mt-1.5 text-sm">
-                  {task.expectedMinutes != null ? (
-                    formatExpectedTime(task.expectedMinutes)
-                  ) : (
-                    <span className="text-muted-foreground">Not set</span>
-                  )}
-                </p>
-              </div>
-            </div>
-
-            <div>
-              <span className="font-mono text-xs tracking-wide text-muted-foreground uppercase">Checklist</span>
-              <div className="mt-2">
-                <TaskChecklist
-                  taskId={task.id}
-                  items={task.checklistItems}
-                  assigneeIds={assigneeIds}
-                  onChanged={onChanged}
-                />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Assignees</CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-3">
-            {task.assignees.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No one assigned.</p>
-            ) : (
-              task.assignees.map((assignee) => (
-                <div key={assignee.id} className="flex items-center gap-3">
-                  <Avatar className="size-8">
-                    <AvatarFallback className="text-xs">{initials(assignee.fullName)}</AvatarFallback>
-                  </Avatar>
-                  <div className="flex flex-col">
-                    <span className="text-sm font-medium">{assignee.fullName}</span>
-                    <span className="text-xs text-muted-foreground capitalize">{assignee.role}</span>
-                  </div>
-                </div>
-              ))
-            )}
-
-            <div className="mt-2 flex flex-col gap-1.5 border-t pt-3 text-xs text-muted-foreground">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted-foreground">
+            <TaskPriorityBadge priority={task.priority} />
+            <span>Due {formatDate(task.dueDate)}</span>
+            <span>
+              {task.activity ? `${task.activity.departmentName}: ${task.activity.name}` : "No activity tagged"}
+            </span>
+            {checklistTotal > 0 && (
               <span>
-                Created by <span className="font-medium text-foreground">{task.createdBy.fullName}</span>
-                {task.selfAdded && " (self-added)"}
+                Checklist {checklistDone}/{checklistTotal}
               </span>
-              <span>{formatDateTime(task.createdAt)}</span>
-              {task.statusChangedBy && (
-                <>
-                  <span className="mt-2">
-                    Status last changed by{" "}
-                    <span className="font-medium text-foreground">{task.statusChangedBy.fullName}</span>
+            )}
+            {!isSelfOnlyAssignee &&
+              (task.assignees.length === 0 ? (
+                <span>Unassigned</span>
+              ) : (
+                <span className="flex items-center gap-1.5">
+                  <span className="flex -space-x-2">
+                    {task.assignees.map((assignee) => (
+                      <Avatar key={assignee.id} size="sm" className="ring-2 ring-card">
+                        <AvatarFallback className="text-[0.65rem]">{initials(assignee.fullName)}</AvatarFallback>
+                      </Avatar>
+                    ))}
                   </span>
-                  <span>{formatDateTime(task.statusChangedAt)}</span>
-                </>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+                  {task.assignees.length === 1 ? task.assignees[0].fullName : `${task.assignees.length} assignees`}
+                </span>
+              ))}
+          </div>
+
+          {task.description && (
+            <p className="text-sm text-muted-foreground whitespace-pre-wrap">{task.description}</p>
+          )}
+
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t pt-3 text-xs text-muted-foreground">
+            <span>
+              Created by <span className="font-medium text-foreground">{task.createdBy.fullName}</span>
+              {task.selfAdded && " (self-added)"} · {formatDateTime(task.createdAt)}
+            </span>
+            {task.statusChangedBy && (
+              <span>
+                Status last changed by{" "}
+                <span className="font-medium text-foreground">{task.statusChangedBy.fullName}</span> ·{" "}
+                {formatDateTime(task.statusChangedAt)}
+              </span>
+            )}
+          </div>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Time Tracking</CardTitle>
+          <CardTitle className="text-base">Time Activity</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
           {!task.parentTaskId && timeRollup && timeRollup.subtasksMinutes > 0 && (
@@ -257,20 +191,25 @@ export function TaskDetailContent({ task, onChanged, onTimerChanged, onOpenSubta
               </span>
             </div>
           )}
-          <TaskTimeTracking
+          <TaskTimeTracking timer={timer} />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Checklist</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <TaskChecklist
             taskId={task.id}
-            companyId={task.companyId}
+            items={task.checklistItems}
             assigneeIds={assigneeIds}
-            expectedMinutes={task.expectedMinutes}
-            onTaskChanged={onChanged}
-            onTimerChanged={onTimerChanged}
+            onChanged={onChanged}
           />
         </CardContent>
       </Card>
 
-      {!task.parentTaskId && (
-        <TaskSubtasksSection parentTask={task} onOpenSubtask={onOpenSubtask} onChanged={onChanged} />
-      )}
+      {!task.parentTaskId && <TaskSubtasksSection parentTask={task} onChanged={onChanged} />}
 
       <TaskHandoffSection taskId={task.id} handoffs={handoffs} onChanged={refreshHandoffs} />
 

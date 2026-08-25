@@ -1,8 +1,8 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, ChevronDown, LayoutGrid, List as ListIcon, Play, Plus } from "lucide-react";
 import { useAuth } from "@/lib/auth/auth-context";
 import { useTasks } from "@/lib/data/hooks/use-tasks";
@@ -37,7 +37,6 @@ import { SavedViewsBar } from "@/components/tasks/saved-views-bar";
 import { TaskGroupBySelect } from "@/components/tasks/task-group-by-select";
 import { TaskGridCard } from "@/components/tasks/task-grid-card";
 import { TaskBoard } from "@/components/tasks/task-board";
-import { TaskDrawer } from "@/components/tasks/task-drawer";
 import { ChecklistProgress } from "@/components/ui/checklist-progress";
 import { TaskFormDialog } from "@/components/tasks/task-form-dialog";
 import { STAGGER_ITEM_CLASS, staggerDelay } from "@/lib/stagger";
@@ -71,22 +70,14 @@ function TasksPageContent() {
   const { companies } = useCompanies();
   const { workstreams } = useWorkstreams();
   const { assignableStaff } = useCompanyLookups();
-  const { runningTimer, refresh: refreshRunningTimer } = useRunningTimer();
+  const { runningTimer } = useRunningTimer();
   const router = useRouter();
-  const pathname = usePathname();
   const searchParams = useSearchParams();
 
   const [createOpen, setCreateOpen] = useState(false);
   const [view, setView] = useState<TaskView>("list");
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
   const { filters, patch } = useTaskFilters();
-  // Whether THIS page instance pushed the drawer's own history entry — if so, closing goes back to
-  // undo exactly that; if the drawer was instead opened by landing directly on a shared `?task=`
-  // URL, there's nothing of ours to go back to, so closing replaces the URL instead. The smallest
-  // robust option after weighing a heavier client-routing/modal-route setup: a single query param
-  // the drawer's own open state derives from, so a refresh never corrupts the underlying list/board
-  // (it's just re-derived from the same URL), and a shared deep link always opens the right Task.
-  const pushedDrawerEntry = useRef(false);
 
   // Seeds this page's filter from a KPI-card "view full details" link (e.g. /dashboard/tasks?status=done)
   // — one-time on mount, same `patch` the filter bar itself already calls, no change to useTaskFilters.
@@ -127,25 +118,11 @@ function TasksPageContent() {
     if (next.status !== "all" && runningOnly) setRunningOnly(false);
   }
 
-  const drawerTaskId = searchParams.get("task");
-
-  function openDrawer(taskId: string) {
-    const params = new URLSearchParams(searchParams.toString());
-    params.set("task", taskId);
-    pushedDrawerEntry.current = true;
-    router.push(`${pathname}?${params.toString()}`);
-  }
-
-  function closeDrawer() {
-    if (pushedDrawerEntry.current) {
-      pushedDrawerEntry.current = false;
-      router.back();
-      return;
-    }
-    const params = new URLSearchParams(searchParams.toString());
-    params.delete("task");
-    const query = params.toString();
-    router.replace(query ? `${pathname}?${query}` : pathname);
+  // Phase 11B — the dedicated Tasks module always navigates straight to the full Task page now
+  // (locked navigation rule: Dashboard/Home is the only surface that opens Quick View). This
+  // replaced the old `?task=` query-param Drawer mechanism entirely.
+  function openTask(taskId: string) {
+    router.push(`/dashboard/tasks/${taskId}`);
   }
 
   // "active" doesn't map onto a single TaskStatus value (it spans several), so it's a separate,
@@ -202,7 +179,7 @@ function TasksPageContent() {
         key={task.id}
         className={cn("cursor-pointer", STAGGER_ITEM_CLASS)}
         style={staggerDelay(index)}
-        onClick={() => openDrawer(task.id)}
+        onClick={() => openTask(task.id)}
       >
         <TableCell className="max-w-64 font-medium whitespace-normal">
           <span className="inline-flex items-center gap-1.5 hover:underline">
@@ -339,7 +316,7 @@ function TasksPageContent() {
           <p className="p-6 text-sm text-muted-foreground">Loading tasks…</p>
         ) : view === "board" ? (
           <div className="p-4">
-            <TaskBoard user={user} tasks={filtered} onChanged={refresh} runningTaskId={runningTaskId} onOpenTask={openDrawer} />
+            <TaskBoard user={user} tasks={filtered} onChanged={refresh} runningTaskId={runningTaskId} />
           </div>
         ) : filters.groupBy === "none" ? (
           <Table>
@@ -399,7 +376,6 @@ function TasksPageContent() {
                           className={STAGGER_ITEM_CLASS}
                           style={staggerDelay(i)}
                           isRunning={task.id === runningTaskId}
-                          onOpen={openDrawer}
                         />
                       ))}
                     </div>
@@ -412,12 +388,6 @@ function TasksPageContent() {
       </Card>
 
       <TaskFormDialog open={createOpen} onOpenChange={setCreateOpen} mode="create" onSaved={refresh} />
-      <TaskDrawer
-        taskId={drawerTaskId}
-        onOpenChange={(open) => !open && closeDrawer()}
-        onChanged={refresh}
-        onTimerChanged={refreshRunningTimer}
-      />
     </div>
   );
 }

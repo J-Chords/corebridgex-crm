@@ -22,7 +22,6 @@ import { TaskAssigneeChips } from "@/components/tasks/task-assignee-chips";
 import { ChecklistBuilder, type ChecklistBuilderRow } from "@/components/tasks/checklist-builder";
 import { ReusePastTaskDialog } from "@/components/tasks/reuse-past-task-dialog";
 import { WorkstreamFormDialog } from "@/components/workstreams/workstream-form-dialog";
-import { ExpectedTimeInput } from "@/components/ui/expected-time-input";
 import { Sheet, SheetContent, SheetFooter, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -669,15 +668,6 @@ export function TaskFormDialog({
                       type="date"
                       value={form.dueDate}
                       onChange={(e) => setForm((p) => ({ ...p, dueDate: e.target.value }))}
-                    />
-                  </div>
-                  <div className="col-span-1 flex flex-col gap-1.5 sm:col-span-2">
-                    <Label htmlFor="task-expected-time">Expected time</Label>
-                    <ExpectedTimeInput
-                      key={task?.id ?? "new"}
-                      id="task-expected-time"
-                      valueMinutes={form.expectedMinutes}
-                      onChange={(expectedMinutes) => setForm((p) => ({ ...p, expectedMinutes }))}
                     />
                   </div>
                 </div>

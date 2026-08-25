@@ -36,7 +36,10 @@ interface TaskGridCardProps {
   onExitEnd?: () => void;
   /** True when this task has the current viewer's own active running timer — shows a small "Running" cue alongside the status dot. */
   isRunning?: boolean;
-  /** When provided, the card opens this handler (e.g. the Task Center's drawer) instead of navigating to the full Task route — My Day's bucket grid omits this and keeps its original Link-navigate behavior unchanged. */
+  /** Phase 11B — when provided, the card opens this handler (Dashboard/Home's Quick View Drawer)
+   * instead of navigating to the full Task route. Every dedicated work surface (Tasks module, My
+   * Day) omits this and keeps its Link-navigate-to-full-page default per the locked navigation
+   * rule. */
   onOpen?: (taskId: string) => void;
 }
 

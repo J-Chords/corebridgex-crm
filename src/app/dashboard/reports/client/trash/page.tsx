@@ -13,20 +13,12 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { ClientReportStatusBadge } from "@/components/client-reports/client-report-status-badge";
 import { STAGGER_ITEM_CLASS, staggerDelay } from "@/lib/stagger";
 
-const PURGE_AFTER_DAYS = 30;
-
 function formatDate(value: string) {
   return new Date(value).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
 function formatRange(start: string, end: string) {
   return start === end ? formatDate(start) : `${formatDate(start)} – ${formatDate(end)}`;
-}
-
-function purgeDate(deletedAt: string) {
-  const d = new Date(deletedAt);
-  d.setDate(d.getDate() + PURGE_AFTER_DAYS);
-  return d.toISOString();
 }
 
 export default function ClientReportsTrashPage() {
@@ -73,8 +65,8 @@ export default function ClientReportsTrashPage() {
         <div>
           <h1 className="font-heading text-2xl font-semibold">Trash</h1>
           <p className="text-sm text-muted-foreground">
-            Deleted client reports stay here for {PURGE_AFTER_DAYS} days before they&apos;re permanently removed.
-            Restore a report to bring it back to the main list.
+            Deleted client reports stay here until restored or permanently deleted. Restore a report to
+            bring it back to the main list.
           </p>
         </div>
       </div>
@@ -86,7 +78,7 @@ export default function ClientReportsTrashPage() {
               <TableHead className="font-mono text-xs tracking-wide text-muted-foreground uppercase">Client</TableHead>
               <TableHead className="font-mono text-xs tracking-wide text-muted-foreground uppercase">Range</TableHead>
               <TableHead className="font-mono text-xs tracking-wide text-muted-foreground uppercase">Status</TableHead>
-              <TableHead className="font-mono text-xs tracking-wide text-muted-foreground uppercase">Auto-deletes</TableHead>
+              <TableHead className="font-mono text-xs tracking-wide text-muted-foreground uppercase">Deleted</TableHead>
               <TableHead className="font-mono text-xs tracking-wide text-muted-foreground uppercase" />
             </TableRow>
           </TableHeader>
@@ -106,7 +98,7 @@ export default function ClientReportsTrashPage() {
                   <ClientReportStatusBadge status={report.status} />
                 </TableCell>
                 <TableCell className="text-muted-foreground">
-                  {report.deletedAt ? formatDate(purgeDate(report.deletedAt)) : "—"}
+                  {report.deletedAt ? formatDate(report.deletedAt) : "—"}
                 </TableCell>
                 <TableCell>
                   <div className="flex items-center justify-end gap-2">

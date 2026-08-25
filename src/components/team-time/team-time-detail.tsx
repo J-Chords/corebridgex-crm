@@ -7,8 +7,6 @@ import type { User } from "@/lib/data/types";
 import type { TimeEntryWithUserAndTask } from "@/lib/data/providers/time-entries-provider";
 import { ROLE_LABELS } from "@/lib/data/role-labels";
 import { formatMinutes } from "@/lib/format-minutes";
-import { computeWorkstreamBudget } from "@/lib/data/time-budget";
-import { bestUnitFor, formatMinutesAs } from "@/lib/data/expected-time";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -22,29 +20,6 @@ import { getInitials as initials } from "@/lib/initials";
 
 function formatTime(iso: string) {
   return new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
-}
-
-/**
- * The Supervisor review signal, per the product rule: never one entry's own duration against the
- * task's estimate — always the task's *cumulative* actual (every completed entry, any assignee)
- * against its estimate. `entry.task.actualMinutes` already carries that cumulative total from the
- * provider. Reuses the exact same `computeWorkstreamBudget` status/percent math every other
- * estimate-vs-actual display in the app already uses — no new thresholds, no new colors. Null when
- * the task has no estimate set — going over is informational only, never shown as an error.
- */
-function taskEstimateContext(expectedMinutes: number | null, taskActualMinutes: number): string | null {
-  if (expectedMinutes == null) return null;
-  const budget = computeWorkstreamBudget({
-    expectedMinutes,
-    actualMinutes: taskActualMinutes,
-    billableMinutes: taskActualMinutes,
-    nonBillableMinutes: 0,
-  });
-  const unit = bestUnitFor(expectedMinutes);
-  const actualLabel = formatMinutesAs(taskActualMinutes, unit);
-  const estimatedLabel = formatMinutesAs(expectedMinutes, unit);
-  const percentLabel = budget.status === "over" ? `${(budget.percent ?? 100) - 100}% over` : `${budget.percent}%`;
-  return `Task total: ${actualLabel} · Est. ${estimatedLabel} · ${percentLabel}`;
 }
 
 interface TeamTimeDetailProps {
@@ -107,7 +82,6 @@ export function TeamTimeDetail({ person, entries, viewerId, onChanged, className
         ) : (
           <ul className="flex flex-col gap-1">
             {entries.map((entry, i) => {
-              const estimateContext = taskEstimateContext(entry.task.expectedMinutes, entry.task.actualMinutes);
               const canCorrectThisEntry =
                 canCorrectThisPerson && entry.durationMinutes !== null;
               return (
@@ -144,7 +118,6 @@ export function TeamTimeDetail({ person, entries, viewerId, onChanged, className
                       {formatTime(entry.startTime)}
                       {entry.endTime ? `–${formatTime(entry.endTime)}` : ""}
                     </span>
-                    {estimateContext && <span className="text-xs text-muted-foreground">{estimateContext}</span>}
                     {entry.notes && <p className="mt-1 text-sm text-foreground">{entry.notes}</p>}
                     <TimeEntryCorrectionInfo timeEntryId={entry.id} correctionCount={entry.correctionCount} />
                   </div>

@@ -5,7 +5,6 @@ import type { TaskWithRelations } from "@/lib/data/providers/tasks-provider";
 import { TaskStatusBadge, STATUS_COLOR_VAR } from "@/components/tasks/task-status-badge";
 import { TaskPriorityBadge } from "@/components/tasks/task-priority-badge";
 import { Badge } from "@/components/ui/badge";
-import { formatExpectedTime } from "@/lib/data/expected-time";
 import { cn } from "@/lib/utils";
 import { getInitials as initials } from "@/lib/initials";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -20,7 +19,7 @@ interface TaskSummaryItemProps {
   isRunning?: boolean;
   /** "chip" is the ultra-compact form used inside a Planner Week/Month calendar cell (title + one
    * status dot); "row" is the fuller form (title, Project → Service → Activity, status, priority,
-   * assignee, expected time, running cue) used by Planner Day/Group and Dashboard KPI/list-widget
+   * assignee, running cue) used by Planner Day/Group and Dashboard KPI/list-widget
    * detail drawers. */
   variant?: "row" | "chip";
   showAssignee?: boolean;
@@ -85,9 +84,6 @@ export function TaskSummaryItem({ task, onOpen, isRunning, variant = "row", show
       </p>
       <div className="flex flex-wrap items-center gap-2">
         <TaskStatusBadge status={task.status} />
-        {task.expectedMinutes != null && (
-          <span className="text-xs text-muted-foreground">{formatExpectedTime(task.expectedMinutes)}</span>
-        )}
         {showDueDate && task.dueDate && (
           <span className={cn("text-xs font-medium", isOverdue ? "text-warning" : "text-muted-foreground")}>
             Due {formatDueDate(task.dueDate)}

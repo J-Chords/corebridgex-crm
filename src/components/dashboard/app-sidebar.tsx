@@ -66,7 +66,7 @@ export function AppSidebar() {
     { href: "/dashboard/tasks", label: "Tasks", icon: ListChecks },
     { href: "/dashboard/planner", label: "Planner", icon: CalendarDays },
     ...(user && isSuperadmin(user) ? [{ href: "/dashboard/companies", label: "Companies", icon: Building2 }] : []),
-    { href: "/dashboard/reports", label: "Reports", icon: ClipboardList },
+    { href: "/dashboard/reports/client", label: "Reports", icon: ClipboardList },
     ...(user && canViewTeamUpdatesPage(user)
       ? [{ href: "/dashboard/team-updates", label: "Team Updates", icon: Users }]
       : []),

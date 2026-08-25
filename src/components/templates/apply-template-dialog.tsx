@@ -11,7 +11,6 @@ import { templatesProvider } from "@/lib/data/providers";
 import type { TemplateWithTasks } from "@/lib/data/providers/templates-provider";
 import type { CompanyWithRelations } from "@/lib/data/providers/companies-provider";
 import { addDaysToDateString, formatPeriodLabel } from "@/lib/data/recurrence";
-import { formatExpectedTime } from "@/lib/data/expected-time";
 import {
   Dialog,
   DialogContent,
@@ -54,12 +53,6 @@ function formatDate(dateStr: string) {
 
 function suggestWorkstreamName(template: TemplateWithTasks, company: CompanyWithRelations, startDate: string) {
   return `${template.name} — ${company.name} (${formatPeriodLabel(startDate, template.recurrenceFrequency)})`;
-}
-
-/** Null when no template task carries an estimate — otherwise the sum, treating unestimated tasks as 0. */
-function totalExpectedMinutes(template: TemplateWithTasks): number | null {
-  if (!template.tasks.some((tt) => tt.expectedMinutes != null)) return null;
-  return template.tasks.reduce((sum, tt) => sum + (tt.expectedMinutes ?? 0), 0);
 }
 
 function emptyForm(defaultLeadId: string) {
@@ -284,8 +277,6 @@ export function ApplyTemplateDialog({ open, onOpenChange, company, onApplied }: 
                   <p className="mb-2 text-sm font-medium">
                     {template.tasks.length} task{template.tasks.length === 1 ? "" : "s"} will be created (unassigned
                     — assign owners from the workstream afterward)
-                    {totalExpectedMinutes(template) != null &&
-                      ` · ${formatExpectedTime(totalExpectedMinutes(template))} expected total`}
                   </p>
                   <div className="flex flex-col gap-1">
                     {template.tasks.map((tt, i) => (
@@ -298,7 +289,6 @@ export function ApplyTemplateDialog({ open, onOpenChange, company, onApplied }: 
                               {tt.checklistItems.length} checklist item{tt.checklistItems.length === 1 ? "" : "s"}
                               {tt.dueDaysAfterStart != null &&
                                 ` · Due ${formatDate(addDaysToDateString(form.startDate, tt.dueDaysAfterStart))}`}
-                              {tt.expectedMinutes != null && ` · ${formatExpectedTime(tt.expectedMinutes)}`}
                             </span>
                           </div>
                           {tt.defaultOwnerRole && (

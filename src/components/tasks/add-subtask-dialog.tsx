@@ -12,7 +12,6 @@ import { TaskStatusPicker } from "@/components/tasks/task-status-picker";
 import { TaskPriorityPicker } from "@/components/tasks/task-priority-picker";
 import { TaskAssigneeChips } from "@/components/tasks/task-assignee-chips";
 import { ChecklistBuilder, type ChecklistBuilderRow } from "@/components/tasks/checklist-builder";
-import { ExpectedTimeInput } from "@/components/ui/expected-time-input";
 import {
   Dialog,
   DialogContent,
@@ -52,8 +51,9 @@ function emptyForm(userId: string) {
  * `TaskFormDialog`: no Client/Project/Service/Activity fields at all, since a Subtask always
  * inherits its parent's context server-side (`createSubtask`) — the Employee never reselects them.
  * Every other meaningful field an ordinary Task supports (title, description, assignees, status,
- * priority, due date, expected time, checklist) is still here, reusing the exact same widgets
- * `TaskFormDialog` uses so the two never drift in what a Task/Subtask can carry.
+ * priority, due date, checklist) is still here, reusing the exact same widgets `TaskFormDialog`
+ * uses so the two never drift in what a Task/Subtask can carry. Expected time is deliberately
+ * absent — Phase 11A removed it from the Task/Subtask product surface entirely.
  */
 export function AddSubtaskDialog({ open, onOpenChange, parentTask, onCreated }: AddSubtaskDialogProps) {
   const { user } = useAuth();
@@ -164,14 +164,6 @@ export function AddSubtaskDialog({ open, onOpenChange, parentTask, onCreated }: 
                 type="date"
                 value={form.dueDate}
                 onChange={(e) => setForm((p) => ({ ...p, dueDate: e.target.value }))}
-              />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="subtask-expected-time">Expected time</Label>
-              <ExpectedTimeInput
-                id="subtask-expected-time"
-                valueMinutes={form.expectedMinutes}
-                onChange={(expectedMinutes) => setForm((p) => ({ ...p, expectedMinutes }))}
               />
             </div>
           </div>

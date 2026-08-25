@@ -122,7 +122,10 @@ interface TaskBoardProps {
   onChanged: () => void;
   /** The task (if any) carrying the current viewer's own active running timer — drives each card's "Running" cue. */
   runningTaskId?: string | null;
-  /** When provided, a card click calls this instead of navigating to the full Task route — the Task Center passes its own drawer-open handler; any other future embedding that omits this keeps the original router.push behavior. */
+  /** Phase 11B — when provided, a card click calls this instead of navigating to the full Task
+   * route (Dashboard/Home's Quick View Drawer). The dedicated Tasks module (Board view) omits this
+   * and keeps the default `router.push` navigate-to-full-page behavior per the locked navigation
+   * rule. */
   onOpenTask?: (taskId: string) => void;
 }
 
