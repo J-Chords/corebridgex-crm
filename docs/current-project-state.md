@@ -32,6 +32,37 @@ Then inspect the current repository (git status, the relevant source files) befo
 
 **Current:**
 ```
+checkpoint: complete phase 12b task workspace redesign
+2026-08-26
+Phase 12B in its entirety — split rail+nav sidebar, Board-default (later
+corrected to List-default per final feedback) Tasks Home with a
+consolidated compact toolbar, reference-driven Board/List/Checklist
+redesigns, two-column full Task page with a compact status control and a
+quieter right-rail Time Tracking widget, redesigned Subtask rows, Quick
+View visual alignment, the narrow assigned-Employee checklist-add RPC
+(add_task_checklist_item, already applied to the hosted project), and the
+final correction pass (List default, Service/Project-context UX fix,
+Service multi-Activity confirmation, Employee create/edit form Assignee
+simplification) — manually accepted in full by the user ("12B correction
+final pass"). Phase 12B is COMPLETE. See git log for the exact commit
+hash; pushed to GitHub.
+```
+
+**Previous:**
+```
+fef02bef625537cecf5648939e12fad3d5a31a6b
+checkpoint: complete phase 12a report semantics baseline
+Phase 12A in its entirety — Client Report Draft/Finalized status removed
+from normal UI, Client/Reporting Period/Services terminology
+standardized, Project removed from the visible generation flow while
+staying Project-scoped internally, and a read-only Task experience
+inventory across all three roles (docs/phase-12-task-redesign-baseline.md)
+— manually accepted in full by the user. Phase 12A is COMPLETE. Pushed to
+GitHub.
+```
+
+**Earlier:**
+```
 checkpoint: complete phase 11 workflow simplification
 2026-08-25
 Phase 11 in its entirety — 11A (Task Experience Redesign & Time
@@ -45,41 +76,10 @@ runtime error was investigated pre-checkpoint and root-caused to
 transient clock skew on Supabase's own hosted GoTrue/PostgREST
 infrastructure, not application code or the local machine; confirmed
 resolved by the user reloading the authenticated app. Phase 11 is
-COMPLETE. See git log for the exact commit hash; pushed to GitHub.
+COMPLETE. Pushed to GitHub.
 ```
 
-**Previous:**
-```
-checkpoint: complete phase 10 one-level subtasks
-2026-08-24
-Phase 10 in its entirety — One-Level Subtasks (base slice), hierarchy-
-authorization hardening (can_access_task_directly separation), migration
-canonicalization (can_user_access_company/can_user_access_task Project-
-access parity fix), and a post-implementation TaskDrawer infinite-
-recursion fix (nested Subtask drawer now lazily mounted, only when
-subtaskDrawerId != null) — manually accepted in full by the user against
-the complete acceptance checklist (login/dashboard stability, Task/
-Subtask creation, inherited context, stacked drawer, recursion-fix
-regression check, one-level enforcement, independent statuses, parent
-Done warning, checklist safety, independent time tracking + rollup,
-list/Board/Planner presentation, hierarchy vs. direct-access permission
-checks, Supervisor behavior, full Task/Subtask pages, final navigation
-sweep). Phase 10 is COMPLETE. Pushed to GitHub.
-```
-
-**Earlier:**
-```
-1c45d688c94336c158cc00c60ad79030586d9c36
-checkpoint: complete phase 9 reporting automation
-Phase 9 in its entirety — 9A (Reporting Automation Audit), 9B (Reporting
-Foundation + Client Report Correctness), 9C (Daily Update Automation), 9D
-(Weekly Client Report Generation), 9E (Sparing Efficiency Review +
-Finalization), 9F (Daily Visit Hours + Recurring Client Report Schedules,
-including the locked Plan -> Complete Visit workflow correction and final
-UX polish) — manually accepted in full by the user ("Phase 9 passed").
-```
-
-Before that: `67f8972d862e9a8ea57c280219a2f19cc5b45284` (Phase 10, complete); `a77785c57c3e5424fa63b4221ee9523a688ffae9` (Phase 8, complete); `299499948621f0d0d4742529d1e658d91b8eaf11` (Phase 9B), `a2f295f94a40e5c446e371a4b76cac9fcfb7dcdf` (Phase 9C), `39614fa660529c72d891c37ec573758599462559` (Phase 9D) — each a Phase 9 sub-checkpoint folded into the single final Phase 9 commit above; `ddc8da638205eb34436060dc003622e8a44b36c9` (Phase 8C), `77dbab9ed37766541aa94ddd053cae76a7e9dc40` (Phase 8B), `9b5a2d8789f9ea2909b2e37bbb7b368e656c68ee` (Phase 8A), `c63e86d03fafeb516846bb65759cfdacf19ae836` (Phase 7 — complete Supabase business backend).
+Before that: `67f8972d862e9a8ea57c280219a2f19cc5b45284` (Phase 10, complete); `1c45d688c94336c158cc00c60ad79030586d9c36` (Phase 9, complete); `a77785c57c3e5424fa63b4221ee9523a688ffae9` (Phase 8, complete); `299499948621f0d0d4742529d1e658d91b8eaf11` (Phase 9B), `a2f295f94a40e5c446e371a4b76cac9fcfb7dcdf` (Phase 9C), `39614fa660529c72d891c37ec573758599462559` (Phase 9D) — each a Phase 9 sub-checkpoint folded into the single final Phase 9 commit above; `ddc8da638205eb34436060dc003622e8a44b36c9` (Phase 8C), `77dbab9ed37766541aa94ddd053cae76a7e9dc40` (Phase 8B), `9b5a2d8789f9ea2909b2e37bbb7b368e656c68ee` (Phase 8A), `c63e86d03fafeb516846bb65759cfdacf19ae836` (Phase 7 — complete Supabase business backend).
 
 **Baseline:**
 ```
@@ -893,7 +893,9 @@ A `listTasks()` Supabase request (`supabase-tasks-provider.ts`, a plain `select(
 
 ## Phase 12A — Report Semantics Cleanup + Task Redesign Baseline
 
-**Status: IMPLEMENTED / MANUAL ACCEPTANCE PENDING.**
+**Status: COMPLETE / CHECKPOINTED.** Manually accepted by the user, checkpointed as
+`fef02bef625537cecf5648939e12fad3d5a31a6b` ("checkpoint: complete phase 12a report semantics
+baseline"), pushed to GitHub. HEAD and `origin/main` both equal this SHA.
 
 **Client Report status removal (visible product only).** Draft/Finalized are no longer presented
 anywhere in normal Client Report UI: `ClientReportStatusBadge` (its own component) was deleted —
@@ -957,14 +959,296 @@ design preference), responsive/mobile notes, and a sample-to-product classificat
 evaluating the user's not-yet-uploaded reference designs. **No Task file was modified** — no layout,
 styling, navigation, fields, statuses, timer behavior, or Subtask behavior changed in this pass.
 
-**Migrations**: none, for either half of this phase. **Do not mark Phase 12A complete or begin
-Phase 12B until the user has manually reviewed both the reporting changes and the baseline document.**
+**Migrations**: none, for either half of this phase.
+
+## Phase 12B — Tasks Workspace & Task Detail Redesign
+
+**Status: COMPLETE / CHECKPOINTED.** Manually accepted by the user ("12B CORRECTION FINAL PASS" —
+the redesign plus all three correction passes below, together, in one review), checkpointed as
+`checkpoint: complete phase 12b task workspace redesign` — see git log for the exact commit hash
+(the hash cannot be embedded here without invalidating itself, per the same convention already
+used for Phase 10/11's own "Current" checkpoint entries above) — pushed to GitHub. A substantial
+visual/component redesign of
+the Tasks experience and its navigation shell, built against three user-supplied reference images
+(a task-list-plus-split-sidebar reference, a Kanban board reference, and a checklist-table
+reference — kept locally under `references/phase-12b/`, never committed). No backend, RLS, RPC,
+schema, or role/permission change — every existing `permissions.ts` helper is untouched and reused
+exactly as before; this phase is visual + component restructuring only, per its own locked scope.
+Full architecture detail: `docs/phase-12b-task-redesign-spec.md`.
+
+**Split navigation shell.** `AppSidebar` was rewritten from the single shadcn `<Sidebar>` tree into
+a thin icon rail (56px, Home/Search/My Day/Tasks/Planner/Reports, tooltip-labeled) plus a wider
+grouped nav panel (240px: Workspace / Client work / Team, uppercase section labels) — both plain
+sticky flex children of `SidebarProvider`'s own row, not the old fixed/offcanvas machinery. The
+existing `SidebarTrigger`/Cmd+B shortcut now shows/hides the wide panel while the rail stays put.
+Mobile collapses to one merged navigation `Sheet` with the same grouped items (no permanent
+two-panel footprint on phones) — Search opens the real command palette via a normal button, not an
+overlay trick. Role gating is 100% reused (`isSuperadmin` for Companies, `canViewTeamTimePage`/
+`canViewTeamUpdatesPage` for the Team group, hidden entirely — not shown empty — when neither
+applies to the viewer). **Project-tree decision**: the reference's nested collapsible Project list
+was deliberately NOT implemented — it would require fetching `useProjects()` in the persistent
+shell on every dashboard page load, which is exactly the "expensive global fetch" the brief said to
+avoid without justification. Projects remains a normal nav item under "Client work."
+
+**Tasks Home (`/dashboard/tasks`) — List is the default view** (corrected from an initial Board-
+default choice, per final user feedback). The view switcher is List/Board, in that order (local
+component state, resets to List on every load — no persisted view preference exists in the data
+model, and none was invented); Board remains fully available one click away, unchanged. List's own
+default grouping stays Status (Todo/In Progress/Blocked/Waiting/Done). The old three-block toolbar (an always-open
+quick-filter pill strip + a full filter-select form + a saved-views chip strip, stacked as three
+separate rows) was recomposed into one compact row: a Group By select (List only), a badge-counted
+"Filters" popover (new `Popover` UI primitive, wrapping the *exact same* `TaskStatusQuickFilters` +
+`TaskFilterBar` components/logic, just relocated), a "Views" popover (wrapping `SavedViewsBar`
+verbatim), and a standalone Search input on the right — zero filtering functionality removed, only
+visually consolidated. Employee's assignee filter/group-by option remain hidden exactly as before.
+**Grid audited and preserved**: `TaskGridCard` was never a separate switcher tab — it was the
+List view's own rendering choice when grouped by anything but "none." That branch was replaced by
+the new dense grouped-row list; `TaskGridCard` itself is untouched and still used by My Day.
+**Saved-view compatibility**: `SavedViewFilters` never stored a List/Grid/Board mode, only filter
+criteria (including `groupBy`) — so an old saved view with a non-`"none"` `groupBy` still applies
+that exact grouping unchanged; it now renders as dense rows instead of a card grid. No data lost,
+no migration, nothing broken.
+
+**Board redesign** (`task-board.tsx`, `task-card.tsx`), close to the board reference: compact
+columns (dot + label + count + a small "+"), thin-bordered cards with no colored left accent
+(status is the column now), a small Client/Service line, a compact priority pill, tiny checklist/
+Subtask-count icons (Subtask counts derived client-side from the already-fetched flattened task
+list — zero new fetches), assignee avatars + due date on the bottom row, and a bordered "+ Add
+task" button at the foot of every column. `TaskFormDialog` gained an optional `defaultStatus` prop
+(purely additive form-state default) so a card created from a column starts in that status. Drag-
+drop, `canProgressTask` gating, and the parent-Done-with-open-Subtasks confirmation are all
+unchanged. An active timer shows a small pulsing dot next to the title, never a large widget.
+Horizontal scrolling for all five columns on narrower widths is preserved/expected.
+
+**List redesign** (new `TaskListRow`/`TaskListSection`/`FlatTaskList`), close to the list reference:
+defaults to grouping by Status (page-local default, set once on mount — the shared `useTaskFilters`
+hook's own default, used by other screens, is untouched); each section is a subtly-tinted (never
+saturated, per the locked "subtle color" rule) header with a status dot, label, count, collapse
+chevron, and a "+" that preselects that status; rows are dense (Task — title + Client line + small
+checklist/Subtask icons — then Priority, Service [+ Activity secondary line], Due date, Assignee),
+no Status column since the section already carries it. Desktop renders a true aligned grid row;
+mobile swaps to a compact stacked block instead of squeezing five columns into a narrow screen.
+Row click still navigates to the full Task page, never a drawer.
+
+**Checklist redesign** (`task-checklist.tsx`), close to the checklist reference's spreadsheet
+density: checkbox / item text / a subtle "Open"/"Completed" text (not a heavy badge) / a hover-
+revealed delete action, compact rows with faint dividers and a light hover state. No invented
+fields (no Code/Duration/Period/Maintenance Level/Department/MTA/per-item assignee — this app's
+checklist never stored any of those). Add/remove now work inline via the *existing* `updateTask`
+RPC (the same one `TaskFormDialog`'s own checklist builder already calls) — gated by `canEditTask`,
+exactly the authorization boundary that already governed adding/removing checklist lines through
+Edit; toggling a box still uses the existing `toggleChecklistItem` RPC gated by `canProgressTask`.
+No new provider method.
+
+**Full Task/Subtask page redesign** (`/dashboard/tasks/[id]`) — the phase's other headline goal,
+directly addressing the "Time Tracking dominates the page" criticism: a two-column desktop
+workspace (main content ~flexible, a 320px right property rail), stacking to properties-then-main
+on mobile. The large Phase 11A five-segment status rail is gone from the full page entirely,
+replaced by a compact `Select`-based status control (same `STATUS_META`/`canProgressTask` gating,
+same Done-with-open-Subtasks confirmation) living in the rail's "Properties" block alongside
+Priority/Due date/Assignees as label→value rows. Edit remains a page-level header action, unrelated
+to Time Tracking. Main content order: Description, Checklist, Subtasks (top-level Tasks only),
+Handoff, Notes, then Time Activity last — Time Tracking's live controls never appear there.
+
+**Time Tracking, quieter but fully preserved.** `TaskTimerControl` gained a `"rail"` variant
+(replacing the old `"header"` variant, which is no longer mounted anywhere) — a stacked, compact
+widget: idle shows "Tracked" + total + "Start timer"; running shows a live H:MM:SS clock +
+Pause/Stop; paused shows the tracked total + Resume/Stop (an honest simplification — this app
+doesn't track paused elapsed time to second precision, so the paused state shows the same total the
+old header variant already showed, not an invented frozen stopwatch value); "+ Log time" and the
+cross-task running/paused-elsewhere notices are unchanged. **`useTaskTimer` itself was not touched**
+— still exactly one instance per rendered Task (full page or Quick View, never both). Time Activity
+(`task-time-tracking.tsx`) is completely unmodified: latest-3/View all/View fewer, the compact
+correction indicator, billable/non-billable totals, and multi-contributor display rules are all
+byte-for-byte the same as Phase 11. The parent/Subtask time rollup (`getTaskTimeRollup`, own vs.
+including-Subtasks) is unchanged, still display-only, never double-counted.
+
+**Subtasks redesigned** (`TaskRow`/`TaskRowList`, now used only by the Subtasks section): a dense
+single row per Subtask — status dot, title, status label, assignee, due date — with a mobile
+stacked fallback instead of forcing four fixed-width columns into a phone screen. One-level nesting
+and "click → full Subtask page" are unchanged.
+
+**Quick View aligned, not rebuilt.** `TaskDrawer` keeps its exact Phase 11B structure and the
+locked Dashboard-only navigation rule; Phase 12B added the same small checklist/Subtask count icons
+Board/List now use and switched its local due-date formatter to the shared `task-display.ts`
+helper. No nested-drawer risk was reintroduced (Quick View still never renders another `TaskDrawer`).
+
+**Adjacent surfaces** (My Day, Planner, Dashboard, Project/Workstream Task entry points) were
+**not** redesigned — only shared components they already depend on (`TaskPriorityBadge`, status
+color tokens, the new `task-display.ts` helpers) flow through automatically. `TaskGridCard` (My
+Day) was left visually as-is: it already has its own accepted hover/mark-done animation language,
+intentionally different in character from Board's new quieter cards, and turning My Day into a
+second Board was explicitly out of scope. Navigation is unchanged everywhere: Dashboard → Quick
+View, Tasks/My Day/Planner → full page, Planner Today → calendar today, Planner Open My Day →
+`/dashboard/my-day`.
+
+**Safe presentation refactors** (Part P): a new `src/lib/data/task-display.ts` consolidates the
+overdue-check and due-date-format logic that Phase 12A's baseline audit found duplicated across
+`TaskGridCard`/`TaskSummaryItem`/the old Tasks Home row renderer — `TaskGridCard`, `TaskSummaryItem`,
+and `TaskDrawer` were updated to import it instead of keeping their own copies. Zero behavior
+change, same output for the same input.
+
+**Files changed**: `src/components/dashboard/app-sidebar.tsx` (full rewrite); `src/app/dashboard/tasks/page.tsx`
+(full rewrite); `src/app/dashboard/tasks/[id]/page.tsx` (full rewrite); `src/components/tasks/task-board.tsx`,
+`task-card.tsx`, `task-checklist.tsx`, `task-detail-content.tsx`, `task-row.tsx`, `task-status-rail.tsx`,
+`task-summary-item.tsx`, `task-timer-control.tsx`, `task-grid-card.tsx` (helper import only), `task-form-dialog.tsx`
+(`defaultStatus` prop), `task-drawer.tsx` (icon/helper alignment only). **New**: `src/components/tasks/task-list-row.tsx`,
+`task-list-section.tsx`, `task-properties-rail.tsx`, `src/components/ui/popover.tsx`, `src/lib/data/task-display.ts`.
+
+**Migrations**: none. **Provider abstraction**: untouched — no provider method added/removed/changed.
+**Permissions**: untouched at the time of the initial Phase 12B pass — see the final-polish
+subsection immediately below for the one helper added in a follow-up pass.
+
+### Phase 12B final polish — assignee visibility + assigned-Employee checklist add
+
+**Status: COMPLETE / CHECKPOINTED** (folded into the same Phase 12B checkpoint commit). Two issues
+the user found during manual review of the redesign:
+
+**1. Employee self-assignment is now visibly shown in Quick View.** Audited every assignee-display
+surface (`TaskFormDialog`'s "People" section, the full Task page's `TaskPropertiesRail`, `TaskCard`/
+`TaskGridCard`/`TaskListRow`/`TaskSummaryItem`, Quick View) — the underlying data was never wrong:
+`create_task`'s self-assignment (`effective_assignee_ids := array[auth.uid()]` for an Employee),
+`task_assignees` hydration, and `TaskFormDialog`'s existing read-only self-chip (`<TaskAssigneeChips
+staff={[user]} selectedIds={[user.id]} />`, already shown in both create AND edit mode for any
+Employee) were all already correct. The only real bug was a leftover Phase 11A display rule in
+`TaskDrawer` (Quick View) — `!isSelfOnlyAssignee && (...)` — that hid the entire assignee line
+whenever the sole assignee was the viewer themselves, i.e. exactly the self-assigned-Employee case.
+Removed that condition entirely; Quick View now always shows either "Unassigned" or the real
+assignee avatar(s)/name(s), matching every other surface (which never had this hiding rule, since
+`TaskDetailContent`'s own version of it was already dropped when Phase 12B moved Assignees into
+`TaskPropertiesRail`, which has always rendered unconditionally). Assignees is conceptually visible
+on every surface for all three roles — only *which users can be selected* differs: Employee is
+still forced to self-only, Supervisor to self + direct reports, Superadmin org-wide — none of that
+selection logic (`resolveAssigneeIds`/`assignableStaffFor`, `create_task`'s own mirrored SQL) was
+touched.
+
+**2. Assigned-Employee checklist-add — NOW FULLY IMPLEMENTED, backend included.** Following the
+prior pass's audit (which proved this required a narrow migration and correctly stopped before
+creating one), the user explicitly authorized it. Implemented:
+
+- **Migration**: `supabase/migrations/20260826090000_add_task_checklist_item.sql` — one new
+  function, `public.add_task_checklist_item(target_task_id uuid, p_description text)`, mirroring
+  `toggle_checklist_item`'s existing pattern exactly: `SECURITY DEFINER`, `set search_path = ''`,
+  gated on `can_progress_task(target_task_id)` (confirmed by inspection to mean exactly "manager,
+  or a direct assignee" — no hierarchy-read-only leakage, since the SQL function has no such
+  concept at all). Validates the Task exists, trims the description, rejects empty/whitespace-only,
+  computes the next `position` (`coalesce(max(position), -1) + 1`), inserts exactly one
+  `checklist_items` row, and returns the (unmutated) `tasks` row for the client's existing
+  hydration path. **Never touches the `tasks` row itself or any other checklist line.** No existing
+  RLS policy was changed — `tasks_update` and `checklist_items_write` are untouched, still
+  `can_edit_task`-gated exactly as before. `revoke all ... from public, anon; grant execute ... to
+  authenticated, service_role;` — anonymous execution is impossible. Applied to the existing hosted
+  project (`qxqxzuoaivyddwxqqoog`) via `supabase db push`; `supabase migration list` confirmed
+  before AND after that local/remote history stayed fully in sync (every prior migration already
+  matched; the new one now shows on both).
+- **Provider abstraction**: `TasksProvider` gained `addChecklistItem(viewer, taskId, description)`.
+  `supabaseTasksProvider` calls the new RPC directly (`supabase.rpc("add_task_checklist_item", ...)`
+  ) and re-hydrates — used by both `supabase` and `supabase-core` modes (`usesSupabaseCoreData`).
+  `mockTasksProvider` implements the identical authorization in JS (`canAddTaskChecklistItem`, via
+  `requireDirectAccess` — never the hierarchy-inclusive `canAccessTask`, per the Phase 10 mutation-
+  authorization convention), appending one item at the end — used by `mock` and `supabase-auth`
+  modes. `updateTask` was never touched for this operation.
+- **`canAddTaskChecklistItem(viewer, task)`** in `permissions.ts`: `canEditTask(viewer, task) ||
+  task.assigneeIds.includes(viewer.id)` — now wired into `TaskChecklist`'s add-gate (previously
+  defined but deliberately unused pending this decision).
+- **Three separate, non-conflated checklist permissions** in `TaskChecklist`: TOGGLE stays
+  `canProgressTask` (unchanged); ADD is now `canAddTaskChecklistItem`, calling the new
+  `tasksProvider.addChecklistItem` (no `TaskInput` reconstruction, no `updateTask` call); REMOVE
+  stays `canEditTask`, still via the existing `updateTask`/`taskToInput` reconstruction — unchanged,
+  since no per-item creator/owner field exists to safely support a narrower self-delete rule, and
+  none was invented. A failed add surfaces its error inline (no silent failure, no fake success).
+
+**Unchanged, reconfirmed by re-reading rather than assumed:** `canEditTask`/`canProgressTask`
+themselves were not modified; `updateTask`'s own authorization is untouched; Employee assignment
+remains self-only; Supervisor remains self + direct reports; Superadmin org-wide assignment is
+unchanged; Time logging remains assignment-only; Subtasks remain one level; no other RLS policy was
+touched.
+
+### Phase 12B final correction pass — List default, Service/Project UX, Activity confirmation, Employee form simplification
+
+**Status: COMPLETE / CHECKPOINTED** (folded into the same Phase 12B checkpoint commit). Four
+corrections from the user's final manual review of the accepted redesign. No migration — none was
+needed.
+
+**1. Tasks Home default is now List, not Board.** `tasks/page.tsx`'s view state initializes to
+`"list"` instead of `"board"`; the switcher order is now `[List] [Board]`. Board remains fully
+available, unchanged, one click away. List's own default grouping (Status) is unchanged. Saved
+views are unaffected either way — confirmed (again) that `SavedViewFilters` never stored a view
+mode to begin with, only filter criteria.
+
+**2. Service creation from the Task form — real bug found and fixed.** Root-caused by tracing the
+actual code, not assumed: `TaskFormDialog`'s "+ New service" button was already correctly gated on
+having a specific Project resolved (`selectedProject`, derived from the Project `<Select>`, which
+only ever lists real accessible Projects — there is no separate "Client" selector in this form,
+Project already serves that role) — but the button's `onClick` opened `<WorkstreamFormDialog>`
+**without passing the already-resolved `projectId` prop at all**. `WorkstreamFormDialog`'s own
+`projectId` prop is optional, documented to fall back to "the provider resolves it from the
+Company's own single Project" when omitted — a fallback that only works by coincidence for a
+company with exactly one Project. With `projectId` omitted, the `create_workstream` RPC's
+`enforce_workstream_project_link` BEFORE INSERT trigger has to auto-resolve from `company_id`
+alone: zero matching Projects raises "Company has no Project yet," more than one raises "Company
+has more than one Project — a Service must specify which," and only exactly one silently succeeds
+— explaining why this went unnoticed until a Supervisor hit a company whose Project count wasn't
+exactly one. **Fix**: pass `projectId={selectedProject.id}` into `<WorkstreamFormDialog>` (the
+child dialog render is now additionally guarded on `selectedProject` being non-null, for type
+safety matching the existing runtime guarantee). This makes the already-correct gating logic
+actually take effect end-to-end:
+  - **Exactly one eligible Project** for the context already in the Task form → already
+    auto-resolved by the existing Project `<Select>`/`selectedProject` derivation; no second click
+    was ever required once a Project is chosen.
+  - **Multiple eligible Projects** → the user must already pick one from the Project `<Select>`
+    before "+ New service" appears at all — never guessed.
+  - **No eligible Project** → the button doesn't render; the existing hint text ("Pick a project
+    above to add a new service for it.") explains why, before any Service-creation attempt, not
+    after a thrown error.
+  No new UI was invented — the three-case handling already existed structurally; the only defect
+  was the dropped prop. `WorkstreamFormDialog`'s own `handleWorkstreamCreated` callback already
+  refreshes the Service list, selects the new Service, and keeps the rest of the Task form intact
+  with no page reload — unchanged, already correct. **Scope note**: the Company detail page's own,
+  separate "Add Workstream" entry point (Supervisor/Superadmin, pre-Phase-12) has the same
+  optional-`projectId`/trigger-fallback shape and was not touched — it wasn't reported as broken,
+  and fixing it was outside this pass's explicit "Task workflow" scope.
+  **Supervisor authorization**: confirmed unchanged and legitimate — `create_workstream`'s own
+  Supervisor branch has always been allowed to create a Service in any Project they can access; no
+  permission was broadened or bypassed, only the UX defect that hid a working capability behind a
+  confusing error was fixed.
+
+**3. Service→Activities already supports multiple Activities — confirmed, not changed.** Audited
+the schema, RPC, and UI: `workstream_activities` is already a genuine many-to-many join table
+(composite primary key `workstream_id, activity_id`), `create_workstream`'s `p_activity_ids uuid[]`
+already accepts multiple, and `WorkstreamFormDialog` already renders a full multi-select checkbox
+grid ("Select the Activities this Project will use for this Service") wired to
+`form.activityIds: string[]`. This already-existing capability fully satisfies the request — no
+schema, RLS, RPC, or UI change was needed or made. A Task's own Activity field remains exactly
+single-select (`TaskFormDialog`'s `form.activityId: string`, a plain `<Select>` scoped to whichever
+Activities the chosen Service has enabled) — confirmed unchanged, `task.activityId` stays a scalar
+column, no join table, no reporting-aggregation change.
+
+**4. Employee Task/Subtask create-and-edit forms no longer show an Assignees control.**
+`TaskFormDialog`'s "People" section and `AddSubtaskDialog`'s "Assignee(s)" field are now both
+wrapped in `{!employeeView && (...)}` — an Employee sees neither a read-only self-chip nor any
+selector; the form is simply shorter. The backend self-assignment is completely unaffected (
+`resolveAssigneeIds`/`create_task`/`createSubtask` already force-resolve to the Employee's own id
+regardless of what the form displays or submits) — this was a pure display simplification, not a
+behavior change, and supersedes the earlier "make self-assignment visible in the form" instruction
+per the user's updated preference. Supervisor and Superadmin keep the full Assignees control,
+unchanged, still self+direct-reports / org-wide respectively. **Nothing about the persisted Task's
+own identity changed**: `TaskPropertiesRail` (full Task page), `TaskDrawer` (Quick View), and every
+Board/List/card surface still show the Task's real current assignee(s) unconditionally — a
+Supervisor can still see and later reassign who's actually on a Task; only the Employee's own
+create/edit form dialog was simplified.
+
+**Unchanged**: the checklist ADD/TOGGLE/REMOVE permission split from the prior pass (`
+canAddTaskChecklistItem`/`add_task_checklist_item` RPC, `canProgressTask`, `canEditTask`/
+`updateTask`) — not touched in this pass, no new checklist migration.
 
 ## Next roadmap
 
 **Phase 11 in its entirety (11A–11D) is COMPLETE and MANUALLY ACCEPTED** — see the phase's own sections above, including 11D's final decisions (Client Visit restriction is intentionally UI-only, no Visit RLS migration; legacy Internal Reports are Superadmin historical-archive-only with new generation removed from the UI; Review Queue and Client Report Schedules UI removed, both backends fully preserved; exactly three roles) and the JWT "issued at future" investigation (root-caused to transient Supabase hosted-infrastructure clock skew, confirmed resolved by the user reloading the authenticated app). Checkpointed and pushed to GitHub — see "Latest verified checkpoint" for the exact hash.
 
-**Phase 12A — Report Semantics Cleanup + Task Redesign Baseline is IMPLEMENTED, uncommitted, and awaiting the user's manual acceptance** — see its own section above. It has two independent halves: (1) Client Report Draft/Finalized status removed from all normal UI (backend lifecycle untouched) plus Client/Reporting Period/Services terminology standardization, with "Project" removed from the visible generation flow while the backend stays Project-scoped; (2) a read-only Task experience inventory across all three roles, written to `docs/phase-12-task-redesign-baseline.md`, in preparation for a sample-driven Tasks redesign in **Phase 12B — not yet started**, pending the user uploading reference designs.
+**Phase 12A — Report Semantics Cleanup + Task Redesign Baseline is COMPLETE, MANUALLY ACCEPTED, and CHECKPOINTED** (`fef02bef625537cecf5648939e12fad3d5a31a6b`, pushed to GitHub). **Phase 12B — Tasks Workspace & Task Detail Redesign is COMPLETE, MANUALLY ACCEPTED ("12B CORRECTION FINAL PASS"), and CHECKPOINTED** — see its own section above and `docs/phase-12b-task-redesign-spec.md` for full architecture detail. Includes the one narrow, already-hosted migration (`supabase/migrations/20260826090000_add_task_checklist_item.sql`) — the only migration in either half of Phase 12; no other RLS/RPC/schema/permission change was made in Phase 12A or 12B. Phase 12 in its entirety is now complete. Phase 13 has not been discussed or scoped.
+
+**Phase 12A — Report Semantics Cleanup + Task Redesign Baseline is COMPLETE, MANUALLY ACCEPTED, and CHECKPOINTED** (`fef02bef625537cecf5648939e12fad3d5a31a6b`, pushed to GitHub) — see its own section above. It had two independent halves: (1) Client Report Draft/Finalized status removed from all normal UI (backend lifecycle untouched) plus Client/Reporting Period/Services terminology standardization, with "Project" removed from the visible generation flow while the backend stays Project-scoped; (2) a read-only Task experience inventory across all three roles, written to `docs/phase-12-task-redesign-baseline.md`. **Phase 12B — Tasks Workspace + Sidebar + Task Detail Redesign is in progress**, driven by three user-supplied visual references.
 
 ## Known deferred / do not build now
 
@@ -1041,6 +1325,8 @@ Read the Current phase and Next roadmap sections before proposing changes.
 - Date: 2026-08-24 (Phase 11A/11B/11C manually accepted + Phase 11D implementation — final Phase 11 pass)
 - Date: 2026-08-25 (Phase 11A/11B/11C/11D all manually accepted; legacy Internal Report generation retired from UI; JWT "issued at future" investigated and root-caused to transient Supabase hosted-infrastructure clock skew, not app code)
 - Date: 2026-08-25 (Phase 11 checkpointed and pushed as `4bb335d8e1ead751624f8187246da36c1e895a75`; Phase 12A implemented — Client Report Draft/Finalized status removed from normal UI, Client/Reporting Period/Services terminology standardized, Project removed from the visible generation flow while staying Project-scoped internally; Task redesign baseline document created, no Task UI changed)
+- Date: 2026-08-26 (Phase 12A checkpointed and pushed as `fef02bef625537cecf5648939e12fad3d5a31a6b`; Phase 12B implemented — split rail+nav sidebar, Board-default Tasks Home with a consolidated compact toolbar, reference-driven Board/List/Checklist redesigns, two-column full Task page with a compact status control and a quieter right-rail Time Tracking widget, redesigned Subtask rows, Quick View visual alignment — no backend/permission changes)
+- Date: 2026-08-26 (Phase 12B final polish — Quick View assignee-visibility fix; assigned-Employee checklist-add narrow RPC designed, then implemented and applied to the hosted project as `add_task_checklist_item`; final correction pass — Tasks Home default switched to List, Service-creation Project-context bug found and fixed, Service multi-Activity support confirmed already correct, Employee create/edit form Assignee control removed. Manually accepted in full by the user — "12B correction final pass." Phase 12B checkpointed and pushed to GitHub. Phase 12 in its entirety is now COMPLETE.)
 - **Phase 8 is COMPLETE and pushed** (`a77785c57c3e5424fa63b4221ee9523a688ffae9`). Phase 9A (Reporting Automation audit) is complete and was read-only. **Phase 9B — Reporting Foundation + Client Report Correctness is COMPLETE and manually accepted**: Client Report gained Project scoping (`project_id`, deterministic-only legacy backfill), both report types' generation moved off a raw INSERT onto SECURITY DEFINER RPCs, Employees may now generate Client Report drafts (Project-scoped), generate/finalize are now separate permissions — finalize is never owner-based; **Supervisor finalization is legitimate-team/report-scoped** (reuses `can_view_client_report` + a Project-access defense-in-depth check), **Superadmin remains organization-wide**, a finalized Client Report can no longer be reopened, and the Accomplishments-vs-Client-Report naming confusion that produced the originally-reported RLS error was disambiguated in the UI. Destructive actions (trash/restore/permanently-delete) are separated from view/comment/finalize into their own narrower scope — trash/restore is generator-or-Superadmin-only, permanent delete is Superadmin-only always. A manually-reported Client Report detail-page 404 was root-caused to a **stale local Turbopack dev-server route cache**, not RLS or application code. Checkpointed as `299499948621f0d0d4742529d1e658d91b8eaf11`.
 - **Phase 9C — Daily Update Automation is COMPLETE and manually accepted** ("Phase 9C passed") — see its own section above. Checkpointed as `a2f295f94a40e5c446e371a4b76cac9fcfb7dcdf`.
 - **Phase 9D — Weekly Client Report Generation is COMPLETE and MANUALLY ACCEPTED** — see its own section above. Checkpointed as `39614fa660529c72d891c37ec573758599462559`.

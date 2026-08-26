@@ -8,10 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { getInitials as initials } from "@/lib/initials";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-
-function formatDueDate(value: string) {
-  return new Date(value).toLocaleDateString("en-US", { month: "short", day: "numeric" });
-}
+import { isTaskOverdue, formatDueDateShort } from "@/lib/data/task-display";
 
 interface TaskSummaryItemProps {
   task: TaskWithRelations;
@@ -50,7 +47,7 @@ export function TaskSummaryItem({ task, onOpen, isRunning, variant = "row", show
     );
   }
 
-  const isOverdue = showDueDate && task.status !== "done" && task.dueDate != null && task.dueDate < new Date().toISOString().slice(0, 10);
+  const isOverdue = showDueDate && isTaskOverdue(task);
 
   return (
     <button
@@ -86,7 +83,7 @@ export function TaskSummaryItem({ task, onOpen, isRunning, variant = "row", show
         <TaskStatusBadge status={task.status} />
         {showDueDate && task.dueDate && (
           <span className={cn("text-xs font-medium", isOverdue ? "text-warning" : "text-muted-foreground")}>
-            Due {formatDueDate(task.dueDate)}
+            Due {formatDueDateShort(task.dueDate)}
           </span>
         )}
         {showAssignee && task.assignees.length > 0 && (

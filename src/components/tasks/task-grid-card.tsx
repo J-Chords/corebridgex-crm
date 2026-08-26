@@ -11,16 +11,13 @@ import { TaskPriorityBadge } from "@/components/tasks/task-priority-badge";
 import { STATUS_COLOR_VAR, TASK_STATUS_SELECT_ITEMS } from "@/components/tasks/task-status-badge";
 import { ChecklistProgress } from "@/components/ui/checklist-progress";
 import { Checkbox } from "@/components/ui/checkbox";
+import { isTaskOverdue, formatDueDateShort } from "@/lib/data/task-display";
 import { cn } from "@/lib/utils";
 
 /** How long the checkbox's own "gentle check" pop plays before the card starts easing out — long enough to register as a distinct beat, short enough to still feel quick. */
 const MARK_DONE_POP_MS = 220;
 
 import { getInitials as initials } from "@/lib/initials";
-
-function formatDueDate(value: string) {
-  return new Date(value).toLocaleDateString("en-US", { month: "short", day: "numeric" });
-}
 
 interface TaskGridCardProps {
   task: TaskWithRelations;
@@ -52,7 +49,7 @@ interface TaskGridCardProps {
  */
 export function TaskGridCard({ task, className, style, isFocusTask, onMarkDone, isExiting, onExitEnd, isRunning, onOpen }: TaskGridCardProps) {
   const [justChecked, setJustChecked] = useState(false);
-  const isOverdue = task.status !== "done" && task.dueDate != null && task.dueDate < new Date().toISOString().slice(0, 10);
+  const isOverdue = isTaskOverdue(task);
 
   function handleCheckedChange(checked: boolean) {
     if (!checked || !onMarkDone || justChecked) return;
@@ -144,7 +141,7 @@ export function TaskGridCard({ task, className, style, isFocusTask, onMarkDone, 
         )}
         {task.dueDate && (
           <span className={cn("text-xs font-medium", isOverdue ? "text-warning" : "text-muted-foreground")}>
-            {formatDueDate(task.dueDate)}
+            {formatDueDateShort(task.dueDate)}
           </span>
         )}
       </div>

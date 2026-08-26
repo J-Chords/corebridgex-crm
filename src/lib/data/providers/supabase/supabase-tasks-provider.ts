@@ -356,6 +356,17 @@ export const supabaseTasksProvider: TasksProvider = {
     return hydrated;
   },
 
+  async addChecklistItem(_viewer, taskId, description) {
+    const supabase = createClient();
+    const { data, error } = await supabase.rpc("add_task_checklist_item", {
+      target_task_id: taskId,
+      p_description: description,
+    });
+    if (error) throw new Error(error.message);
+    const [hydrated] = await hydrate([toTask(data as TaskRow)]);
+    return hydrated;
+  },
+
   async listSubtasks(_viewer, parentTaskId) {
     const supabase = createClient();
     const { data, error } = await supabase.from("tasks").select("*").eq("parent_task_id", parentTaskId).order("created_at", { ascending: true });

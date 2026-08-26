@@ -123,6 +123,13 @@ export interface TasksProvider {
     isDone: boolean
   ): Promise<TaskWithRelations>;
   /**
+   * Phase 12B final polish — ADD one checklist item, authorized by `canAddTaskChecklistItem`
+   * (any direct assignee, or anyone who already has `canEditTask`) — deliberately narrower than
+   * the full checklist add/remove/rename path inside `updateTask` (`canEditTask`-gated). Never
+   * touches any other Task field. Trims/rejects an empty description the same way the RPC does.
+   */
+  addChecklistItem(viewer: User, taskId: string, description: string): Promise<TaskWithRelations>;
+  /**
    * "Reuse from past" — recently completed tasks tagged to the same activity, newest first,
    * capped to a short list. Respects the same task visibility gate as listTasks/getTask, so a
    * viewer never sees a candidate they couldn't otherwise access. Pass excludeTaskId when editing

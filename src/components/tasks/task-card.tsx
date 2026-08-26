@@ -1,59 +1,72 @@
-import { Play } from "lucide-react";
+import { Layers, ListChecks } from "lucide-react";
 import type { TaskWithRelations } from "@/lib/data/providers/tasks-provider";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { TaskPriorityBadge } from "@/components/tasks/task-priority-badge";
-import { STATUS_COLOR_VAR } from "@/components/tasks/task-status-badge";
-import { ChecklistProgress } from "@/components/ui/checklist-progress";
+import { isTaskOverdue, formatDueDateShort, taskServiceLabel } from "@/lib/data/task-display";
 import { cn } from "@/lib/utils";
 
 import { getInitials as initials } from "@/lib/initials";
-
-function formatDueDate(value: string) {
-  return new Date(value).toLocaleDateString("en-US", { month: "short", day: "numeric" });
-}
 
 interface TaskCardProps {
   task: TaskWithRelations;
   /** True when this task has the current viewer's own active running timer. */
   isRunning?: boolean;
+  /** Derived client-side from the already-fetched task list (see `subtaskSummary`) — never a
+   * per-card fetch. Omitted entirely (not "0/0") for a Subtask, which can't have children. */
+  subtaskCount?: { total: number; done: number };
 }
 
-/** Kanban card content — draggability/click handling is layered on by whatever renders it (see TaskBoard). The colored left accent mirrors TaskGridCard's own convention, so a status stays visibly identifiable even scrolled away from its column header. */
-export function TaskCard({ task, isRunning }: TaskCardProps) {
-  const isOverdue = task.status !== "done" && task.dueDate != null && task.dueDate < new Date().toISOString().slice(0, 10);
+/**
+ * Phase 12B — Board card, redesigned to Reference 2's compact density: title, a small Client/
+ * Service line, priority + compact metadata icons (checklist, Subtasks) on one row, then assignee
+ * avatars + due date on the bottom row. No description, no progress bar, no full breadcrumb, no
+ * large status badge (status is already the column) — status stays legible via the thin left
+ * accent only, matching `TaskGridCard`'s own existing convention.
+ */
+export function TaskCard({ task, isRunning, subtaskCount }: TaskCardProps) {
+  const overdue = isTaskOverdue(task);
+  const checklistTotal = task.checklistItems.length;
+  const checklistDone = task.checklistItems.filter((c) => c.isDone).length;
+
   return (
-    <div
-      className="flex flex-col gap-2.5 rounded-lg border border-l-4 bg-card p-3 text-left shadow-sm"
-      style={{ borderLeftColor: STATUS_COLOR_VAR[task.status] }}
-    >
+    <div className="flex flex-col gap-2 rounded-lg border bg-card p-2.5 text-left">
       <div className="flex items-start justify-between gap-2">
-        <span className="flex items-center gap-1.5 text-sm font-medium">
-          {task.title}
+        <span className="flex min-w-0 items-center gap-1.5 text-sm font-medium">
+          {isRunning && (
+            <span className="relative flex size-1.5 shrink-0" aria-hidden="true" title="Running">
+              <span className="absolute inline-flex size-full animate-ping rounded-full opacity-75" style={{ backgroundColor: "var(--info)" }} />
+              <span className="relative inline-flex size-1.5 rounded-full" style={{ backgroundColor: "var(--info)" }} />
+            </span>
+          )}
+          <span className="truncate">{task.title}</span>
           {task.parentTaskId && (
-            <Badge variant="neutral" className="text-[10px]">
+            <Badge variant="neutral" className="shrink-0 text-[10px]">
               SUBTASK
             </Badge>
           )}
         </span>
-        <TaskPriorityBadge priority={task.priority} />
       </div>
       <span className="truncate text-xs text-muted-foreground">
-        {task.parentTask ? (
-          `Parent: ${task.parentTask.title}`
-        ) : (
-          <>
-            {task.workstream.projectName ?? task.company.name} <span className="text-muted-foreground/60">·</span>{" "}
-            {task.workstream.name}
-            {task.activity && (
-              <>
-                {" "}
-                <span className="text-muted-foreground/60">·</span> {task.activity.name}
-              </>
-            )}
-          </>
-        )}
+        {task.parentTask ? `Parent: ${task.parentTask.title}` : `${task.company.name} · ${taskServiceLabel(task)}`}
       </span>
+      <div className="flex items-center gap-2">
+        <TaskPriorityBadge priority={task.priority} />
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          {checklistTotal > 0 && (
+            <span className="flex items-center gap-0.5" title="Checklist">
+              <ListChecks className="size-3" aria-hidden="true" />
+              {checklistDone}/{checklistTotal}
+            </span>
+          )}
+          {subtaskCount && subtaskCount.total > 0 && (
+            <span className="flex items-center gap-0.5" title="Subtasks">
+              <Layers className="size-3" aria-hidden="true" />
+              {subtaskCount.done}/{subtaskCount.total}
+            </span>
+          )}
+        </div>
+      </div>
       <div className="flex items-center justify-between gap-2">
         {task.assignees.length === 0 ? (
           <span className="text-xs text-muted-foreground">Unassigned</span>
@@ -66,23 +79,12 @@ export function TaskCard({ task, isRunning }: TaskCardProps) {
             ))}
           </div>
         )}
-        <div className="flex items-center gap-2">
-          {isRunning && (
-            <span className="flex items-center gap-1 text-xs font-medium" style={{ color: "var(--info)" }}>
-              <Play className="size-3" aria-hidden="true" /> Running
-            </span>
-          )}
-          {task.dueDate && (
-            <span className={cn("text-xs font-medium", isOverdue ? "text-warning" : "text-muted-foreground")}>
-              {formatDueDate(task.dueDate)}
-            </span>
-          )}
-        </div>
+        {task.dueDate && (
+          <span className={cn("text-xs font-medium", overdue ? "text-warning" : "text-muted-foreground")}>
+            {formatDueDateShort(task.dueDate)}
+          </span>
+        )}
       </div>
-      <ChecklistProgress
-        done={task.checklistItems.filter((c) => c.isDone).length}
-        total={task.checklistItems.length}
-      />
     </div>
   );
 }

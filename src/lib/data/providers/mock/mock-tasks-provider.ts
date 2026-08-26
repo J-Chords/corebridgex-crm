@@ -6,6 +6,7 @@ import {
   canAccessWorkstream,
   canAccessTask,
   canAccessTaskDirectly,
+  canAddTaskChecklistItem,
   canEditTask,
   canProgressTask,
   isEmployee,
@@ -535,6 +536,33 @@ export const mockTasksProvider: TasksProvider = {
       notifyOfStatusChange(updatedTask, updatedTask.status, viewer, taskAssigneeIds(taskId));
     }
     return toTaskWithRelations(updatedTask, viewer);
+  },
+
+  async addChecklistItem(viewer, taskId, description) {
+    const task = db.tasks.find((t) => t.id === taskId);
+    if (!task) throw new Error("Task not found.");
+    // Phase 10 hierarchy-authorization hardening — this is a mutation, so direct access only;
+    // being visible through a parent/child relationship must never grant this.
+    requireDirectAccess(viewer, task);
+    if (!canAddTaskChecklistItem(viewer, { ...task, assigneeIds: taskAssigneeIds(taskId) })) {
+      throw new Error("You don't have permission to add a checklist item to this task.");
+    }
+    const trimmed = description.trim();
+    if (!trimmed) throw new Error("Checklist item description cannot be empty.");
+
+    const nextPosition = db.checklistItems.filter((ci) => ci.taskId === taskId).reduce((max, ci) => Math.max(max, ci.position), -1) + 1;
+    const newItem: ChecklistItem = {
+      id: crypto.randomUUID(),
+      taskId,
+      description: trimmed,
+      isDone: false,
+      position: nextPosition,
+      completedById: null,
+      completedAt: null,
+    };
+    db.checklistItems = [...db.checklistItems, newItem];
+
+    return toTaskWithRelations(task, viewer);
   },
 
   async listSubtasks(viewer, parentTaskId) {

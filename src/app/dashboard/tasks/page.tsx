@@ -2,8 +2,8 @@
 
 import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeft, ChevronDown, LayoutGrid, List as ListIcon, Play, Plus } from "lucide-react";
+import { useSearchParams } from "next/navigation";
+import { ArrowLeft, Bookmark, LayoutGrid, List as ListIcon, Plus, Search, SlidersHorizontal } from "lucide-react";
 import { useAuth } from "@/lib/auth/auth-context";
 import { useTasks } from "@/lib/data/hooks/use-tasks";
 import { useCompanies, useCompanyLookups } from "@/lib/data/hooks/use-companies";
@@ -17,44 +17,28 @@ import {
   useActivityOptionsFromTasks,
 } from "@/lib/data/hooks/use-task-filters";
 import { isEmployee } from "@/lib/data/permissions";
-import type { TaskGroupBy, TaskStatus } from "@/lib/data/types";
-import type { TaskWithRelations } from "@/lib/data/providers/tasks-provider";
-import { Button } from "@/components/ui/button";
+import type { TaskStatus } from "@/lib/data/types";
 import { Card } from "@/components/ui/card";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { TaskStatusBadge } from "@/components/tasks/task-status-badge";
-import { TaskPriorityBadge } from "@/components/tasks/task-priority-badge";
-import { TaskFilterBar, type TaskFilterField } from "@/components/tasks/task-filter-bar";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Separator } from "@/components/ui/separator";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { TaskFilterBar } from "@/components/tasks/task-filter-bar";
 import { TaskStatusQuickFilters } from "@/components/tasks/task-status-quick-filters";
 import { SavedViewsBar } from "@/components/tasks/saved-views-bar";
 import { TaskGroupBySelect } from "@/components/tasks/task-group-by-select";
-import { TaskGridCard } from "@/components/tasks/task-grid-card";
 import { TaskBoard } from "@/components/tasks/task-board";
-import { ChecklistProgress } from "@/components/ui/checklist-progress";
+import { TaskListSection, FlatTaskList } from "@/components/tasks/task-list-section";
 import { TaskFormDialog } from "@/components/tasks/task-form-dialog";
-import { STAGGER_ITEM_CLASS, staggerDelay } from "@/lib/stagger";
-import { cn } from "@/lib/utils";
 
 const VALID_STATUSES: TaskStatus[] = ["todo", "in-progress", "blocked", "waiting-on-client", "done"];
-const GROUP_BY_OPTIONS: TaskGroupBy[] = ["none", "project", "company", "workstream", "activity", "status", "assignee"];
 
 function todayDateString() {
   return new Date().toISOString().slice(0, 10);
 }
 
-type TaskView = "list" | "board";
-
-function formatDate(value: string | null) {
-  if (!value) return "—";
-  return new Date(value).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-}
+type TaskView = "board" | "list";
 
 export default function TasksPage() {
   return (
@@ -71,10 +55,14 @@ function TasksPageContent() {
   const { workstreams } = useWorkstreams();
   const { assignableStaff } = useCompanyLookups();
   const { runningTimer } = useRunningTimer();
-  const router = useRouter();
   const searchParams = useSearchParams();
 
   const [createOpen, setCreateOpen] = useState(false);
+  const [createDefaultStatus, setCreateDefaultStatus] = useState<TaskStatus | undefined>(undefined);
+  // Phase 12B final correction — List is the default Tasks Home view for every role; Board remains
+  // one click away. Local component state only (no persisted user preference exists in the
+  // current data model — per instruction, not inventing one), so this always starts fresh at
+  // List on every page load.
   const [view, setView] = useState<TaskView>("list");
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
   const { filters, patch } = useTaskFilters();
@@ -93,6 +81,10 @@ function TasksPageContent() {
     // drilling down to one team member's own tasks (e.g. Team Workload's per-person row).
     const assignee = searchParams.get("assignee");
     if (assignee) patch({ assigneeId: assignee });
+    // Phase 12B — List's own default grouping is Status (Reference 1); this only sets the initial
+    // value for THIS page's own `useTaskFilters()` instance, never the shared default other screens
+    // (My Day/Planner/employee dashboard) get from their own separate calls to the same hook.
+    patch({ groupBy: "status" });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -118,11 +110,9 @@ function TasksPageContent() {
     if (next.status !== "all" && runningOnly) setRunningOnly(false);
   }
 
-  // Phase 11B — the dedicated Tasks module always navigates straight to the full Task page now
-  // (locked navigation rule: Dashboard/Home is the only surface that opens Quick View). This
-  // replaced the old `?task=` query-param Drawer mechanism entirely.
-  function openTask(taskId: string) {
-    router.push(`/dashboard/tasks/${taskId}`);
+  function openCreate(defaultStatus?: TaskStatus) {
+    setCreateDefaultStatus(defaultStatus);
+    setCreateOpen(true);
   }
 
   // "active" doesn't map onto a single TaskStatus value (it spans several), so it's a separate,
@@ -172,80 +162,45 @@ function TasksPageContent() {
     });
   }
 
-  function renderTaskRow(task: TaskWithRelations, index: number) {
-    const isOverdue = task.status !== "done" && task.dueDate != null && task.dueDate < today;
-    return (
-      <TableRow
-        key={task.id}
-        className={cn("cursor-pointer", STAGGER_ITEM_CLASS)}
-        style={staggerDelay(index)}
-        onClick={() => openTask(task.id)}
-      >
-        <TableCell className="max-w-64 font-medium whitespace-normal">
-          <span className="inline-flex items-center gap-1.5 hover:underline">
-            {task.id === runningTaskId && <Play className="size-3 shrink-0" style={{ color: "var(--info)" }} aria-hidden="true" />}
-            {task.title}
-          </span>
-        </TableCell>
-        <TableCell className="text-muted-foreground">
-          <span className="flex flex-wrap items-center gap-1 text-xs">
-            {task.workstream.projectName && <span>{task.workstream.projectName}</span>}
-            {task.workstream.projectName && <span className="text-muted-foreground/50">→</span>}
-            <span>{task.workstream.name}</span>
-            {task.activity && (
-              <>
-                <span className="text-muted-foreground/50">→</span>
-                <span>{task.activity.name}</span>
-              </>
-            )}
-          </span>
-        </TableCell>
-        <TableCell>
-          <TaskStatusBadge status={task.status} />
-        </TableCell>
-        <TableCell>
-          <TaskPriorityBadge priority={task.priority} />
-        </TableCell>
-        <TableCell className="text-muted-foreground">
-          {task.assignees.map((a) => a.fullName).join(", ") || "—"}
-        </TableCell>
-        <TableCell className={isOverdue ? "font-medium text-warning" : "text-muted-foreground"}>
-          {formatDate(task.dueDate)}
-        </TableCell>
-        <TableCell className="min-w-32">
-          <ChecklistProgress
-            done={task.checklistItems.filter((c) => c.isDone).length}
-            total={task.checklistItems.length}
-          />
-        </TableCell>
-      </TableRow>
-    );
-  }
-
   if (!user) return null;
 
   const employeeView = isEmployee(user);
-  const filterFields: TaskFilterField[] = [
-    "search",
-    "project",
-    "company",
-    "workstream",
-    "activity",
-    "priority",
-    ...(employeeView ? [] : (["assignee"] as TaskFilterField[])),
+  const filterFields = [
+    "project" as const,
+    "company" as const,
+    "workstream" as const,
+    "activity" as const,
+    "priority" as const,
+    ...(employeeView ? [] : (["assignee"] as const)),
   ];
-  const groupByOptions = employeeView ? GROUP_BY_OPTIONS.filter((g) => g !== "assignee") : GROUP_BY_OPTIONS;
+  const groupByOptions = (["none", "status", "project", "company", "workstream", "activity", ...(employeeView ? [] : ["assignee" as const])] as const);
+
+  // Phase 12B — badge count for the compact "Filters" popover trigger: every narrowing filter that's
+  // not at its default value, plus the two derived quick toggles. Purely a display count — the real
+  // filtering logic (`filterTasks`) is completely untouched.
+  const activeFilterCount =
+    (filters.projectId !== "all" ? 1 : 0) +
+    (filters.companyId !== "all" ? 1 : 0) +
+    (filters.workstreamId !== "all" ? 1 : 0) +
+    (filters.activityId !== "all" ? 1 : 0) +
+    (filters.priority !== "all" ? 1 : 0) +
+    (filters.assigneeId !== "all" ? 1 : 0) +
+    (filters.status !== "all" ? 1 : 0) +
+    (runningOnly ? 1 : 0) +
+    (overdueOnly ? 1 : 0) +
+    (dueTodayOnly ? 1 : 0);
 
   // Phase 8B — open to every role. The real access boundary is the Task query itself
   // (RLS/permissions already scope results to Employee's own assigned work, Supervisor's own +
   // team, Superadmin's org-wide view), not a page-level gate — removing this gate is a UI change
   // only, the underlying data was already correctly scoped per viewer.
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-4">
       <Link href="/dashboard" className="w-fit text-sm text-muted-foreground hover:underline">
         <ArrowLeft className="mr-1 inline size-3.5" aria-hidden="true" />
         Back to dashboard
       </Link>
+
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="font-heading text-2xl font-semibold">Tasks</h1>
@@ -257,137 +212,126 @@ function TasksPageContent() {
                 : "Every task across the org."}
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-0.5 rounded-lg border p-0.5">
-            <Button
-              size="sm"
-              variant={view === "list" ? "secondary" : "ghost"}
-              aria-pressed={view === "list"}
-              onClick={() => setView("list")}
-            >
-              <ListIcon /> List
-            </Button>
-            <Button
-              size="sm"
-              variant={view === "board" ? "secondary" : "ghost"}
-              aria-pressed={view === "board"}
-              onClick={() => setView("board")}
-            >
-              <LayoutGrid /> Board
-            </Button>
-          </div>
-          {view === "list" && (
-            <TaskGroupBySelect value={filters.groupBy} onChange={(groupBy) => patch({ groupBy })} options={groupByOptions} />
-          )}
-          <Button onClick={() => setCreateOpen(true)} data-shortcut="new-task">
-            <Plus /> New Task
-          </Button>
+        <Button onClick={() => openCreate()} data-shortcut="new-task">
+          <Plus /> New Task
+        </Button>
+      </div>
+
+      <div className="flex items-center gap-0.5 rounded-lg border p-0.5">
+        <Button size="sm" variant={view === "list" ? "secondary" : "ghost"} aria-pressed={view === "list"} onClick={() => setView("list")}>
+          <ListIcon /> List
+        </Button>
+        <Button size="sm" variant={view === "board" ? "secondary" : "ghost"} aria-pressed={view === "board"} onClick={() => setView("board")}>
+          <LayoutGrid /> Board
+        </Button>
+      </div>
+
+      {/* Phase 12B — one compact toolbar row (Reference 1): grouping/filtering/saved-views on the
+          left, search on the right — replacing the old always-open quick-filter strip + filter form
+          + saved-views strip stacked as three separate blocks. Every control here is the exact same
+          existing functionality (TaskStatusQuickFilters/TaskFilterBar/SavedViewsBar), just tucked
+          into popovers instead of always rendered inline. */}
+      <div className="flex flex-wrap items-center gap-2">
+        {view === "list" && (
+          <TaskGroupBySelect value={filters.groupBy} onChange={(groupBy) => patch({ groupBy })} options={[...groupByOptions]} />
+        )}
+        <Popover>
+          <PopoverTrigger render={<Button variant="outline" size="sm" />}>
+            <SlidersHorizontal /> Filters
+            {activeFilterCount > 0 && (
+              <Badge variant="secondary" className="ml-1 px-1.5 font-mono">
+                {activeFilterCount}
+              </Badge>
+            )}
+          </PopoverTrigger>
+          <PopoverContent align="start" className="w-80">
+            <div className="flex flex-col gap-3">
+              <TaskStatusQuickFilters
+                status={filters.status}
+                onStatusChange={handleStatusPillChange}
+                runningOnly={runningOnly}
+                onRunningChange={handleRunningChange}
+                overdueOnly={overdueOnly}
+                onOverdueChange={setOverdueOnly}
+                dueTodayOnly={dueTodayOnly}
+                onDueTodayChange={setDueTodayOnly}
+                counts={statusCounts}
+              />
+              <Separator />
+              <TaskFilterBar
+                filters={filters}
+                onChange={patch}
+                fields={filterFields}
+                projects={projectOptions}
+                companies={companies}
+                workstreams={workstreams}
+                activities={activityOptions}
+                assignableStaff={assignableStaff}
+                className="flex flex-col items-stretch gap-2"
+              />
+            </div>
+          </PopoverContent>
+        </Popover>
+        <Popover>
+          <PopoverTrigger render={<Button variant="outline" size="sm" />}>
+            <Bookmark /> Views
+          </PopoverTrigger>
+          <PopoverContent align="start" className="w-80">
+            <SavedViewsBar filters={filters} onApply={handleApplySavedView} />
+          </PopoverContent>
+        </Popover>
+        <div className="relative ml-auto min-w-48">
+          <Search
+            aria-hidden="true"
+            className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground"
+          />
+          <Input
+            value={filters.search}
+            onChange={(e) => patch({ search: e.target.value })}
+            placeholder="Search tasks…"
+            className="h-8 pl-8"
+            aria-label="Search tasks"
+          />
         </div>
       </div>
 
-      <TaskStatusQuickFilters
-        status={filters.status}
-        onStatusChange={handleStatusPillChange}
-        runningOnly={runningOnly}
-        onRunningChange={handleRunningChange}
-        overdueOnly={overdueOnly}
-        onOverdueChange={setOverdueOnly}
-        dueTodayOnly={dueTodayOnly}
-        onDueTodayChange={setDueTodayOnly}
-        counts={statusCounts}
-      />
-
-      <Card className="min-w-0 overflow-hidden py-0">
-        <div className="flex flex-col gap-3 border-b bg-muted/40 p-4">
-          <TaskFilterBar
-            filters={filters}
-            onChange={patch}
-            fields={filterFields}
-            projects={projectOptions}
-            companies={companies}
-            workstreams={workstreams}
-            activities={activityOptions}
-            assignableStaff={assignableStaff}
-          />
-          <SavedViewsBar filters={filters} onApply={handleApplySavedView} />
-        </div>
-
-        {isLoading ? (
-          <p className="p-6 text-sm text-muted-foreground">Loading tasks…</p>
-        ) : view === "board" ? (
-          <div className="p-4">
-            <TaskBoard user={user} tasks={filtered} onChanged={refresh} runningTaskId={runningTaskId} />
-          </div>
-        ) : filters.groupBy === "none" ? (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="font-mono text-xs tracking-wide text-muted-foreground uppercase">Task</TableHead>
-                <TableHead className="font-mono text-xs tracking-wide text-muted-foreground uppercase">Project → Service → Activity</TableHead>
-                <TableHead className="font-mono text-xs tracking-wide text-muted-foreground uppercase">Status</TableHead>
-                <TableHead className="font-mono text-xs tracking-wide text-muted-foreground uppercase">Priority</TableHead>
-                <TableHead className="font-mono text-xs tracking-wide text-muted-foreground uppercase">Assignees</TableHead>
-                <TableHead className="font-mono text-xs tracking-wide text-muted-foreground uppercase">Due</TableHead>
-                <TableHead className="font-mono text-xs tracking-wide text-muted-foreground uppercase">Progress</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filtered.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={7} className="py-10 text-center text-sm text-muted-foreground">
-                    No tasks match this view.
-                  </TableCell>
-                </TableRow>
-              )}
-              {filtered.map((task, i) => renderTaskRow(task, i))}
-            </TableBody>
-          </Table>
+      {isLoading ? (
+        <p className="p-6 text-sm text-muted-foreground">Loading tasks…</p>
+      ) : view === "board" ? (
+        <TaskBoard user={user} tasks={filtered} onChanged={refresh} runningTaskId={runningTaskId} />
+      ) : filters.groupBy === "none" ? (
+        filtered.length === 0 ? (
+          <Card className="p-10 text-center text-sm text-muted-foreground">No tasks match this view.</Card>
         ) : (
-          <div className="flex flex-col gap-6 p-4">
-            {groups.length === 0 && (
-              <p className="py-10 text-center text-sm text-muted-foreground">No tasks match this view.</p>
-            )}
-            {groups.map((group) => {
-              const isCollapsed = collapsedGroups.has(group.key);
-              return (
-                <div key={group.key}>
-                  <button
-                    type="button"
-                    onClick={() => toggleGroup(group.key)}
-                    aria-expanded={!isCollapsed}
-                    className="-mx-2 flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-muted/60"
-                  >
-                    <ChevronDown
-                      className={cn(
-                        "size-4 shrink-0 text-muted-foreground transition-transform duration-200",
-                        isCollapsed && "-rotate-90"
-                      )}
-                      aria-hidden="true"
-                    />
-                    <span className="text-sm font-medium">{group.label}</span>
-                    <span className="font-mono text-xs text-muted-foreground">{group.tasks.length}</span>
-                  </button>
-                  {!isCollapsed && (
-                    <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-                      {group.tasks.map((task, i) => (
-                        <TaskGridCard
-                          key={task.id}
-                          task={task}
-                          className={STAGGER_ITEM_CLASS}
-                          style={staggerDelay(i)}
-                          isRunning={task.id === runningTaskId}
-                        />
-                      ))}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </Card>
+          <FlatTaskList tasks={filtered} allTasks={tasks} runningTaskId={runningTaskId} />
+        )
+      ) : (
+        <div className="flex flex-col gap-3">
+          {groups.length === 0 && (
+            <Card className="p-10 text-center text-sm text-muted-foreground">No tasks match this view.</Card>
+          )}
+          {groups.map((group) => (
+            <TaskListSection
+              key={group.key}
+              group={group}
+              groupBy={filters.groupBy}
+              allTasks={tasks}
+              runningTaskId={runningTaskId}
+              isCollapsed={collapsedGroups.has(group.key)}
+              onToggleCollapse={() => toggleGroup(group.key)}
+              onAddTask={openCreate}
+            />
+          ))}
+        </div>
+      )}
 
-      <TaskFormDialog open={createOpen} onOpenChange={setCreateOpen} mode="create" onSaved={refresh} />
+      <TaskFormDialog
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        mode="create"
+        defaultStatus={createDefaultStatus}
+        onSaved={refresh}
+      />
     </div>
   );
 }

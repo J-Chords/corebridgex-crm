@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { Plus } from "lucide-react";
 import {
   DndContext,
   PointerSensor,
@@ -17,8 +18,11 @@ import type { TaskStatus } from "@/lib/data/types";
 import type { TaskWithRelations } from "@/lib/data/providers/tasks-provider";
 import { canProgressTask } from "@/lib/data/permissions";
 import { tasksProvider } from "@/lib/data/providers";
+import { subtaskSummary } from "@/lib/data/task-display";
 import { TaskCard } from "@/components/tasks/task-card";
+import { TaskFormDialog } from "@/components/tasks/task-form-dialog";
 import { STATUS_COLOR_VAR, TASK_STATUS_SELECT_ITEMS } from "@/components/tasks/task-status-badge";
+import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { cn } from "@/lib/utils";
 
@@ -34,10 +38,11 @@ interface BoardCardProps {
   task: TaskWithRelations;
   canDrag: boolean;
   isRunning: boolean;
+  subtaskCount?: { total: number; done: number };
   onNavigate: () => void;
 }
 
-function BoardCard({ task, canDrag, isRunning, onNavigate }: BoardCardProps) {
+function BoardCard({ task, canDrag, isRunning, subtaskCount, onNavigate }: BoardCardProps) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: task.id,
     disabled: !canDrag,
@@ -65,7 +70,7 @@ function BoardCard({ task, canDrag, isRunning, onNavigate }: BoardCardProps) {
         isDragging && "opacity-50"
       )}
     >
-      <TaskCard task={task} isRunning={isRunning} />
+      <TaskCard task={task} isRunning={isRunning} subtaskCount={subtaskCount} />
     </div>
   );
 }
@@ -74,30 +79,45 @@ interface BoardColumnProps {
   status: TaskStatus;
   label: string;
   tasks: TaskWithRelations[];
+  allTasks: TaskWithRelations[];
   user: User;
   runningTaskId: string | null;
+  canAdd: boolean;
   onNavigate: (taskId: string) => void;
+  onAddTask: (status: TaskStatus) => void;
 }
 
-function BoardColumn({ status, label, tasks, user, runningTaskId, onNavigate }: BoardColumnProps) {
+/** Phase 12B — compact column header (dot + title + count) matching Reference 2's density, and a
+ * bottom "+ Add task" affordance instead of the old boxed column chrome. */
+function BoardColumn({ status, label, tasks, allTasks, user, runningTaskId, canAdd, onNavigate, onAddTask }: BoardColumnProps) {
   const { setNodeRef, isOver } = useDroppable({ id: status });
   const color = STATUS_COLOR_VAR[status];
 
   return (
     <div
       ref={setNodeRef}
-      style={{ borderTopColor: color }}
       className={cn(
-        "flex w-72 shrink-0 flex-col gap-3 rounded-xl border border-t-4 bg-muted/30 p-3 transition-colors",
-        isOver && "border-primary/50 bg-primary/10"
+        "flex w-64 shrink-0 flex-col gap-2 rounded-lg border bg-muted/20 p-2 transition-colors",
+        isOver && "border-primary/50 bg-primary/5"
       )}
     >
-      <div className="flex items-center gap-2 px-1">
-        <span className="size-2.5 shrink-0 rounded-full" style={{ backgroundColor: color }} aria-hidden="true" />
+      <div className="flex items-center gap-1.5 px-1 py-0.5">
+        <span className="size-2 shrink-0 rounded-full" style={{ backgroundColor: color }} aria-hidden="true" />
         <span className="text-sm font-medium">{label}</span>
         <span className="font-mono text-xs text-muted-foreground">{tasks.length}</span>
+        {canAdd && (
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className="ml-auto size-6"
+            aria-label={`Add task to ${label}`}
+            onClick={() => onAddTask(status)}
+          >
+            <Plus className="size-3.5" aria-hidden="true" />
+          </Button>
+        )}
       </div>
-      <div className="flex min-h-16 flex-col gap-2">
+      <div className="flex min-h-16 flex-col gap-1.5">
         {tasks.length === 0 ? (
           <p className="px-1 text-xs text-muted-foreground">No tasks.</p>
         ) : (
@@ -107,11 +127,17 @@ function BoardColumn({ status, label, tasks, user, runningTaskId, onNavigate }: 
               task={task}
               canDrag={canProgressTask(user, { assigneeIds: task.assignees.map((a) => a.id) })}
               isRunning={task.id === runningTaskId}
+              subtaskCount={task.parentTaskId ? undefined : subtaskSummary(task.id, allTasks)}
               onNavigate={() => onNavigate(task.id)}
             />
           ))
         )}
       </div>
+      {canAdd && (
+        <Button variant="outline" size="sm" className="w-full justify-start text-muted-foreground" onClick={() => onAddTask(status)}>
+          <Plus /> Add task
+        </Button>
+      )}
     </div>
   );
 }
@@ -137,6 +163,7 @@ export function TaskBoard({ user, tasks, onChanged, runningTaskId = null, onOpen
   // drawer's status Select shows. Derived from the already-fetched `tasks` list (no extra fetch —
   // Section 49's N+1 avoidance), never stored.
   const [pendingDoneTaskId, setPendingDoneTaskId] = useState<string | null>(null);
+  const [addStatus, setAddStatus] = useState<TaskStatus | null>(null);
 
   const grouped = new Map<TaskStatus, TaskWithRelations[]>(COLUMNS.map((c) => [c.key, []]));
   for (const task of tasks) grouped.get(task.status)?.push(task);
@@ -168,16 +195,19 @@ export function TaskBoard({ user, tasks, onChanged, runningTaskId = null, onOpen
 
   return (
     <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
-      <div className="flex gap-4 overflow-x-auto pb-2">
+      <div className="flex gap-3 overflow-x-auto pb-2">
         {COLUMNS.map(({ key, label }) => (
           <BoardColumn
             key={key}
             status={key}
             label={label}
             tasks={grouped.get(key) ?? []}
+            allTasks={tasks}
             user={user}
             runningTaskId={runningTaskId}
+            canAdd
             onNavigate={navigate}
+            onAddTask={setAddStatus}
           />
         ))}
       </div>
@@ -191,6 +221,16 @@ export function TaskBoard({ user, tasks, onChanged, runningTaskId = null, onOpen
         confirmLabel="Mark Done"
         onConfirm={() => {
           if (pendingDoneTaskId) void applyStatusChange(pendingDoneTaskId, "done");
+        }}
+      />
+      <TaskFormDialog
+        open={addStatus !== null}
+        onOpenChange={(open) => !open && setAddStatus(null)}
+        mode="create"
+        defaultStatus={addStatus ?? undefined}
+        onSaved={() => {
+          setAddStatus(null);
+          onChanged();
         }}
       />
     </DndContext>

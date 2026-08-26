@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { ArrowUpRight, Pencil } from "lucide-react";
+import { ArrowUpRight, Layers, ListChecks, Pencil } from "lucide-react";
 import { useAuth } from "@/lib/auth/auth-context";
 import { useTask, useSubtasks } from "@/lib/data/hooks/use-tasks";
 import { useTaskTimer } from "@/lib/data/hooks/use-task-timer";
@@ -17,12 +17,9 @@ import { TaskFormDialog } from "@/components/tasks/task-form-dialog";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { formatDueDateShort } from "@/lib/data/task-display";
 
 import { getInitials as initials } from "@/lib/initials";
-
-function formatDueDate(value: string) {
-  return new Date(value).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-}
 
 interface TaskDrawerProps {
   /** The Task to preview, or null when Quick View should be closed. */
@@ -103,7 +100,6 @@ function LoadedTaskQuickView({
   const checklistTotal = task.checklistItems.length;
   const checklistDone = task.checklistItems.filter((ci) => ci.isDone).length;
   const subtaskDone = subtasks.filter((s) => s.status === "done").length;
-  const isSelfOnlyAssignee = task.assignees.length === 1 && task.assignees[0].id === user.id;
 
   return (
     <>
@@ -149,24 +145,23 @@ function LoadedTaskQuickView({
         <div className="flex flex-wrap items-center gap-2">
           <TaskStatusBadge status={task.status} />
           <TaskPriorityBadge priority={task.priority} />
-          {task.dueDate && <span className="text-xs text-muted-foreground">Due {formatDueDate(task.dueDate)}</span>}
+          {task.dueDate && <span className="text-xs text-muted-foreground">Due {formatDueDateShort(task.dueDate)}</span>}
         </div>
 
-        {!isSelfOnlyAssignee &&
-          (task.assignees.length === 0 ? (
-            <span className="text-xs text-muted-foreground">Unassigned</span>
-          ) : (
-            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <div className="flex -space-x-2">
-                {task.assignees.map((assignee) => (
-                  <Avatar key={assignee.id} size="sm" className="ring-2 ring-card">
-                    <AvatarFallback className="text-[0.65rem]">{initials(assignee.fullName)}</AvatarFallback>
-                  </Avatar>
-                ))}
-              </div>
-              {task.assignees.length === 1 ? task.assignees[0].fullName : `${task.assignees.length} assignees`}
+        {task.assignees.length === 0 ? (
+          <span className="text-xs text-muted-foreground">Unassigned</span>
+        ) : (
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <div className="flex -space-x-2">
+              {task.assignees.map((assignee) => (
+                <Avatar key={assignee.id} size="sm" className="ring-2 ring-card">
+                  <AvatarFallback className="text-[0.65rem]">{initials(assignee.fullName)}</AvatarFallback>
+                </Avatar>
+              ))}
             </div>
-          ))}
+            {task.assignees.length === 1 ? task.assignees[0].fullName : `${task.assignees.length} assignees`}
+          </div>
+        )}
 
         {task.description && (
           <p className="line-clamp-3 text-sm text-muted-foreground whitespace-pre-wrap">{task.description}</p>
@@ -175,12 +170,14 @@ function LoadedTaskQuickView({
         {(checklistTotal > 0 || (!task.parentTaskId && subtasks.length > 0)) && (
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
             {checklistTotal > 0 && (
-              <span>
+              <span className="flex items-center gap-1">
+                <ListChecks className="size-3.5" aria-hidden="true" />
                 Checklist {checklistDone}/{checklistTotal}
               </span>
             )}
             {!task.parentTaskId && subtasks.length > 0 && (
-              <span>
+              <span className="flex items-center gap-1">
+                <Layers className="size-3.5" aria-hidden="true" />
                 Subtasks {subtaskDone}/{subtasks.length}
               </span>
             )}

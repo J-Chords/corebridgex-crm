@@ -167,14 +167,15 @@ export function AddSubtaskDialog({ open, onOpenChange, parentTask, onCreated }: 
               />
             </div>
           </div>
-          <div className="flex flex-col gap-1.5">
-            <Label>Assignee(s)</Label>
-            {employeeView ? (
-              <TaskAssigneeChips staff={[user]} selectedIds={[user.id]} />
-            ) : (
+          {/* Phase 12B final correction — same rule as the Task create form: an Employee's Subtask
+              is always self-assigned automatically (createSubtask/resolveAssigneeIds), so a
+              read-only "you" chip adds no information here either. */}
+          {!employeeView && (
+            <div className="flex flex-col gap-1.5">
+              <Label>Assignee(s)</Label>
               <TaskAssigneeChips staff={assignableStaff} selectedIds={form.assigneeIds} onToggle={toggleAssignee} />
-            )}
-          </div>
+            </div>
+          )}
           <div className="flex flex-col gap-1.5">
             <Label>Checklist</Label>
             <ChecklistBuilder items={form.checklist} onAdd={addChecklistRow} onUpdate={updateChecklistRow} onRemove={removeChecklistRow} />

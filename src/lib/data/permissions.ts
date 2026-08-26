@@ -174,6 +174,31 @@ export function canProgressTask(viewer: User, task: { assigneeIds: string[] }): 
 }
 
 /**
+ * Phase 12B final polish — ADDING a new checklist line, deliberately narrower than `canEditTask`:
+ * a direct assignee needs enough operational control to make the work executable (the Supervisor
+ * forgot an item), but that must never imply title/description/context/assignee/priority/due-date
+ * edit rights, or the ability to delete/rename someone else's existing checklist line (those stay
+ * on `canEditTask`, unchanged). True for anyone who already has full edit rights (so Supervisor/
+ * Superadmin/the self-added creator are unaffected), OR any direct assignee.
+ *
+ * NOT YET WIRED into `TaskChecklist`'s add-gate. The database boundary for actually adding a
+ * checklist row is `checklist_items`' own RLS policy (`checklist_items_write`, `USING/WITH CHECK
+ * can_edit_task(task_id)`), and the client's only existing write path (`updateTask`) touches the
+ * `tasks` row first — RLS-gated by `tasks_update`'s own `can_edit_task(id)` — before it ever
+ * reaches `checklist_items`. Both reject a directly-assigned-but-non-editing Employee today, so
+ * this helper alone cannot yet make the feature work end-to-end against real Supabase without a
+ * new narrow SECURITY DEFINER RPC (mirroring `toggle_checklist_item`'s existing `can_progress_task`-
+ * gated pattern, INSERT-only, touching no other column/table) — see docs/current-project-state.md's
+ * Phase 12B final-polish section for the exact proposed migration, intentionally not created yet.
+ */
+export function canAddTaskChecklistItem(
+  viewer: User,
+  task: { assigneeIds: string[]; createdById: string; selfAdded: boolean }
+): boolean {
+  return canEditTask(viewer, task) || task.assigneeIds.includes(viewer.id);
+}
+
+/**
  * Logging your OWN time (start/pause/resume/stop a timer, add a manual entry) — deliberately
  * narrower than `canProgressTask`, and no longer an alias of it. Being able to manage/progress a
  * task (status changes, checklist ticks, correcting *someone else's* completed time) never by

@@ -82,12 +82,16 @@ interface TaskFormDialogProps {
   defaultWorkstreamId?: string;
   /** Pre-selects an Activity tag — used by the workstream detail page's per-Activity "+ Add Task". */
   defaultActivityId?: string;
+  /** Phase 12B — pre-selects a starting status, used by the Board's per-column "+ Add task" so a
+   * card created from the "In Progress" column doesn't land in Todo and need an extra status change.
+   * Purely a form-state default — the same `create_task`/status-change path runs either way. */
+  defaultStatus?: TaskStatus;
   onSaved: () => void;
 }
 
 const ALL_PROJECTS = "all";
 
-function emptyForm(userId: string, defaultWorkstreamId?: string, defaultActivityId?: string) {
+function emptyForm(userId: string, defaultWorkstreamId?: string, defaultActivityId?: string, defaultStatus?: TaskStatus) {
   return {
     title: "",
     description: "",
@@ -95,7 +99,7 @@ function emptyForm(userId: string, defaultWorkstreamId?: string, defaultActivity
     workstreamId: defaultWorkstreamId ?? "",
     activityId: defaultActivityId ?? NO_ACTIVITY,
     assigneeIds: [userId],
-    status: "todo" as TaskStatus,
+    status: defaultStatus ?? ("todo" as TaskStatus),
     priority: "medium" as TaskPriority,
     dueDate: "",
     expectedMinutes: null as number | null,
@@ -120,12 +124,13 @@ export function TaskFormDialog({
   task,
   defaultWorkstreamId,
   defaultActivityId,
+  defaultStatus,
   onSaved,
 }: TaskFormDialogProps) {
   const { user } = useAuth();
   const { companies } = useCompanies();
   const { projects } = useProjects();
-  const [form, setForm] = useState(() => emptyForm(user?.id ?? "", defaultWorkstreamId, defaultActivityId));
+  const [form, setForm] = useState(() => emptyForm(user?.id ?? "", defaultWorkstreamId, defaultActivityId, defaultStatus));
   const { workstreams, refresh: refreshWorkstreams } = useWorkstreams({
     projectId: form.projectId === ALL_PROJECTS ? undefined : form.projectId,
   });
@@ -224,9 +229,9 @@ export function TaskFormDialog({
         checklist: task.checklistItems.map((ci) => ({ id: ci.id, description: ci.description, key: ci.id })),
       });
     } else {
-      setForm(emptyForm(user.id, defaultWorkstreamId, defaultActivityId));
+      setForm(emptyForm(user.id, defaultWorkstreamId, defaultActivityId, defaultStatus));
     }
-  }, [open, task, user, defaultWorkstreamId, defaultActivityId]);
+  }, [open, task, user, defaultWorkstreamId, defaultActivityId, defaultStatus]);
 
   // A brand-new task on a workstream that actually has activities to choose from must be tagged to
   // one — "Workstream → Activity → Task" is the real hierarchy for normal client service work now.
@@ -673,24 +678,19 @@ export function TaskFormDialog({
                 </div>
               </FormSection>
 
-              <FormSection label="People">
-                {employeeView ? (
-                  <>
-                    <TaskAssigneeChips staff={[user]} selectedIds={[user.id]} />
-                    {mode === "create" && (
-                      <p className="text-xs text-muted-foreground">
-                        Self-added tasks go live immediately — your supervisor and superadmin are notified.
-                      </p>
-                    )}
-                  </>
-                ) : (
+              {/* Phase 12B final correction — Employee assignment is always self, automatically,
+                  regardless of what this form shows or doesn't; a read-only "you" chip added no
+                  information an Employee didn't already know, so the whole section is dropped for
+                  them to keep the form cleaner. Supervisor/Superadmin keep full Assignees, unchanged. */}
+              {!employeeView && (
+                <FormSection label="People">
                   <TaskAssigneeChips
                     staff={assignableStaff}
                     selectedIds={form.assigneeIds}
                     onToggle={toggleAssignee}
                   />
-                )}
-              </FormSection>
+                </FormSection>
+              )}
 
               <FormSection label="Checklist">
                 <ChecklistBuilder
@@ -730,12 +730,19 @@ export function TaskFormDialog({
           onSelect={handleUseReuseCandidate}
         />
       )}
-      {companyForNewWorkstream && (
+      {companyForNewWorkstream && selectedProject && (
         <WorkstreamFormDialog
           open={newWorkstreamOpen}
           onOpenChange={setNewWorkstreamOpen}
           mode="create"
           company={companyForNewWorkstream}
+          // Bug fix — this dialog was being opened with `projectId` omitted even though a specific
+          // Project was already required (and resolved) just to show the "+ New service" button.
+          // Omitting it let the new-service RPC fall back to its own company-wide auto-resolution
+          // (`enforce_workstream_project_link`), which raises rather than guessing whenever that
+          // company has zero or more than one Project — surfacing a confusing late error instead of
+          // simply using the Project context the Task form already had in hand.
+          projectId={selectedProject.id}
           onSaved={() => {}}
           onCreated={handleWorkstreamCreated}
         />
