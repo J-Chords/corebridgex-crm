@@ -5,6 +5,15 @@ design proposal. No product code, migration, RLS policy, or provider was changed
 (one factual documentation correction is noted separately in the final report, not applied here
 without approval). Nothing in this document should be treated as built.
 
+> **Superseded IA recommendation, 2026-08-26.** Section 6 below recommended a new, separate
+> operational Client route. That recommendation was rejected by the product owner before any of it
+> was committed — see [Section 21, "Post-audit IA decision — Project-centric operational
+> model,"](#21-post-audit-ia-decision--project-centric-operational-model) at the end of this
+> document. Sections 1–20 are preserved unedited below as the original audit record; every
+> underlying architecture/data finding in them (Parts A–C, N, and the locked constraints) remains
+> valid and is exactly what the revised, Project-centric Phase 13B is built on. Only the "where does
+> this live" conclusion in Sections 6 and 16–17 changed.
+
 **Question this phase answers for the future feature:** for one Client (Company), "what have we
 ever done for them" — not just what's currently open — spanning every Project/Service/Task/Time
 entry/Report/Note/Visit/Handoff that has ever touched that Company, readable by the roles who
@@ -311,3 +320,54 @@ to Employee/Supervisor with zero backend work. The recommended path (Option B: a
 `/dashboard/clients/[id]`-style operational route, gated by the existing `canAccessCompany`) adds no
 new authorization surface, touches no existing Superadmin boundary, and can be built incrementally
 across 13B–13E in the order above.
+
+## 21. Post-audit IA decision — Project-centric operational model
+
+**Dated 2026-08-26, after Phase 13A's Section 6 recommendation was briefly implemented
+(uncommitted) as a separate `/dashboard/clients`/`/dashboard/clients/[id]` route.**
+
+**Decision: the separate operational Client workspace is rejected.** The uncommitted
+implementation was fully removed before anything from it was committed or pushed — no trace of it
+remains in git history.
+
+**Reason:** for Employee/Supervisor, Project already represents the Client work assigned to them.
+Introducing a second navigation layer — Clients → Client → Project — on top of the existing
+Projects → Project path creates an unnecessary extra mental model and forces a choice
+(Clients-first or Projects-first) that the product doesn't need. Employee/Supervisor should not
+have to decide which of two roughly-equivalent entry points to use for the same work.
+
+**What this changes, relative to Sections 6, 16, and 17 above:**
+- The new, separate Client route recommended in Section 6 ("Option B") is **rejected**. No
+  `/dashboard/clients` or `/dashboard/clients/[id]` route, no new sidebar item, no command-palette
+  repoint to a Client-specific route.
+- Employee/Supervisor's operational entry point for Client work remains exactly what it already
+  was: **Projects → Project** (`/dashboard/projects`, `/dashboard/projects/[id]`).
+- **Company remains the permanent, administrative Client master** — Superadmin-only,
+  unchanged, Contacts included, at `/dashboard/companies`/`/dashboard/companies/[id]`.
+- **Permanent Client context (Company Notes) will be surfaced *through* the Project page**, not a
+  separate workspace. The data model is unaffected: notes stay stored with `companyId`, never
+  `projectId`, so the same set of notes correctly appears on every year's Project for that Client
+  (Alderleaf 2025 / 2026 / 2027 all surface the same permanent Client context) without duplication
+  and without losing anything across an annual Project renewal.
+- **Historical/related Projects for the same Client may be surfaced within the Project page**
+  (e.g. "Other Projects for this Client: 2027 — Active, 2026 — Current, 2025 — Completed"), but
+  only the Projects the viewer already has legitimate Project-level access to
+  (`canAccessProject`) — Company-level access must never be used as a shortcut to reveal an
+  otherwise-inaccessible historical Project. This is a **stricter** gate than the rejected Client
+  workspace would have used (which would have shown all Projects the viewer's Company access
+  covered); it's intentionally kept at the narrower, already-established Project-authorization
+  level.
+- Contacts remain Superadmin-only and are still never surfaced to Employee/Supervisor anywhere,
+  including through the Project page.
+- Later Phase 13 work (completed-work/report history, time/team aggregates, unified Timeline)
+  attaches to the **Project workspace**, not to a Client workspace — no separate route is created
+  for any later slice either.
+
+**What is unaffected — everything else in this document stays valid:** the full data-source
+inventory (Section 3), the Permanent Client Note finding that Company Notes already work for
+Employee/Supervisor at the RLS layer (Section 4), the access-model reasoning reusing
+`canAccessCompany`/`canAccessProject` rather than inventing a new permission system (Section 5, now
+applied to the Project page instead of a new route), the exists-vs-new classification (Section 15),
+and the "no generic audit-log table needed" conclusion (Section 15) are all carried forward
+unchanged into the revised Phase 13B–13E sequence recorded in
+`docs/current-project-state.md`.

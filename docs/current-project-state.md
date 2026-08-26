@@ -1248,43 +1248,69 @@ canAddTaskChecklistItem`/`add_task_checklist_item` RPC, `canProgressTask`, `canE
 
 **Status: COMPLETE / CHECKPOINTED.** Audit/design only — no product code, migration, RLS, or
 provider was changed in 13A itself. Full write-up in `docs/phase-13-client-history-audit.md`.
-Checkpoint: see git log for the exact commit hash (this file cannot embed its own commit's SHA —
-established convention, see Phase 10/11/12B). Accepted by the user as the architecture source of
-truth for Phase 13B onward.
-
-**Accepted architectural decisions (locked for 13B–13E):**
-- Company administration remains a separate, Superadmin-only surface
-  (`/dashboard/companies`, `/dashboard/companies/[id]`) — unchanged, not reused.
-- Operational Client History will live on a new, separate Client route, not a role-branch of the
-  Company admin page.
-- Employee/Supervisor access to the new Client route reuses existing legitimate Company access
-  (`canAccessCompany`/`visibleCompanyIds`) — no new permission system.
-- Client Contacts remain Superadmin-only and are excluded entirely from Client History.
-- Company Notes already support legitimate Employee/Supervisor access at the RLS/provider layer
-  (`can_access_company` gates `notes_select`/`notes_insert` for the company branch) — reused as-is,
-  no new Note type or table.
-- No generic audit-log table is required for v1.
-- Client-wide raw TimeEntry visibility will NOT be broadened for Client History — TimeEntry stays
-  person-hierarchy scoped; any Company-wide "hours" figure is deferred/labeled accordingly.
-- **13B** = Client workspace + Overview + permanent Client context + Project/Service history.
-- **13C** = completed work + Client Report history.
-- **13D** = safe time/team aggregates.
-- **13E** = unified Timeline (explicitly excluding surveillance-shaped events).
+Checkpoint: `184abc81f1f21e177aac193a3c7a933d418b8130`, pushed to GitHub.
 
 Read-only audit of the existing Company/Client/Project/Workstream/Task/Time/Reports/Notes/Visits/
-Handoffs architecture and role-access model, to design (not build) a future "Client operational
-history" workspace answering "what have we ever done for this client," not only what's currently
-open. Headline findings: Company-level Notes (`listNotesForCompany`/`createCompanyNote`) already
-exist and are already gated by the same general `canAccessCompany` RLS rule used everywhere else —
-not Superadmin-restricted at the data layer, only currently rendered on the Superadmin-only Company
-admin page; every other needed data source (Tasks, Projects, Workstreams, Time Entries, Client
-Reports, Visit Entries, Task Handoffs) already carries the right foreign keys and RLS for the
-existing three-role model. Recommended design: a new, separate operational Client route (not a
-reuse of `/dashboard/companies/[id]`, which stays Superadmin-only, unchanged), gated by the existing
-`canAccessCompany`, delivered incrementally as 13B (shell + Overview + Notes + Project/Service
-history), 13C (completed-work + report history), 13D (time/team aggregates), 13E (unified
-Timeline, explicitly excluding any surveillance-shaped events). No new generic audit-log table was
-found to be necessary. Phase 13B has not been scoped or started.
+Handoffs architecture and role-access model. Headline findings, still valid and still the
+architecture source of truth: Company-level Notes (`listNotesForCompany`/`createCompanyNote`)
+already exist and are already gated by the same general `canAccessCompany` RLS rule used
+everywhere else — not Superadmin-restricted at the data layer, only currently rendered on the
+Superadmin-only Company admin page; every other needed data source (Tasks, Projects, Workstreams,
+Time Entries, Client Reports, Visit Entries, Task Handoffs) already carries the right foreign keys
+and RLS for the existing three-role model; Company is the permanent Client master, Projects remain
+the annual/engagement boundary, historical Projects relate through `companyId`, Services stay tied
+to Project, Tasks stay tied to Project/Service/Activity, Client Contacts remain Superadmin-only, no
+generic audit-log table is required for v1, and raw coworker TimeEntry visibility must not be
+broadened.
+
+**The audit's original UI/IA recommendation (a separate `/dashboard/clients` workspace) was
+superseded by a product-owner decision before any of it was committed** — see
+`docs/phase-13-client-history-audit.md`'s "Post-audit IA decision — Project-centric operational
+model" section for the full reasoning. The underlying architecture/data findings above are
+unaffected; only the recommended UI location changed.
+
+### Phase 13B — Project Workspace History + Permanent Client Context
+
+**Status: DESIGN READY / IMPLEMENTATION NOT STARTED.**
+
+An initial Phase 13B ("Client Workspace + Permanent Client Context") was implemented as a separate
+`/dashboard/clients` + `/dashboard/clients/[id]` operational route, reusing existing role-scoped
+providers/hooks with no migration/RLS/provider changes. **Before any of it was committed, the
+product owner rejected the separate-Client-workspace direction**: for Employee/Supervisor, Project
+already represents their assigned Client work, and a second "Clients → Client → Project"
+navigation layer would create an unnecessary extra mental model. That entire uncommitted
+implementation (`src/app/dashboard/clients/**`, the sidebar "Clients" item, the command-palette
+Companies-category repoint, `docs/phase-13b-client-workspace-spec.md`) was fully removed/reverted
+before this correction pass ended — nothing from it was ever committed or pushed.
+
+**Redefined Phase 13B** keeps the locked model — Company (permanent administrative Client master,
+Superadmin-only) → Project (the Employee/Supervisor operational Client workspace) → Service →
+Activity → Task → Subtask → Checklist — and makes the *existing* Project workspace richer instead
+of adding a parallel one:
+- Client context surfaced **inside** the Project page (a "Client Context" section showing the
+  Company's permanent Notes — still stored with `companyId`, never `projectId`, so the same notes
+  correctly survive annual Project renewal and appear on every year's Project for that Client, with
+  no duplication).
+- Other Projects for the same Client, shown only where the viewer already has legitimate
+  Project-level access (`canAccessProject`) — Company access alone must never be used to expose an
+  otherwise-inaccessible historical Project.
+- Project overview/history IA evolving toward Overview/Tasks/Services/Team/History tabs (not built
+  yet).
+
+No new sidebar item, no `/dashboard/clients` route. Company administration
+(`/dashboard/companies`, `/dashboard/companies/[id]`) stays Superadmin-only, Contacts included,
+completely unchanged. Implementation has not started — this pass was architecture correction only.
+
+**Revised Phase 13 delivery sequence:**
+- **13B** — Project Workspace History + Permanent Client Context: Client context inside Project,
+  permanent Company Notes surfaced through Project, related/previous accessible Projects, Project
+  overview/history IA.
+- **13C** — Project Completed Work + Client Report History: completed Tasks/Subtasks, Project
+  report history, filters/search.
+- **13D** — Safe Project Time + Team Intelligence: legitimate aggregates only, no raw coworker
+  TimeEntry visibility broadening.
+- **13E** — Project Operational Timeline: factual events only, no surveillance-shaped entries,
+  paginated.
 
 ## Next roadmap
 
