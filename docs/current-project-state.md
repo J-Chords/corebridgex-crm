@@ -1242,6 +1242,50 @@ create/edit form dialog was simplified.
 canAddTaskChecklistItem`/`add_task_checklist_item` RPC, `canProgressTask`, `canEditTask`/
 `updateTask`) — not touched in this pass, no new checklist migration.
 
+## Phase 13 — Client History & Operational Intelligence
+
+### Phase 13A — Client History & Operational Intelligence Audit
+
+**Status: COMPLETE / CHECKPOINTED.** Audit/design only — no product code, migration, RLS, or
+provider was changed in 13A itself. Full write-up in `docs/phase-13-client-history-audit.md`.
+Checkpoint: see git log for the exact commit hash (this file cannot embed its own commit's SHA —
+established convention, see Phase 10/11/12B). Accepted by the user as the architecture source of
+truth for Phase 13B onward.
+
+**Accepted architectural decisions (locked for 13B–13E):**
+- Company administration remains a separate, Superadmin-only surface
+  (`/dashboard/companies`, `/dashboard/companies/[id]`) — unchanged, not reused.
+- Operational Client History will live on a new, separate Client route, not a role-branch of the
+  Company admin page.
+- Employee/Supervisor access to the new Client route reuses existing legitimate Company access
+  (`canAccessCompany`/`visibleCompanyIds`) — no new permission system.
+- Client Contacts remain Superadmin-only and are excluded entirely from Client History.
+- Company Notes already support legitimate Employee/Supervisor access at the RLS/provider layer
+  (`can_access_company` gates `notes_select`/`notes_insert` for the company branch) — reused as-is,
+  no new Note type or table.
+- No generic audit-log table is required for v1.
+- Client-wide raw TimeEntry visibility will NOT be broadened for Client History — TimeEntry stays
+  person-hierarchy scoped; any Company-wide "hours" figure is deferred/labeled accordingly.
+- **13B** = Client workspace + Overview + permanent Client context + Project/Service history.
+- **13C** = completed work + Client Report history.
+- **13D** = safe time/team aggregates.
+- **13E** = unified Timeline (explicitly excluding surveillance-shaped events).
+
+Read-only audit of the existing Company/Client/Project/Workstream/Task/Time/Reports/Notes/Visits/
+Handoffs architecture and role-access model, to design (not build) a future "Client operational
+history" workspace answering "what have we ever done for this client," not only what's currently
+open. Headline findings: Company-level Notes (`listNotesForCompany`/`createCompanyNote`) already
+exist and are already gated by the same general `canAccessCompany` RLS rule used everywhere else —
+not Superadmin-restricted at the data layer, only currently rendered on the Superadmin-only Company
+admin page; every other needed data source (Tasks, Projects, Workstreams, Time Entries, Client
+Reports, Visit Entries, Task Handoffs) already carries the right foreign keys and RLS for the
+existing three-role model. Recommended design: a new, separate operational Client route (not a
+reuse of `/dashboard/companies/[id]`, which stays Superadmin-only, unchanged), gated by the existing
+`canAccessCompany`, delivered incrementally as 13B (shell + Overview + Notes + Project/Service
+history), 13C (completed-work + report history), 13D (time/team aggregates), 13E (unified
+Timeline, explicitly excluding any surveillance-shaped events). No new generic audit-log table was
+found to be necessary. Phase 13B has not been scoped or started.
+
 ## Next roadmap
 
 **Phase 11 in its entirety (11A–11D) is COMPLETE and MANUALLY ACCEPTED** — see the phase's own sections above, including 11D's final decisions (Client Visit restriction is intentionally UI-only, no Visit RLS migration; legacy Internal Reports are Superadmin historical-archive-only with new generation removed from the UI; Review Queue and Client Report Schedules UI removed, both backends fully preserved; exactly three roles) and the JWT "issued at future" investigation (root-caused to transient Supabase hosted-infrastructure clock skew, confirmed resolved by the user reloading the authenticated app). Checkpointed and pushed to GitHub — see "Latest verified checkpoint" for the exact hash.
@@ -1327,6 +1371,7 @@ Read the Current phase and Next roadmap sections before proposing changes.
 - Date: 2026-08-25 (Phase 11 checkpointed and pushed as `4bb335d8e1ead751624f8187246da36c1e895a75`; Phase 12A implemented — Client Report Draft/Finalized status removed from normal UI, Client/Reporting Period/Services terminology standardized, Project removed from the visible generation flow while staying Project-scoped internally; Task redesign baseline document created, no Task UI changed)
 - Date: 2026-08-26 (Phase 12A checkpointed and pushed as `fef02bef625537cecf5648939e12fad3d5a31a6b`; Phase 12B implemented — split rail+nav sidebar, Board-default Tasks Home with a consolidated compact toolbar, reference-driven Board/List/Checklist redesigns, two-column full Task page with a compact status control and a quieter right-rail Time Tracking widget, redesigned Subtask rows, Quick View visual alignment — no backend/permission changes)
 - Date: 2026-08-26 (Phase 12B final polish — Quick View assignee-visibility fix; assigned-Employee checklist-add narrow RPC designed, then implemented and applied to the hosted project as `add_task_checklist_item`; final correction pass — Tasks Home default switched to List, Service-creation Project-context bug found and fixed, Service multi-Activity support confirmed already correct, Employee create/edit form Assignee control removed. Manually accepted in full by the user — "12B correction final pass." Phase 12B checkpointed and pushed to GitHub. Phase 12 in its entirety is now COMPLETE.)
+- Date: 2026-08-26 (Phase 13A — Client History & Operational Intelligence Audit: read-only architecture audit and design produced, `docs/phase-13-client-history-audit.md`; no code/migration/RLS/provider changes; manually accepted and checkpointed as the architecture source of truth for Phase 13B onward)
 - **Phase 8 is COMPLETE and pushed** (`a77785c57c3e5424fa63b4221ee9523a688ffae9`). Phase 9A (Reporting Automation audit) is complete and was read-only. **Phase 9B — Reporting Foundation + Client Report Correctness is COMPLETE and manually accepted**: Client Report gained Project scoping (`project_id`, deterministic-only legacy backfill), both report types' generation moved off a raw INSERT onto SECURITY DEFINER RPCs, Employees may now generate Client Report drafts (Project-scoped), generate/finalize are now separate permissions — finalize is never owner-based; **Supervisor finalization is legitimate-team/report-scoped** (reuses `can_view_client_report` + a Project-access defense-in-depth check), **Superadmin remains organization-wide**, a finalized Client Report can no longer be reopened, and the Accomplishments-vs-Client-Report naming confusion that produced the originally-reported RLS error was disambiguated in the UI. Destructive actions (trash/restore/permanently-delete) are separated from view/comment/finalize into their own narrower scope — trash/restore is generator-or-Superadmin-only, permanent delete is Superadmin-only always. A manually-reported Client Report detail-page 404 was root-caused to a **stale local Turbopack dev-server route cache**, not RLS or application code. Checkpointed as `299499948621f0d0d4742529d1e658d91b8eaf11`.
 - **Phase 9C — Daily Update Automation is COMPLETE and manually accepted** ("Phase 9C passed") — see its own section above. Checkpointed as `a2f295f94a40e5c446e371a4b76cac9fcfb7dcdf`.
 - **Phase 9D — Weekly Client Report Generation is COMPLETE and MANUALLY ACCEPTED** — see its own section above. Checkpointed as `39614fa660529c72d891c37ec573758599462559`.
