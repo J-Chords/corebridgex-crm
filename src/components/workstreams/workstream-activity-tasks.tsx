@@ -2,11 +2,12 @@
 
 import { Plus } from "lucide-react";
 import { useAuth } from "@/lib/auth/auth-context";
-import { isSuperadmin, isSupervisor, managesUser } from "@/lib/data/permissions";
+import { isEmployee, isSuperadmin, isSupervisor, managesUser } from "@/lib/data/permissions";
 import type { DepartmentWithActivities } from "@/lib/data/providers/activity-catalog-provider";
 import type { TaskWithRelations } from "@/lib/data/providers/tasks-provider";
 import type { Activity, TaskStatus } from "@/lib/data/types";
-import { TaskRowList } from "@/components/tasks/task-row";
+import { TaskListRow, TaskListHeader } from "@/components/tasks/task-list-row";
+import { isAssigneeColumnRedundantForViewer, subtaskSummary } from "@/lib/data/task-display";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -16,8 +17,46 @@ interface WorkstreamActivityTasksProps {
   catalogLoading: boolean;
   tasks: TaskWithRelations[];
   isLoading: boolean;
+  /** For the shared `TaskListRow`'s running-timer indicator — same prop every other List-view surface (Tasks Home, the Project workspace's Tasks tab) already threads through. */
+  runningTaskId: string | null;
   /** Opens the (shared, page-level) Task form pre-filled with this workstream — and this activity, if given. */
   onAddTask: (activityId?: string) => void;
+}
+
+/** Row-level rendering shared with every other List-view surface (Tasks Home, the Project
+ * workspace's Tasks tab) — Phase 13B final correction pass replaced this file's own
+ * `TaskRowList`/`TaskRow` rendering with the literal same `TaskListRow` component, per the locked
+ * "no third Task visual system" rule. Only this file's Activity-grouping/role-aware sectioning
+ * (My Work/Team Work/Other Activities) is unique to the Service workspace — the row itself is not. */
+function ActivityTaskRows({
+  tasks,
+  allTasks,
+  runningTaskId,
+  showAssignee,
+}: {
+  tasks: TaskWithRelations[];
+  allTasks: TaskWithRelations[];
+  runningTaskId: string | null;
+  showAssignee: boolean;
+}) {
+  return (
+    <div className="flex flex-col">
+      <TaskListHeader context="service" showAssignee={showAssignee} />
+      <div className="flex flex-col divide-y">
+        {tasks.map((task, i) => (
+          <TaskListRow
+            key={task.id}
+            task={task}
+            index={i}
+            isRunning={task.id === runningTaskId}
+            subtaskCount={task.parentTaskId ? undefined : subtaskSummary(task.id, allTasks)}
+            context="service"
+            showAssignee={showAssignee}
+          />
+        ))}
+      </div>
+    </div>
+  );
 }
 
 /** In-progress/blocked/waiting-on-client work first — the actionable statuses — then todo, then done last so completed work never crowds out what still needs attention. Ties broken by due date (soonest first, undated last), matching what the row itself already implies. */
@@ -49,13 +88,19 @@ interface ActivityGroup {
 function ActivityCard({
   activity,
   tasks,
+  allTasks,
   isLoading,
+  runningTaskId,
   onAddTask,
+  showAssignee,
 }: {
   activity: Activity;
   tasks: TaskWithRelations[];
+  allTasks: TaskWithRelations[];
   isLoading: boolean;
+  runningTaskId: string | null;
   onAddTask: (activityId?: string) => void;
+  showAssignee: boolean;
 }) {
   const isEmpty = !isLoading && tasks.length === 0;
   return (
@@ -77,21 +122,48 @@ function ActivityCard({
           <Plus className="size-3" /> Add Task
         </Button>
       </div>
-      {!isEmpty && (
-        <TaskRowList tasks={tasks} isLoading={isLoading} emptyMessage="No tasks yet under this activity." />
+      {isEmpty ? (
+        <p className="text-sm text-muted-foreground">No tasks yet under this activity.</p>
+      ) : (
+        <ActivityTaskRows tasks={tasks} allTasks={allTasks} runningTaskId={runningTaskId} showAssignee={showAssignee} />
       )}
     </div>
   );
 }
 
-function Section({ label, groups, isLoading, onAddTask }: { label: string | null; groups: ActivityGroup[]; isLoading: boolean; onAddTask: (activityId?: string) => void }) {
+function Section({
+  label,
+  groups,
+  allTasks,
+  isLoading,
+  runningTaskId,
+  onAddTask,
+  showAssignee,
+}: {
+  label: string | null;
+  groups: ActivityGroup[];
+  allTasks: TaskWithRelations[];
+  isLoading: boolean;
+  runningTaskId: string | null;
+  onAddTask: (activityId?: string) => void;
+  showAssignee: boolean;
+}) {
   if (groups.length === 0) return null;
   return (
     <div className="flex flex-col gap-2">
       {label && <span className="font-mono text-xs tracking-wider text-muted-foreground uppercase">{label}</span>}
       <div className="flex flex-col gap-3">
         {groups.map(({ activity, tasks }) => (
-          <ActivityCard key={activity.id} activity={activity} tasks={tasks} isLoading={isLoading} onAddTask={onAddTask} />
+          <ActivityCard
+            key={activity.id}
+            activity={activity}
+            tasks={tasks}
+            allTasks={allTasks}
+            isLoading={isLoading}
+            runningTaskId={runningTaskId}
+            onAddTask={onAddTask}
+            showAssignee={showAssignee}
+          />
         ))}
       </div>
     </div>
@@ -112,15 +184,23 @@ function Section({ label, groups, isLoading, onAddTask }: { label: string | null
  * Inside every activity, tasks are ordered by actionable status first (in-progress/blocked/waiting,
  * then todo, then done last).
  */
-export function WorkstreamActivityTasks({ departments, catalogLoading, tasks, isLoading, onAddTask }: WorkstreamActivityTasksProps) {
+export function WorkstreamActivityTasks({ departments, catalogLoading, tasks, isLoading, runningTaskId, onAddTask }: WorkstreamActivityTasksProps) {
   const { user } = useAuth();
   const activities = departments.flatMap((d) => d.activities);
+  // Phase 13B final polish (Part B) — same audited rule as every other Task List surface:
+  // Supervisor/Superadmin always keep Assignee; an Employee only loses it when every Task on this
+  // Service is genuinely just "assigned to me."
+  const showAssignee = user && isEmployee(user) ? !isAssigneeColumnRedundantForViewer(tasks, user.id) : true;
 
   if (!catalogLoading && activities.length === 0) {
     return (
       <div className="flex flex-col gap-3">
         <p className="text-sm text-muted-foreground">No activities are configured for this workstream.</p>
-        <TaskRowList tasks={tasks} isLoading={isLoading} emptyMessage="No tasks on this workstream yet." />
+        {tasks.length === 0 ? (
+          !isLoading && <p className="text-sm text-muted-foreground">No tasks on this workstream yet.</p>
+        ) : (
+          <ActivityTaskRows tasks={tasks} allTasks={tasks} runningTaskId={runningTaskId} showAssignee={showAssignee} />
+        )}
       </div>
     );
   }
@@ -174,7 +254,16 @@ export function WorkstreamActivityTasks({ departments, catalogLoading, tasks, is
   return (
     <div className="flex flex-col gap-4">
       {sections.map((section) => (
-        <Section key={section.label} label={section.label} groups={section.groups} isLoading={isLoading} onAddTask={onAddTask} />
+        <Section
+          key={section.label}
+          label={section.label}
+          groups={section.groups}
+          allTasks={tasks}
+          isLoading={isLoading}
+          runningTaskId={runningTaskId}
+          onAddTask={onAddTask}
+          showAssignee={showAssignee}
+        />
       ))}
 
       {(untaggedTasks.length > 0 || (!isLoading && tasks.length === 0)) && (
@@ -185,7 +274,11 @@ export function WorkstreamActivityTasks({ departments, catalogLoading, tasks, is
               <Plus className="size-3" /> Add Task
             </Button>
           </div>
-          <TaskRowList tasks={untaggedTasks} isLoading={isLoading} emptyMessage="No untagged tasks." />
+          {untaggedTasks.length === 0 ? (
+            !isLoading && <p className="text-sm text-muted-foreground">No untagged tasks.</p>
+          ) : (
+            <ActivityTaskRows tasks={untaggedTasks} allTasks={tasks} runningTaskId={runningTaskId} showAssignee={showAssignee} />
+          )}
         </div>
       )}
     </div>

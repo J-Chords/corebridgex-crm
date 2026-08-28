@@ -17,6 +17,7 @@ import {
   useActivityOptionsFromTasks,
 } from "@/lib/data/hooks/use-task-filters";
 import { isEmployee } from "@/lib/data/permissions";
+import { isAssigneeColumnRedundantForViewer } from "@/lib/data/task-display";
 import type { TaskStatus } from "@/lib/data/types";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -136,6 +137,12 @@ function TasksPageContent() {
     () => (filters.groupBy === "none" ? [] : groupTasksBy(filtered, filters.groupBy)),
     [filtered, filters.groupBy]
   );
+
+  // Phase 13B final polish (Part B) — Supervisor/Superadmin always keep the Assignee column (they
+  // need to tell their own work apart from their team's); an Employee only loses it when every
+  // currently-displayed Task is genuinely just "assigned to me" — audited per render, never a
+  // blanket per-role hide.
+  const showAssignee = user && isEmployee(user) ? !isAssigneeColumnRedundantForViewer(filtered, user.id) : true;
 
   const statusCounts = {
     all: beforeStatusFilter.length,
@@ -303,7 +310,7 @@ function TasksPageContent() {
         filtered.length === 0 ? (
           <Card className="p-10 text-center text-sm text-muted-foreground">No tasks match this view.</Card>
         ) : (
-          <FlatTaskList tasks={filtered} allTasks={tasks} runningTaskId={runningTaskId} />
+          <FlatTaskList tasks={filtered} allTasks={tasks} runningTaskId={runningTaskId} showAssignee={showAssignee} />
         )
       ) : (
         <div className="flex flex-col gap-3">
@@ -320,6 +327,7 @@ function TasksPageContent() {
               isCollapsed={collapsedGroups.has(group.key)}
               onToggleCollapse={() => toggleGroup(group.key)}
               onAddTask={openCreate}
+              showAssignee={showAssignee}
             />
           ))}
         </div>

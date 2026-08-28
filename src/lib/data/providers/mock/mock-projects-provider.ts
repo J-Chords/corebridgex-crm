@@ -1,6 +1,7 @@
 import type { ProjectsProvider, ProjectWithRelations, ProjectTaskSummary, ProjectInput, ProjectRenewalInput } from "../projects-provider";
 import type { Project, User, Workstream } from "../../types";
 import { canAccessProject, canManageProjects } from "../../permissions";
+import { INTERNAL_COMPANY_ID } from "../../constants";
 import { db } from "./mock-db";
 
 function memberUserIds(projectId: string): string[] {
@@ -39,6 +40,7 @@ function toProjectWithRelations(project: Project): ProjectWithRelations | null {
   return {
     ...project,
     companyName: company.name,
+    isInternal: company.id === INTERNAL_COMPANY_ID,
     owner,
     members,
     memberCount: members.length,

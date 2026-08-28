@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { ArrowUpRight, Layers, ListChecks, Pencil } from "lucide-react";
+import { ArrowUpRight, ListChecks, Pencil } from "lucide-react";
 import { useAuth } from "@/lib/auth/auth-context";
 import { useTask, useSubtasks } from "@/lib/data/hooks/use-tasks";
 import { useTaskTimer } from "@/lib/data/hooks/use-task-timer";
@@ -14,10 +14,23 @@ import { TaskStatusBadge } from "@/components/tasks/task-status-badge";
 import { TaskPriorityBadge } from "@/components/tasks/task-priority-badge";
 import { TaskTimerControl } from "@/components/tasks/task-timer-control";
 import { TaskFormDialog } from "@/components/tasks/task-form-dialog";
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter } from "@/components/ui/sheet";
+import { TaskRowList } from "@/components/tasks/task-row";
+import {
+  DetailDrawer,
+  DetailDrawerHeader,
+  DetailDrawerIdentity,
+  DetailDrawerBody,
+  DetailDrawerSection,
+  DetailDrawerPropertyGrid,
+  DetailDrawerPropertyRow,
+  DetailDrawerFooter,
+} from "@/components/ui/detail-drawer";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { CompanyProjectAvatar } from "@/components/companies/company-project-avatar";
+import { TaskStatusAvatar } from "@/components/tasks/task-status-avatar";
 import { formatDueDateShort } from "@/lib/data/task-display";
+import { isLikelyInternalTask } from "@/lib/data/identity-color";
 
 import { getInitials as initials } from "@/lib/initials";
 
@@ -32,42 +45,41 @@ interface TaskDrawerProps {
 }
 
 /**
- * Phase 11B — Quick View. Deliberately lightweight: this is the Dashboard/Home overview preview
- * ONLY — the locked navigation rule sends every dedicated work surface (Tasks List/Grid/Board, My
- * Day, Planner) straight to the full `/dashboard/tasks/[id]` page instead of opening this. It
- * intentionally does NOT reproduce the full page's rich sections: no full Checklist editor, no
- * Notes/Handoff history, no full Time Entry history, no giant Assignees/Details cards, and no
- * per-Subtask row list — just enough to decide "do I need to open this," plus "Open full task" and
- * "Edit" (shown only when the viewer is actually authorized to edit — never merely because
- * hierarchy-read visibility let them see it).
+ * Phase 11B — Quick View, redesigned in the Phase 13B final boss-feedback pass into a clean
+ * operational inspector built on the shared `DetailDrawer` primitives (see
+ * `src/components/ui/detail-drawer.tsx`). Deliberately lightweight: this is the Dashboard/Home
+ * overview preview ONLY — the locked navigation rule sends every dedicated work surface (Tasks
+ * List/Grid/Board, My Day, Planner) straight to the full `/dashboard/tasks/[id]` page instead of
+ * opening this. It intentionally does NOT reproduce the full page's rich sections: no full
+ * Checklist editor, no Notes/Handoff history, no full Time Entry history — just enough to decide
+ * "do I need to open this," plus "Open full task" and "Edit" (shown only when the viewer is
+ * actually authorized to edit — never merely because hierarchy-read visibility let them see it).
  *
- * Subtask navigation: Phase 10's TaskDrawer self-recursion bug (an unconditionally-nested
- * `<TaskDrawer>`, fixed during that phase's manual acceptance) cannot recur here — this component
- * never renders another instance of itself. A Subtask's own parent context, and the fact that a
- * parent's own Subtasks aren't individually listed here (only their count/progress), are both
- * handled with plain `Link` navigation to that Task's own full page, never a stacked Drawer.
+ * Identity, once — Company name only (never the redundant "Company → Project-with-year" chain),
+ * paired with Service · Activity as muted secondary context. Subtask navigation: a Subtask's own
+ * parent context, and the fact that a parent's own historical Subtasks aren't individually listed
+ * here (only their count), are both handled with plain `Link` navigation to that Task's own full
+ * page, never a stacked Drawer.
  */
 export function TaskDrawer({ taskId, onOpenChange, onChanged, onTimerChanged }: TaskDrawerProps) {
   const { user } = useAuth();
   const { task, isLoading, notFound } = useTask(taskId ?? "");
 
   return (
-    <Sheet open={taskId != null} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="flex w-full flex-col gap-0 p-0 sm:max-w-md">
-        {isLoading || !user ? (
-          <div className="p-6">
-            <p className="text-sm text-muted-foreground">Loading…</p>
-          </div>
-        ) : notFound || !task ? (
-          <div className="flex flex-col gap-2 p-6">
-            <SheetTitle>Task not found</SheetTitle>
-            <SheetDescription>This task doesn&apos;t exist, or you no longer have access to it.</SheetDescription>
-          </div>
-        ) : (
-          <LoadedTaskQuickView task={task} user={user} onChanged={onChanged} onTimerChanged={onTimerChanged} />
-        )}
-      </SheetContent>
-    </Sheet>
+    <DetailDrawer open={taskId != null} onOpenChange={onOpenChange} srTitle={task ? task.title : "Task"}>
+      {isLoading || !user ? (
+        <div className="p-6">
+          <p className="text-sm text-muted-foreground">Loading…</p>
+        </div>
+      ) : notFound || !task ? (
+        <div className="flex flex-col gap-2 p-6">
+          <p className="font-heading text-lg font-semibold text-foreground">Task not found</p>
+          <p className="text-sm text-muted-foreground">This task doesn&apos;t exist, or you no longer have access to it.</p>
+        </div>
+      ) : (
+        <LoadedTaskQuickView task={task} user={user} onChanged={onChanged} onTimerChanged={onTimerChanged} />
+      )}
+    </DetailDrawer>
   );
 }
 
@@ -93,18 +105,16 @@ function LoadedTaskQuickView({
 }) {
   const [editOpen, setEditOpen] = useState(false);
   const timer = useTaskTimer(task.id, task.assignees.map((a) => a.id));
-  // Only a top-level Task has Subtasks to summarize — useSubtasks(null) is a safe no-op for a Subtask itself.
+  // Only a top-level Task has (historical) Subtasks — useSubtasks(null) is a safe no-op for a Subtask itself.
   const { subtasks } = useSubtasks(task.parentTaskId ? null : task.id);
 
   const canEdit = canEditTask(user, task);
   const checklistTotal = task.checklistItems.length;
   const checklistDone = task.checklistItems.filter((ci) => ci.isDone).length;
-  const subtaskDone = subtasks.filter((s) => s.status === "done").length;
 
   return (
     <>
-      <SheetHeader className="gap-2 border-b bg-card px-6 py-5">
-        <SheetDescription className="sr-only">Quick view for &quot;{task.title}&quot;.</SheetDescription>
+      <DetailDrawerHeader>
         {task.parentTaskId && task.parentTask && (
           <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
             <Badge variant="neutral" className="text-[10px]">
@@ -121,73 +131,92 @@ function LoadedTaskQuickView({
             </span>
           </div>
         )}
-        <SheetTitle className="font-heading text-lg font-semibold text-foreground">{task.title}</SheetTitle>
-        <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-          <span>{task.company.name}</span>
-          {task.workstream.projectId && (
+        <DetailDrawerIdentity
+          icon={<TaskStatusAvatar title={task.title} status={task.status} />}
+          title={task.title}
+          primaryContext={
             <>
-              <span className="text-muted-foreground/60">→</span>
-              <span>{task.workstream.projectName ?? "Project"}</span>
+              <CompanyProjectAvatar
+                companyId={task.company.id}
+                companyName={task.company.name}
+                size="sm"
+                isInternal={isLikelyInternalTask(task)}
+              />
+              {task.company.name}
             </>
-          )}
-          <span className="text-muted-foreground/60">→</span>
-          <span>{task.workstream.name}</span>
-          {task.activity && (
+          }
+          secondaryContext={
             <>
-              <span className="text-muted-foreground/60">→</span>
-              <span>{task.activity.name}</span>
+              {task.workstream.name}
+              {task.activity && ` · ${task.activity.name}`}
             </>
-          )}
-        </div>
-      </SheetHeader>
-
-      <div className="flex flex-1 flex-col gap-4 overflow-y-auto px-6 py-5">
+          }
+        />
         <div className="flex flex-wrap items-center gap-2">
           <TaskStatusBadge status={task.status} />
           <TaskPriorityBadge priority={task.priority} />
-          {task.dueDate && <span className="text-xs text-muted-foreground">Due {formatDueDateShort(task.dueDate)}</span>}
         </div>
+      </DetailDrawerHeader>
 
-        {task.assignees.length === 0 ? (
-          <span className="text-xs text-muted-foreground">Unassigned</span>
-        ) : (
-          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <div className="flex -space-x-2">
-              {task.assignees.map((assignee) => (
-                <Avatar key={assignee.id} size="sm" className="ring-2 ring-card">
-                  <AvatarFallback className="text-[0.65rem]">{initials(assignee.fullName)}</AvatarFallback>
-                </Avatar>
-              ))}
-            </div>
-            {task.assignees.length === 1 ? task.assignees[0].fullName : `${task.assignees.length} assignees`}
-          </div>
-        )}
+      <DetailDrawerBody>
+        <DetailDrawerSection label="Details">
+          <DetailDrawerPropertyGrid>
+            <DetailDrawerPropertyRow label="Start">
+              {task.startDate ? formatDueDateShort(task.startDate) : "—"}
+            </DetailDrawerPropertyRow>
+            <DetailDrawerPropertyRow label="Due">
+              <span className={task.dueDate && task.status !== "done" && task.dueDate < new Date().toISOString().slice(0, 10) ? "font-medium text-warning" : undefined}>
+                {task.dueDate ? formatDueDateShort(task.dueDate) : "—"}
+              </span>
+            </DetailDrawerPropertyRow>
+            <DetailDrawerPropertyRow label="Assignee">
+              {task.assignees.length === 0 ? (
+                "Unassigned"
+              ) : (
+                <div className="flex items-center gap-1.5">
+                  <div className="flex -space-x-2">
+                    {task.assignees.map((assignee) => (
+                      <Avatar key={assignee.id} size="sm" className="ring-2 ring-card">
+                        <AvatarFallback className="text-[0.65rem]">{initials(assignee.fullName)}</AvatarFallback>
+                      </Avatar>
+                    ))}
+                  </div>
+                  <span className="truncate">
+                    {task.assignees.length === 1 ? task.assignees[0].fullName : `${task.assignees.length} assignees`}
+                  </span>
+                </div>
+              )}
+            </DetailDrawerPropertyRow>
+          </DetailDrawerPropertyGrid>
+        </DetailDrawerSection>
 
         {task.description && (
-          <p className="line-clamp-3 text-sm text-muted-foreground whitespace-pre-wrap">{task.description}</p>
+          <DetailDrawerSection label="Description">
+            <p className="line-clamp-3 text-sm whitespace-pre-wrap">{task.description}</p>
+          </DetailDrawerSection>
         )}
 
-        {(checklistTotal > 0 || (!task.parentTaskId && subtasks.length > 0)) && (
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
-            {checklistTotal > 0 && (
-              <span className="flex items-center gap-1">
-                <ListChecks className="size-3.5" aria-hidden="true" />
-                Checklist {checklistDone}/{checklistTotal}
-              </span>
-            )}
-            {!task.parentTaskId && subtasks.length > 0 && (
-              <span className="flex items-center gap-1">
-                <Layers className="size-3.5" aria-hidden="true" />
-                Subtasks {subtaskDone}/{subtasks.length}
-              </span>
-            )}
-          </div>
+        {checklistTotal > 0 && (
+          <DetailDrawerSection label="Checklist">
+            <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
+              <ListChecks className="size-3.5" aria-hidden="true" />
+              {checklistDone}/{checklistTotal} complete
+            </span>
+          </DetailDrawerSection>
         )}
 
-        <TaskTimerControl timer={timer} onTaskChanged={onChanged} onTimerChanged={onTimerChanged} variant="compact" />
-      </div>
+        <DetailDrawerSection label="Time">
+          <TaskTimerControl timer={timer} onTaskChanged={onChanged} onTimerChanged={onTimerChanged} variant="compact" />
+        </DetailDrawerSection>
 
-      <SheetFooter className="flex-row justify-end gap-2 border-t bg-card">
+        {!task.parentTaskId && subtasks.length > 0 && (
+          <DetailDrawerSection label="Subtasks">
+            <TaskRowList tasks={subtasks} emptyMessage="" />
+          </DetailDrawerSection>
+        )}
+      </DetailDrawerBody>
+
+      <DetailDrawerFooter>
         {canEdit && (
           <Button variant="outline" onClick={() => setEditOpen(true)}>
             <Pencil /> Edit
@@ -196,7 +225,7 @@ function LoadedTaskQuickView({
         <Button nativeButton={false} render={<Link href={`/dashboard/tasks/${task.id}`} />}>
           <ArrowUpRight /> Open full task
         </Button>
-      </SheetFooter>
+      </DetailDrawerFooter>
 
       {canEdit && <TaskFormDialog open={editOpen} onOpenChange={setEditOpen} mode="edit" task={task} onSaved={onChanged} />}
     </>

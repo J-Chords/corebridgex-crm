@@ -8,7 +8,10 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { getInitials as initials } from "@/lib/initials";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { CompanyProjectAvatar } from "@/components/companies/company-project-avatar";
+import { TaskStatusAvatar } from "@/components/tasks/task-status-avatar";
 import { isTaskOverdue, formatDueDateShort } from "@/lib/data/task-display";
+import { isLikelyInternalTask } from "@/lib/data/identity-color";
 
 interface TaskSummaryItemProps {
   task: TaskWithRelations;
@@ -58,6 +61,7 @@ export function TaskSummaryItem({ task, onOpen, isRunning, variant = "row", show
     >
       <div className="flex items-start justify-between gap-2">
         <span className="flex min-w-0 items-center gap-1.5 text-sm font-medium">
+          <TaskStatusAvatar title={task.title} status={task.status} size="sm" />
           {isRunning && <Play className="size-3 shrink-0" style={{ color: "var(--info)" }} aria-hidden="true" />}
           <span className="truncate">{task.title}</span>
           {task.parentTaskId && (
@@ -68,16 +72,20 @@ export function TaskSummaryItem({ task, onOpen, isRunning, variant = "row", show
         </span>
         <TaskPriorityBadge priority={task.priority} />
       </div>
-      <p className="truncate text-xs text-muted-foreground">
-        {task.parentTask ? (
-          `Subtask of ${task.parentTask.title}`
-        ) : (
-          <>
-            {task.workstream.projectName && <>{task.workstream.projectName} · </>}
-            {task.workstream.name}
-            {task.activity && <> · {task.activity.name}</>}
-          </>
+      <p className="flex min-w-0 items-center gap-1.5 truncate text-xs text-muted-foreground">
+        {!task.parentTask && (
+          <CompanyProjectAvatar companyId={task.company.id} companyName={task.company.name} size="sm" isInternal={isLikelyInternalTask(task)} />
         )}
+        <span className="truncate">
+          {task.parentTask ? (
+            `Subtask of ${task.parentTask.title}`
+          ) : (
+            <>
+              {task.company.name} · {task.workstream.name}
+              {task.activity && <> · {task.activity.name}</>}
+            </>
+          )}
+        </span>
       </p>
       <div className="flex flex-wrap items-center gap-2">
         <TaskStatusBadge status={task.status} />

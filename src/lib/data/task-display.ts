@@ -26,6 +26,20 @@ export function taskContextLine(task: Pick<TaskWithRelations, "company" | "works
   return parts.join(" · ");
 }
 
+/**
+ * Phase 13B final polish — an Assignee column/header is only genuinely redundant for an Employee
+ * viewer when EVERY currently-displayed Task is assigned to exactly them and no one else — a
+ * self-added, self-assigned Task, or one where the viewer is the sole assignee. An unassigned Task
+ * (still "—" but meaningfully different from "assigned to me"), a Task shared with a coworker, or a
+ * hierarchy-visible Task actually assigned to someone else (see `canAccessTask`'s
+ * `hierarchyAssigneeIds` branch) all still carry real information, so the column stays. Never
+ * called for Supervisor/Superadmin — they always keep the column (need to tell their own work apart
+ * from their team's).
+ */
+export function isAssigneeColumnRedundantForViewer(tasks: Pick<TaskWithRelations, "assignees">[], viewerId: string): boolean {
+  return tasks.every((t) => t.assignees.length === 1 && t.assignees[0].id === viewerId);
+}
+
 /** Direct-child Subtask count/done-count for one parent Task, derived from an already-fetched
  * flattened task list — never a per-card fetch (the same N+1-avoidance convention `TaskBoard`'s
  * own Done-with-open-Subtasks check already uses). */

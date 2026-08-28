@@ -53,6 +53,16 @@
   --color-warning: var(--warning);
   --color-info: var(--info);
 
+  /* Phase 13B — Company/Project identity colors (never status-semantic). Exactly 3, deterministically
+     assigned per companyId (see src/lib/data/identity-color.ts) — stable across light/dark since an
+     identity badge is a small opaque surface, not a themed page region. */
+  --color-identity-1: var(--identity-1);
+  --color-identity-1-foreground: var(--identity-1-foreground);
+  --color-identity-2: var(--identity-2);
+  --color-identity-2-foreground: var(--identity-2-foreground);
+  --color-identity-3: var(--identity-3);
+  --color-identity-3-foreground: var(--identity-3-foreground);
+
   /* Plexa radius scale (fixed px, not the default calc() multiples) */
   --radius-xs: 3px;
   --radius-sm: 5px;
@@ -108,6 +118,16 @@
   --sidebar-accent-foreground: #1a4bdb;
   --sidebar-border: rgba(0, 0, 0, 0.07);
   --sidebar-ring: #1a4bdb;
+  /* Company/Project identity — blue / teal / violet, deliberately distinct from --destructive/
+     --warning/--success/--info (never reused for identity). Stable across themes (same object
+     should read as the same color regardless of light/dark) — small opaque badges, not a themed
+     page region, so no light/dark hue shift is needed for contrast. */
+  --identity-1: #2f5fdb;
+  --identity-1-foreground: #ffffff;
+  --identity-2: #0d9488;
+  --identity-2-foreground: #ffffff;
+  --identity-3: #7c3aed;
+  --identity-3-foreground: #ffffff;
 }
 
 .dark {
@@ -148,6 +168,13 @@
   --sidebar-accent-foreground: #00e5b0;
   --sidebar-border: rgba(255, 255, 255, 0.07);
   --sidebar-ring: #00e5b0;
+  /* Same identity trio as :root — deliberately unchanged between themes, see :root's comment. */
+  --identity-1: #2f5fdb;
+  --identity-1-foreground: #ffffff;
+  --identity-2: #0d9488;
+  --identity-2-foreground: #ffffff;
+  --identity-3: #7c3aed;
+  --identity-3-foreground: #ffffff;
 }
 
 @layer base {

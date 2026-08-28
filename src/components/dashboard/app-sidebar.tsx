@@ -6,6 +6,7 @@ import {
   Building2,
   CalendarDays,
   ChevronsLeft,
+  ChevronsRight,
   Clock,
   ClipboardList,
   FolderKanban,
@@ -60,17 +61,16 @@ interface NavGroup {
   items: NavItem[];
 }
 
+type SidebarUser = { fullName: string; email: string; role: "employee" | "supervisor" | "superadmin" };
+
 /**
- * Phase 12B — split shell (thin icon rail + wider grouped nav panel), replacing the single
- * shadcn `<Sidebar>` tree entirely. Deliberately built from plain flex children rather than the
- * `Sidebar` component's own fixed/gap/offcanvas machinery — since both the rail and the nav panel
- * are meant to sit in the SAME flex row as the page content (not overlay it), plain `sticky`
- * children of `SidebarProvider`'s own `flex` wrapper are simpler and need no extra layout
- * scaffolding. Still reads `useSidebar()` for `isMobile`/`openMobile`/`state` — so the existing
- * `SidebarTrigger` in the topbar and the Cmd/Ctrl+B shortcut keep working unchanged: on desktop,
- * toggling now shows/hides the wider nav panel (the rail always stays visible); on mobile, it
- * opens/closes the one merged navigation Sheet below (Part A/5 — no permanent two-panel footprint
- * on phones).
+ * Phase 13B structural correction — ONE desktop sidebar component that collapses to icon-only
+ * width in place, replacing the earlier split "permanent icon rail + separate wider nav panel"
+ * shell (which still read as two side-by-side navigation surfaces even though it was visually one
+ * shell). Collapse/expand now toggles the SAME element's width/content — no second panel ever
+ * mounts alongside it. Icon-only tooltips only ever show while collapsed (the only state where a
+ * label isn't already visible next to its icon); expanded mode shows real text labels and no
+ * tooltips at all. Mobile keeps its own single merged Sheet, unchanged.
  */
 export function AppSidebar() {
   const { user, logout } = useAuth();
@@ -145,31 +145,23 @@ export function AppSidebar() {
   }
 
   return (
-    <>
-      <IconRail isActive={isActive} onOpenSearch={() => setPaletteOpen(true)} />
-      {state === "expanded" && (
-        <NavPanel
-          groups={groups}
-          isActive={isActive}
-          user={user}
-          onToggle={toggleSidebar}
-          onOpenHelp={() => setHelpOpen(true)}
-          onLogout={handleLogout}
-        />
-      )}
-    </>
+    <DesktopSidebar
+      groups={groups}
+      isActive={isActive}
+      user={user}
+      collapsed={state !== "expanded"}
+      onToggleCollapse={toggleSidebar}
+      onOpenSearch={() => setPaletteOpen(true)}
+      onOpenHelp={() => setHelpOpen(true)}
+      onLogout={handleLogout}
+    />
   );
 }
 
-const RAIL_SHORTCUTS: { href: string; label: string; icon: LucideIcon }[] = [
-  { href: "/dashboard", label: "Home", icon: Home },
-  { href: "/dashboard/my-day", label: "My Day", icon: Sun },
-  { href: "/dashboard/tasks", label: "Tasks", icon: ListChecks },
-  { href: "/dashboard/planner", label: "Planner", icon: CalendarDays },
-  { href: "/dashboard/reports/client", label: "Reports", icon: ClipboardList },
-];
-
-function RailButton({
+/** One icon-only row, tooltip-labeled — collapsed mode's equivalent of a labeled `NavGroupSection`
+ * row. Tooltips only ever render here (collapsed), never in expanded mode, which shows the same
+ * label as real text instead. */
+function CollapsedNavButton({
   icon: Icon,
   label,
   active,
@@ -198,41 +190,6 @@ function RailButton({
       </TooltipTrigger>
       <TooltipContent side="right">{label}</TooltipContent>
     </Tooltip>
-  );
-}
-
-/** Thin icon rail — Part A/2. Quick global access only; every icon requires a tooltip since it's
- * icon-only. Deliberately does not include Companies/Projects/Team surfaces — those live in the
- * wider nav panel only, matching the reference's own "rail = a short, fixed shortcut list" role. */
-function IconRail({
-  isActive,
-  onOpenSearch,
-}: {
-  isActive: (href: string) => boolean;
-  onOpenSearch: () => void;
-}) {
-  const railHrefs = new Set(RAIL_SHORTCUTS.map((s) => s.href));
-  return (
-    <div className="sticky top-0 z-10 flex h-svh w-14 shrink-0 flex-col items-center gap-1 border-r bg-sidebar py-3 print:hidden">
-      <Link
-        href="/dashboard"
-        className="mb-2 flex size-8 items-center justify-center rounded-md bg-primary text-primary-foreground"
-        aria-label="Corebridge X — Home"
-      >
-        <span className="text-[11px] font-bold">CX</span>
-      </Link>
-      <RailButton icon={Search} label="Search" onClick={onOpenSearch} />
-      <div className="my-1 h-px w-6 bg-sidebar-border" />
-      {RAIL_SHORTCUTS.map((item) => (
-        <RailButton
-          key={item.href}
-          icon={item.icon}
-          label={item.label}
-          active={railHrefs.has(item.href) && isActive(item.href)}
-          href={item.href}
-        />
-      ))}
-    </div>
   );
 }
 
@@ -270,108 +227,174 @@ function NavGroupSection({
   );
 }
 
-/** Wider nav panel — Part A/3. Grouped, compact uppercase section labels, thin rows — deliberately
- * close in density to the reference's own nav list, not the old roomier single-list sidebar. */
-function NavPanel({
+/**
+ * The one desktop sidebar (Phase 13B structural correction — Part F). `collapsed` swaps its own
+ * width (w-60 expanded, w-14 collapsed) and content density — never a second panel. Expanded shows
+ * real labels/group headers and no tooltips; collapsed shows icon-only rows with tooltips and a
+ * thin divider between groups instead of a text header, so every destination (including
+ * Projects/Team, which the old rail deliberately left out) stays reachable while collapsed too.
+ */
+function DesktopSidebar({
   groups,
   isActive,
   user,
-  onToggle,
+  collapsed,
+  onToggleCollapse,
+  onOpenSearch,
   onOpenHelp,
   onLogout,
 }: {
   groups: NavGroup[];
   isActive: (href: string) => boolean;
-  user: { fullName: string; email: string; role: "employee" | "supervisor" | "superadmin" };
-  onToggle: () => void;
+  user: SidebarUser;
+  collapsed: boolean;
+  onToggleCollapse: () => void;
+  onOpenSearch: () => void;
   onOpenHelp: () => void;
   onLogout: () => void;
 }) {
   return (
-    <div className="sticky top-0 z-10 flex h-svh w-60 shrink-0 flex-col border-r bg-sidebar py-3 print:hidden">
-      <div className="flex items-center justify-between gap-2 px-3">
-        <span className="truncate text-sm font-semibold text-sidebar-foreground">Corebridge X</span>
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <Button variant="ghost" size="icon-sm" onClick={onToggle} aria-label="Collapse navigation" />
-            }
+    <div
+      className={cn(
+        "sticky top-0 z-10 flex h-svh shrink-0 flex-col border-r bg-sidebar py-3 print:hidden",
+        collapsed ? "w-14 items-center" : "w-60"
+      )}
+    >
+      {collapsed ? (
+        <>
+          <Link
+            href="/dashboard"
+            className="mb-2 flex size-8 items-center justify-center rounded-md bg-primary text-primary-foreground"
+            aria-label="Corebridge X — Home"
           >
-            <ChevronsLeft className="size-4" aria-hidden="true" />
-          </TooltipTrigger>
-          <TooltipContent side="bottom">Collapse</TooltipContent>
-        </Tooltip>
-      </div>
-      <div className="px-3 pt-2 pb-1">
-        <SearchTriggerBar variant="compact" placeholder="Search…" />
-      </div>
-      <div className="mt-2 flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-2">
-        {groups.map((group) => (
-          <NavGroupSection key={group.label} group={group} isActive={isActive} />
-        ))}
-      </div>
-      <div className="flex flex-col gap-0.5 border-t px-2 pt-2">
-        <Link
-          href="/dashboard/settings"
-          className={cn(
-            "flex h-8 items-center gap-2.5 rounded-md px-2 text-sm text-sidebar-foreground/85 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-            isActive("/dashboard/settings") && "bg-sidebar-accent font-medium text-sidebar-accent-foreground"
-          )}
-        >
-          <Settings className="size-4 shrink-0" aria-hidden="true" />
-          <span>Settings</span>
-        </Link>
-        <button
-          type="button"
-          onClick={onOpenHelp}
-          className="flex h-8 items-center gap-2.5 rounded-md px-2 text-left text-sm text-sidebar-foreground/85 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-        >
-          <HelpCircle className="size-4 shrink-0" aria-hidden="true" />
-          <span>Help</span>
-        </button>
-        <DropdownMenu>
-          <DropdownMenuTrigger
-            render={
-              <button
-                type="button"
-                className="flex h-11 items-center gap-2.5 rounded-md px-2 text-left text-sm transition-colors hover:bg-sidebar-accent data-open:bg-sidebar-accent"
-              />
-            }
-          >
-            <Avatar className="size-7">
-              <AvatarFallback className="text-xs">{initials(user.fullName)}</AvatarFallback>
-            </Avatar>
-            <div className="flex min-w-0 flex-1 flex-col">
-              <span className="truncate text-sm font-medium">{user.fullName}</span>
-              <span className="truncate text-xs text-sidebar-foreground/60">{ROLE_LABELS[user.role]}</span>
-            </div>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" side="top" className="w-56">
-            <DropdownMenuGroup>
-              <DropdownMenuLabel>
-                <div className="flex flex-col">
-                  <span>{user.fullName}</span>
-                  <span className="text-xs font-normal text-muted-foreground">{user.email}</span>
+            <span className="text-[11px] font-bold">CX</span>
+          </Link>
+          <Tooltip>
+            <TooltipTrigger
+              render={<Button variant="ghost" size="icon-sm" onClick={onToggleCollapse} aria-label="Expand navigation" />}
+            >
+              <ChevronsRight className="size-4" aria-hidden="true" />
+            </TooltipTrigger>
+            <TooltipContent side="right">Expand</TooltipContent>
+          </Tooltip>
+          <div className="my-2 h-px w-6 bg-sidebar-border" />
+          <CollapsedNavButton icon={Search} label="Search" onClick={onOpenSearch} />
+          <div className="mt-2 flex min-h-0 flex-1 flex-col items-center gap-1 overflow-y-auto">
+            {groups.map((group, i) => (
+              <div key={group.label} className="flex flex-col items-center gap-1">
+                {i > 0 && <div className="my-1 h-px w-6 bg-sidebar-border" />}
+                {group.items.map((item) => (
+                  <CollapsedNavButton key={item.href} icon={item.icon} label={item.label} active={isActive(item.href)} href={item.href} />
+                ))}
+              </div>
+            ))}
+          </div>
+          <div className="flex flex-col items-center gap-1 border-t pt-2">
+            <CollapsedNavButton icon={Settings} label="Settings" active={isActive("/dashboard/settings")} href="/dashboard/settings" />
+            <CollapsedNavButton icon={HelpCircle} label="Help" onClick={onOpenHelp} />
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <button
+                    type="button"
+                    className="flex size-9 items-center justify-center rounded-lg hover:bg-sidebar-accent"
+                    aria-label={`${user.fullName} — account menu`}
+                  />
+                }
+              >
+                <Avatar className="size-7">
+                  <AvatarFallback className="text-xs">{initials(user.fullName)}</AvatarFallback>
+                </Avatar>
+              </TooltipTrigger>
+              <TooltipContent side="right">{user.fullName}</TooltipContent>
+            </Tooltip>
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="flex items-center justify-between gap-2 px-3">
+            <span className="truncate text-sm font-semibold text-sidebar-foreground">Corebridge X</span>
+            <Tooltip>
+              <TooltipTrigger
+                render={<Button variant="ghost" size="icon-sm" onClick={onToggleCollapse} aria-label="Collapse navigation" />}
+              >
+                <ChevronsLeft className="size-4" aria-hidden="true" />
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Collapse</TooltipContent>
+            </Tooltip>
+          </div>
+          <div className="px-3 pt-2 pb-1">
+            <SearchTriggerBar variant="compact" placeholder="Search…" />
+          </div>
+          <div className="mt-2 flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-2">
+            {groups.map((group) => (
+              <NavGroupSection key={group.label} group={group} isActive={isActive} />
+            ))}
+          </div>
+          <div className="flex flex-col gap-0.5 border-t px-2 pt-2">
+            <Link
+              href="/dashboard/settings"
+              className={cn(
+                "flex h-8 items-center gap-2.5 rounded-md px-2 text-sm text-sidebar-foreground/85 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                isActive("/dashboard/settings") && "bg-sidebar-accent font-medium text-sidebar-accent-foreground"
+              )}
+            >
+              <Settings className="size-4 shrink-0" aria-hidden="true" />
+              <span>Settings</span>
+            </Link>
+            <button
+              type="button"
+              onClick={onOpenHelp}
+              className="flex h-8 items-center gap-2.5 rounded-md px-2 text-left text-sm text-sidebar-foreground/85 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+            >
+              <HelpCircle className="size-4 shrink-0" aria-hidden="true" />
+              <span>Help</span>
+            </button>
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={
+                  <button
+                    type="button"
+                    className="flex h-11 items-center gap-2.5 rounded-md px-2 text-left text-sm transition-colors hover:bg-sidebar-accent data-open:bg-sidebar-accent"
+                  />
+                }
+              >
+                <Avatar className="size-7">
+                  <AvatarFallback className="text-xs">{initials(user.fullName)}</AvatarFallback>
+                </Avatar>
+                <div className="flex min-w-0 flex-1 flex-col">
+                  <span className="truncate text-sm font-medium">{user.fullName}</span>
+                  <span className="truncate text-xs text-sidebar-foreground/60">{ROLE_LABELS[user.role]}</span>
                 </div>
-              </DropdownMenuLabel>
-            </DropdownMenuGroup>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem render={<Link href="/dashboard/settings" />}>
-              <Settings />
-              Settings
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={onLogout}>
-              <LogOut />
-              Log out
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" side="top" className="w-56">
+                <DropdownMenuGroup>
+                  <DropdownMenuLabel>
+                    <div className="flex flex-col">
+                      <span>{user.fullName}</span>
+                      <span className="text-xs font-normal text-muted-foreground">{user.email}</span>
+                    </div>
+                  </DropdownMenuLabel>
+                </DropdownMenuGroup>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem render={<Link href="/dashboard/settings" />}>
+                  <Settings />
+                  Settings
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={onLogout}>
+                  <LogOut />
+                  Log out
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </>
+      )}
     </div>
   );
 }
 
-/** Mobile/tablet — Part A/5: one merged Sheet, same grouped items, no permanent split-panel footprint. */
+/** Mobile/tablet — one merged Sheet, same grouped items, no permanent split-panel footprint. */
 function MobileNavPanel({
   groups,
   isActive,
@@ -383,7 +406,7 @@ function MobileNavPanel({
 }: {
   groups: NavGroup[];
   isActive: (href: string) => boolean;
-  user: { fullName: string; email: string; role: "employee" | "supervisor" | "superadmin" };
+  user: SidebarUser;
   onNavigate: () => void;
   onOpenSearch: () => void;
   onOpenHelp: () => void;

@@ -67,6 +67,10 @@ export const mockTemplatesProvider: TemplatesProvider = {
         allowUnassigned: true,
         status: "todo",
         priority: "medium",
+        // Templates only define a due-date offset (dueDaysAfterStart), never a separate start
+        // offset — no legitimate data exists to populate a Start Date from, so it's left null
+        // rather than derived/fabricated.
+        startDate: null,
         dueDate,
         expectedMinutes: templateTask.expectedMinutes,
         checklistItems: templateTask.checklistItems.map((ci) => ({ description: ci.description })),

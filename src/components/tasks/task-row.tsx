@@ -1,7 +1,8 @@
 import Link from "next/link";
 import type { TaskWithRelations } from "@/lib/data/providers/tasks-provider";
 import { Badge } from "@/components/ui/badge";
-import { STATUS_META, STATUS_COLOR_VAR } from "@/components/tasks/task-status-badge";
+import { STATUS_META } from "@/components/tasks/task-status-badge";
+import { TaskStatusAvatar } from "@/components/tasks/task-status-avatar";
 import { isTaskOverdue, formatDueDateShort } from "@/lib/data/task-display";
 import { STAGGER_ITEM_CLASS, staggerDelay } from "@/lib/stagger";
 import { cn } from "@/lib/utils";
@@ -34,7 +35,7 @@ export function TaskRow({ task, subtitle, onOpen }: TaskRowProps) {
 
   const titleLine = (
     <span className="flex min-w-0 items-center gap-1.5 text-sm font-medium group-hover/row:underline">
-      <span className="size-2 shrink-0 rounded-full" style={{ backgroundColor: STATUS_COLOR_VAR[task.status] }} aria-hidden="true" />
+      <TaskStatusAvatar title={task.title} status={task.status} size="sm" />
       <span className="truncate">{task.title}</span>
       {task.parentTaskId && (
         <Badge variant="neutral" className="shrink-0 text-[10px] no-underline">

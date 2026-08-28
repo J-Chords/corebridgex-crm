@@ -67,6 +67,7 @@ export function QuickAddFromActivityDialog({ open, onOpenChange, workstream, onA
         allowUnassigned: true,
         status: "todo",
         priority: "medium",
+        startDate: null,
         dueDate: null,
         activityId: selectedActivity.id,
         checklistItems: [],

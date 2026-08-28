@@ -50,6 +50,16 @@ export function TaskPropertiesRail({ task, canProgress, onStatusChange, statusPe
       <PropertyRow label="Priority">
         <TaskPriorityBadge priority={task.priority} />
       </PropertyRow>
+      {/* Shown only when set — unlike Due date, an absent Start Date doesn't waste rail space with
+          a "Not set" placeholder; most Tasks won't have one. */}
+      {task.startDate && (
+        <PropertyRow label="Start date">
+          <span className="flex items-center gap-1.5 text-sm text-foreground">
+            <Calendar className="size-3.5 shrink-0" aria-hidden="true" />
+            {formatDueDateShort(task.startDate)}
+          </span>
+        </PropertyRow>
+      )}
       <PropertyRow label="Due date">
         {task.dueDate ? (
           <span className={cn("flex items-center gap-1.5 text-sm", overdue ? "font-medium text-warning" : "text-foreground")}>

@@ -292,4 +292,21 @@ export const supabaseWorkstreamsProvider: WorkstreamsProvider = {
     const [hydrated] = await hydrate([toWorkstream(data)]);
     return hydrated;
   },
+
+  async createActivityForWorkstream(_viewer, workstreamId, name) {
+    const supabase = createClient();
+    const { data, error } = await supabase.rpc("create_activity_for_workstream", {
+      p_workstream_id: workstreamId,
+      p_name: name,
+    });
+    if (error) throw new Error(error.message);
+    const row = data as { id: string; department_id: string; name: string; position: number; default_task_titles: string[] };
+    return {
+      id: row.id,
+      departmentId: row.department_id,
+      name: row.name,
+      position: row.position,
+      defaultTaskTitles: row.default_task_titles,
+    };
+  },
 };

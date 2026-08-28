@@ -72,4 +72,15 @@ export interface WorkstreamsProvider {
   getWorkstream(viewer: User, id: string): Promise<WorkstreamWithRelations | null>;
   createWorkstream(viewer: User, input: WorkstreamInput): Promise<WorkstreamWithRelations>;
   updateWorkstream(viewer: User, id: string, input: WorkstreamInput): Promise<WorkstreamWithRelations>;
+  /**
+   * Phase 13B final boss-feedback pass — creates a genuinely new, reusable Activity Catalog entry
+   * (auto-resolving/creating its Department from this Workstream's own brand+serviceLine, the same
+   * 1:1 convention every other Department already follows) and associates it with this Workstream in
+   * one call. Same authorization scope as the existing "+ Add another activity to this service"
+   * mechanism (`canExtendServiceActivities`'s real server-side counterpart): Employee only for a
+   * Workstream they themselves lead; Supervisor only for one led by someone they manage, within a
+   * Project they can access; Superadmin unconditionally. Reuses (never duplicates) an existing
+   * Activity in the same Department whose name matches case-insensitively.
+   */
+  createActivityForWorkstream(viewer: User, workstreamId: string, name: string): Promise<Activity>;
 }

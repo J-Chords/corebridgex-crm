@@ -32,6 +32,7 @@ interface TaskRow {
   parent_task_id: string | null;
   status: TaskStatus;
   priority: TaskPriority;
+  start_date: string | null;
   due_date: string | null;
   expected_minutes: number | null;
   created_by: string;
@@ -56,6 +57,7 @@ function toTask(row: TaskRow): Task {
     parentTaskId: row.parent_task_id,
     status: row.status,
     priority: row.priority,
+    startDate: row.start_date,
     dueDate: row.due_date,
     expectedMinutes: row.expected_minutes,
     createdById: row.created_by,
@@ -274,6 +276,7 @@ export const supabaseTasksProvider: TasksProvider = {
       p_expected_minutes: input.expectedMinutes ?? null,
       p_template_id: input.templateId ?? null,
       p_checklist_items: input.checklistItems.map((item) => item.description),
+      p_start_date: input.startDate,
     });
     if (error) throw new Error(error.message);
 
@@ -294,6 +297,7 @@ export const supabaseTasksProvider: TasksProvider = {
         description: input.description,
         workstream_id: input.workstreamId,
         priority: input.priority,
+        start_date: input.startDate,
         due_date: input.dueDate,
         expected_minutes: input.expectedMinutes ?? null,
         activity_id: input.activityId ?? null,
@@ -387,6 +391,7 @@ export const supabaseTasksProvider: TasksProvider = {
       p_due_date: input.dueDate,
       p_expected_minutes: input.expectedMinutes ?? null,
       p_checklist_items: input.checklistItems.map((item) => item.description),
+      p_start_date: input.startDate,
     });
     if (error) throw new Error(error.message);
     const [hydrated] = await hydrate([toTask(data)]);

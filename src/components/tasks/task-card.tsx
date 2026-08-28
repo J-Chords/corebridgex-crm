@@ -2,8 +2,11 @@ import { Layers, ListChecks } from "lucide-react";
 import type { TaskWithRelations } from "@/lib/data/providers/tasks-provider";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
+import { CompanyProjectAvatar } from "@/components/companies/company-project-avatar";
 import { TaskPriorityBadge } from "@/components/tasks/task-priority-badge";
+import { TaskStatusAvatar } from "@/components/tasks/task-status-avatar";
 import { isTaskOverdue, formatDueDateShort, taskServiceLabel } from "@/lib/data/task-display";
+import { isLikelyInternalTask } from "@/lib/data/identity-color";
 import { cn } from "@/lib/utils";
 
 import { getInitials as initials } from "@/lib/initials";
@@ -33,6 +36,7 @@ export function TaskCard({ task, isRunning, subtaskCount }: TaskCardProps) {
     <div className="flex flex-col gap-2 rounded-lg border bg-card p-2.5 text-left">
       <div className="flex items-start justify-between gap-2">
         <span className="flex min-w-0 items-center gap-1.5 text-sm font-medium">
+          <TaskStatusAvatar title={task.title} status={task.status} size="sm" />
           {isRunning && (
             <span className="relative flex size-1.5 shrink-0" aria-hidden="true" title="Running">
               <span className="absolute inline-flex size-full animate-ping rounded-full opacity-75" style={{ backgroundColor: "var(--info)" }} />
@@ -47,8 +51,13 @@ export function TaskCard({ task, isRunning, subtaskCount }: TaskCardProps) {
           )}
         </span>
       </div>
-      <span className="truncate text-xs text-muted-foreground">
-        {task.parentTask ? `Parent: ${task.parentTask.title}` : `${task.company.name} · ${taskServiceLabel(task)}`}
+      <span className="flex min-w-0 items-center gap-1.5 truncate text-xs text-muted-foreground">
+        {!task.parentTask && (
+          <CompanyProjectAvatar companyId={task.company.id} companyName={task.company.name} size="sm" isInternal={isLikelyInternalTask(task)} />
+        )}
+        <span className="truncate">
+          {task.parentTask ? `Parent: ${task.parentTask.title}` : `${task.company.name} · ${taskServiceLabel(task)}`}
+        </span>
       </span>
       <div className="flex items-center gap-2">
         <TaskPriorityBadge priority={task.priority} />

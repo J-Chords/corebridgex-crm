@@ -1,5 +1,5 @@
 import type { WorkstreamsProvider, WorkstreamWithRelations } from "../workstreams-provider";
-import type { Workstream, User } from "../../types";
+import type { Activity, Workstream, User } from "../../types";
 import {
   canAccessCompany,
   canAccessWorkstream,
@@ -294,5 +294,75 @@ export const mockWorkstreamsProvider: WorkstreamsProvider = {
     syncWorkstreamActivities(id, input.activityIds);
 
     return toWorkstreamWithRelations(updated);
+  },
+
+  async createActivityForWorkstream(viewer, workstreamId, name) {
+    const workstream = db.workstreams.find((w) => w.id === workstreamId);
+    if (!workstream) throw new Error("Workstream not found.");
+
+    // Pre-apply correction — the exact same boundary `createTask`'s own `requireWorkstreamAccess`
+    // uses to decide "may this caller create a Task in this Workstream," reused directly rather than
+    // a narrower lead-only approximation. `canAccessWorkstream`'s own final branch already lets any
+    // legitimate team MEMBER (not just the lead) through for an Employee — matching the real product
+    // rule: if you may create a normal Task here, you may create the Activity a Task needs too.
+    const accessible = canAccessWorkstream(
+      viewer,
+      { leadUserId: workstream.leadUserId, teamUserIds: workstreamTeamIds(workstreamId), companyId: workstream.companyId },
+      db.users
+    );
+    if (!accessible) {
+      throw new Error("You don't have permission to add an activity to this service.");
+    }
+    if (!workstream.serviceLineId) {
+      throw new Error("This service has no service line — an activity can't be created for it.");
+    }
+
+    const trimmedName = name.trim();
+    if (!trimmedName) throw new Error("Activity name is required.");
+
+    // Find-or-create the Department for this Workstream's own (brand, service line) — the same
+    // 1:1-by-convention every seeded Department already follows (see seed-departments.ts).
+    let department = db.departments.find(
+      (d) => d.brandId === workstream.brandId && d.serviceLineId === workstream.serviceLineId
+    );
+    if (!department) {
+      const serviceLine = db.serviceLines.find((sl) => sl.id === workstream.serviceLineId);
+      department = {
+        id: crypto.randomUUID(),
+        brandId: workstream.brandId,
+        name: serviceLine?.name ?? "General",
+        position: db.departments.filter((d) => d.brandId === workstream.brandId).length,
+        serviceLineId: workstream.serviceLineId,
+      };
+      db.departments = [...db.departments, department];
+    }
+
+    // Reuse an existing Activity in the same Department if its name matches case-insensitively —
+    // same dedup rule the real catalog-seeding migration already uses (lower(name) = lower(...)).
+    const existingActivity = db.activities.find(
+      (a) => a.departmentId === department!.id && a.name.trim().toLowerCase() === trimmedName.toLowerCase()
+    );
+    let activity: Activity;
+    if (existingActivity) {
+      activity = existingActivity;
+    } else {
+      activity = {
+        id: crypto.randomUUID(),
+        departmentId: department.id,
+        name: trimmedName,
+        position: db.activities.filter((a) => a.departmentId === department!.id).length,
+        defaultTaskTitles: [],
+      };
+      db.activities = [...db.activities, activity];
+    }
+
+    const alreadyAssociated = db.workstreamActivities.some(
+      (wa) => wa.workstreamId === workstreamId && wa.activityId === activity.id
+    );
+    if (!alreadyAssociated) {
+      db.workstreamActivities = [...db.workstreamActivities, { workstreamId, activityId: activity.id }];
+    }
+
+    return activity;
   },
 };

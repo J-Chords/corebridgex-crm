@@ -28,6 +28,10 @@ export interface Task {
   parentTaskId: string | null;
   status: TaskStatus;
   priority: TaskPriority;
+  /** Optional planned/scheduled start date, set directly by the user — never derived from
+   * createdAt, statusChangedAt, or any timer/status event. Phase 13B, added for the Project
+   * Tasks Timeline view. */
+  startDate: string | null;
   dueDate: string | null;
   /** Normalized to minutes regardless of which unit (minutes/hours/days) it was entered in — see `src/lib/data/expected-time.ts`. For later profitability reporting. Set automatically from the template when created via "Apply template"; editable directly otherwise. */
   expectedMinutes: number | null;

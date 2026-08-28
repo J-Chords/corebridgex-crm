@@ -119,6 +119,14 @@ export function GenerateOccurrenceDialog({
     return addDaysToDateString(form.startDate, daysBetween(referenceStartDate, task.dueDate));
   }
 
+  /** Same real, deliberate recurrence-shift math as `shiftedDueDate` — carries a source Task's own
+   * real Start Date forward by the same interval, never fabricating one for a Task that didn't
+   * have one. */
+  function shiftedStartDate(task: TaskWithRelations): string | null {
+    if (!task.startDate || !referenceStartDate) return null;
+    return addDaysToDateString(form.startDate, daysBetween(referenceStartDate, task.startDate));
+  }
+
   async function handleConfirm() {
     if (!user) return;
     setError(null);
@@ -163,6 +171,7 @@ export function GenerateOccurrenceDialog({
           allowUnassigned: assigneeIds.length === 0,
           status: "todo",
           priority: task.priority,
+          startDate: shiftedStartDate(task),
           dueDate: shiftedDueDate(task),
           expectedMinutes: task.expectedMinutes,
           activityId: task.activityId,

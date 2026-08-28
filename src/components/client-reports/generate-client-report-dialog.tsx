@@ -82,7 +82,15 @@ export function GenerateClientReportDialog({ open, onOpenChange }: GenerateClien
 
   const companies = useMemo(() => {
     const byId = new Map<string, string>();
-    for (const p of projects) byId.set(p.companyId, p.companyName);
+    // Phase 13B discovery-surface cleanup — the Internal/Non-billable Project is never a real
+    // client, so it must never appear as a choosable "Client" for a client-facing report. This is
+    // a local filter on this one read-only selection surface, not a change to `useProjects()`
+    // itself — the functional Task-creation fallback that legitimately needs the Internal
+    // Project/Workstream selectable is untouched.
+    for (const p of projects) {
+      if (p.isInternal) continue;
+      byId.set(p.companyId, p.companyName);
+    }
     return Array.from(byId.entries())
       .map(([id, name]) => ({ id, name }))
       .sort((a, b) => a.name.localeCompare(b.name));

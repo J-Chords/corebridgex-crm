@@ -8,6 +8,7 @@ import type { TaskWithRelations } from "@/lib/data/providers/tasks-provider";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { TaskPriorityBadge } from "@/components/tasks/task-priority-badge";
+import { TaskStatusAvatar } from "@/components/tasks/task-status-avatar";
 import { STATUS_COLOR_VAR, TASK_STATUS_SELECT_ITEMS } from "@/components/tasks/task-status-badge";
 import { ChecklistProgress } from "@/components/ui/checklist-progress";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -93,11 +94,7 @@ export function TaskGridCard({ task, className, style, isFocusTask, onMarkDone, 
             )}
           </span>
         )}
-        <span
-          className="mt-1.5 size-2 shrink-0 rounded-full"
-          style={{ backgroundColor: STATUS_COLOR_VAR[task.status] }}
-          aria-hidden="true"
-        />
+        <TaskStatusAvatar title={task.title} status={task.status} size="sm" className="mt-0.5" />
         <span className="sr-only">{TASK_STATUS_SELECT_ITEMS[task.status]}</span>
         <span className="min-w-0 flex-1 text-sm font-medium break-words group-hover/card:underline">
           {task.title}
@@ -115,8 +112,7 @@ export function TaskGridCard({ task, className, style, isFocusTask, onMarkDone, 
           `Subtask of ${task.parentTask.title}`
         ) : (
           <>
-            {task.workstream.projectName && <>{task.workstream.projectName} · </>}
-            {task.workstream.name}
+            {task.company.name} · {task.workstream.name}
             {task.activity && <> · {task.activity.name}</>}
           </>
         )}

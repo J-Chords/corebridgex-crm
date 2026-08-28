@@ -1248,7 +1248,9 @@ canAddTaskChecklistItem`/`add_task_checklist_item` RPC, `canProgressTask`, `canE
 
 **Status: COMPLETE / CHECKPOINTED.** Audit/design only — no product code, migration, RLS, or
 provider was changed in 13A itself. Full write-up in `docs/phase-13-client-history-audit.md`.
-Checkpoint: `184abc81f1f21e177aac193a3c7a933d418b8130`, pushed to GitHub.
+Checkpoint: `184abc81f1f21e177aac193a3c7a933d418b8130`, pushed to GitHub. **Architecture correction
+checkpoint** (locking the Project-centric model after the separate-Client-workspace direction was
+rejected): `9ff7228b480a849d39acdc990d36cb667927d133`, pushed to GitHub.
 
 Read-only audit of the existing Company/Client/Project/Workstream/Task/Time/Reports/Notes/Visits/
 Handoffs architecture and role-access model. Headline findings, still valid and still the
@@ -1271,7 +1273,9 @@ unaffected; only the recommended UI location changed.
 
 ### Phase 13B — Project Workspace History + Permanent Client Context
 
-**Status: DESIGN READY / IMPLEMENTATION NOT STARTED.**
+**Status: COMPLETE / ACCEPTED.** Full write-up in
+`docs/phase-13b-project-workspace-history-spec.md`. Two migrations shipped and hosted (see
+"Accepted final Phase 13B architecture" below).
 
 An initial Phase 13B ("Client Workspace + Permanent Client Context") was implemented as a separate
 `/dashboard/clients` + `/dashboard/clients/[id]` operational route, reusing existing role-scoped
@@ -1281,30 +1285,455 @@ already represents their assigned Client work, and a second "Clients → Client 
 navigation layer would create an unnecessary extra mental model. That entire uncommitted
 implementation (`src/app/dashboard/clients/**`, the sidebar "Clients" item, the command-palette
 Companies-category repoint, `docs/phase-13b-client-workspace-spec.md`) was fully removed/reverted
-before this correction pass ended — nothing from it was ever committed or pushed.
+and checkpointed as the architecture-correction commit above — nothing from it was ever committed
+or pushed.
 
-**Redefined Phase 13B** keeps the locked model — Company (permanent administrative Client master,
-Superadmin-only) → Project (the Employee/Supervisor operational Client workspace) → Service →
-Activity → Task → Subtask → Checklist — and makes the *existing* Project workspace richer instead
-of adding a parallel one:
-- Client context surfaced **inside** the Project page (a "Client Context" section showing the
-  Company's permanent Notes — still stored with `companyId`, never `projectId`, so the same notes
-  correctly survive annual Project renewal and appear on every year's Project for that Client, with
-  no duplication).
-- Other Projects for the same Client, shown only where the viewer already has legitimate
-  Project-level access (`canAccessProject`) — Company access alone must never be used to expose an
-  otherwise-inaccessible historical Project.
-- Project overview/history IA evolving toward Overview/Tasks/Services/Team/History tabs (not built
-  yet).
+**Redefined Phase 13B was then implemented** against the corrected, Project-centric model —
+`/dashboard/projects/[id]` redesigned per Reference 1's visual language (compact header, five
+Task-status summary blocks, dense grouped list, thin borders/compact typography), translating only
+the visual system and explicitly omitting the reference's Gantt/calendar functionality:
+- **Tabs**: Overview | Tasks | Services | Team | **History** (History is the only new tab, same
+  route, no new route created).
+- **Header**: Project name + status badge + "+ New Task" (existing gating, unchanged
+  authorization) + Superadmin-only Renew/Edit. (Second pass, below: the Client-name line originally
+  shown above the Project name was removed — Project is the sole operational identity.)
+- **Five status summary blocks** (Todo/In Progress/Blocked/Waiting/Done), always visible above the
+  tabs, colored via the existing `STATUS_COLOR_VAR` map — no new backend query.
+- **Overview simplified**: Contract Start/End, Owner, and the Team-count card removed from the
+  primary view (nothing deleted from the data model — still present in the Superadmin edit dialog
+  and the Team tab); replaced with an optional Description card, the new **Shared Notes** section
+  (named "Client Context" in the first pass, "Permanent Context" in the second pass, "Shared Notes"
+  — the final wording — in the final correction pass below), and a compact Current Services list.
+- **Shared Notes** reuses the exact existing Company Notes architecture
+  (`useCompanyNotes(project.companyId)` / `notesProvider.createCompanyNote`) — notes stay stored
+  against `companyId`, never `projectId`, so the same permanent context correctly survives annual
+  Project renewal with zero duplication. No new Note type, no new table, no migration.
+- **Tasks tab** reuses the Phase 12B List-view components verbatim (`TaskListSection`/
+  `TaskListRow`, `groupTasksBy`/`filterTasks`) — same row density/typography/Priority/Service/Due
+  date/Assignee treatment, same status grouping, same Task-click-to-full-page navigation, same
+  responsive/dark-mode behavior. Toolbar is Search-only (the list is already Project-scoped).
+- **Services tab** restyled to a dense single list (name, lead, activity count, open-task count,
+  status) — Service still supports multiple Activities, Task still exactly one.
+- **Team tab** unchanged.
+- **History tab (13B foundation)**: "Related Projects" (named "Other Projects for this Client" in
+  the first pass), sourced from the already role-scoped `useProjects()` — Company access is never
+  used to bypass Project authorization; a Project appears here only if the viewer's own role-scoped
+  Project list already included it. Structured as a plain list of Cards so 13C/13D/13E can add
+  sections without another redesign.
+
+One implementation-only correction (not a backend/provider change): the page was split into an
+outer loading/not-found wrapper + `LoadedProjectDetailPage`, mounted only once a real Project
+exists — reusing the codebase's own established Rules-of-Hooks-safe pattern — so
+`useCompanyNotes(project.companyId)` never runs with an empty id during the loading window (the
+Supabase Notes provider has no empty-id guard, since no caller had ever passed one before this
+page's Permanent Context section).
+
+**Second pass — Projects index redesign, real Gantt, operational naming cleanup.** Full detail in
+`docs/phase-13b-project-workspace-history-spec.md`'s "Second pass" section. Two product decisions
+superseded parts of the first pass:
+1. **Naming consistency** — Employee/Supervisor operational UI must never teach a "Client →
+   Project" two-level model; Project is the sole operational identity. Presentation-only changes:
+   the Project detail header no longer shows a separate Client-name line; "Client Context" →
+   "Permanent Context"; "Other Projects for this Client" → "Related Projects." No database table,
+   RPC, RLS policy, or TypeScript model was renamed — `companyId`/`Company` are untouched, and
+   Company administration remains exactly as Superadmin-only as before.
+2. **Real Project Gantt on `/dashboard/projects`** — a scheduling audit (`Project.contractStartDate`/
+   `contractEndDate`, both real, nullable, user-editable `date` columns with a DB-level
+   `end >= start` check) confirmed enough legitimate data to build a read-only, clipped, per-month
+   duration bar per Project — no fabricated dates. `Task.dueDate` alone was confirmed insufficient
+   for a duration bar, so **no Task Gantt bars were built anywhere**, including inside the Project
+   detail's own Tasks tab (unchanged, still the plain Phase 12B List components). The Projects index
+   was fully redesigned: a real 4-block status summary strip (`ProjectStatus` has exactly 4 values —
+   no fifth invented), a Search + month-navigation toolbar, and a status-grouped list where each
+   Project row pairs with a real, read-only, horizontally-independent-scrolling Gantt strip (current
+   month by default, real calendar dates, clipped bars, a "No schedule" label when either date is
+   missing). No migration, RLS, RPC, or provider-interface change.
 
 No new sidebar item, no `/dashboard/clients` route. Company administration
 (`/dashboard/companies`, `/dashboard/companies/[id]`) stays Superadmin-only, Contacts included,
-completely unchanged. Implementation has not started — this pass was architecture correction only.
+completely unchanged and never imported into the Project page.
+
+**Final correction pass — Gantt bug fix, Shared Notes, Team avatars, Service/Workstream redesign,
+sidebar tooltip fix, Internal/Non-billable audit.** Full detail in
+`docs/phase-13b-project-workspace-history-spec.md`'s "Final correction pass" section. Sidebar's
+"Client work" section heading is explicitly kept (re-approved, never in scope for the naming
+cleanup). Key items:
+- **Found and fixed the real cause of "no visible bars"**: `computeBarState` previously returned
+  the same `null` for two different situations — a Project with no schedule at all, and a Project
+  with a real schedule that simply doesn't overlap the selected month — both rendered identically
+  as "No schedule." Now a three-state union (`bar`/`no-schedule`/`out-of-range`); confirmed by code
+  trace and a live mock-mode screenshot (no credentials/DB access exist for the real hosted
+  Supabase project this session ran against, so verification used mock's seeded, non-fabricated
+  fixture data to exercise the same real code path). A second bug (the "No schedule" label centered
+  across the full off-screen scroll width) was found and fixed in the same pass.
+- **Gantt redesign**: the month header now lives inside each status group's own timeline column
+  (shared `monthCursor` state, so every group's timeline moves together); two-line weekday+day
+  headers with real vertical grid lines and subtle weekend shading; Team column now shows up to 3
+  member avatars + a "+N" overflow chip instead of a plain count.
+- **"Permanent Context" → "Shared Notes"** (final wording) — new compact `SharedNotesSection`
+  component; unchanged storage (`companyId`, never `projectId`); an empty state renders only a
+  single-line "+ Add shared note" action, never a large empty card.
+- **`/dashboard/workstreams/[id]` (Service/Workstream detail) redesigned**: Company/Start-date/
+  Renewal-date/Brand removed from the primary Overview (still fully preserved in "Edit
+  workstream"), replaced with a subtle Project-context link and a compact Progress+Team row;
+  `WorkstreamActivityTasks`'s row rendering switched from an older `TaskRowList`/`TaskRow` style to
+  the literal shared `TaskListRow` component (no third Task visual system); Time vs. Budget kept
+  but de-emphasized (moved after Activities, more compact) — not deleted, still fully functional.
+- **Sidebar duplicate-tooltip bug fixed**: the icon rail's hover tooltip is now suppressed while
+  the wider nav panel is also expanded (it already shows the same label) — tooltips still work
+  normally in collapsed/icon-only rail mode. No sidebar restructuring.
+- **Internal/Non-billable audited**: a real, load-bearing dependency was found (an Employee's
+  self-added Task/time-entry creation falls back to the always-available Internal workstream when
+  not staffed on any client workstream) — that functional fallback was never touched. (Superseded
+  below: the final structural correction pass *does* now hide the Internal Project from the normal
+  Employee/Supervisor Projects-index browsing surface specifically, via a new read-only
+  `isInternal` flag — still without touching the fallback itself. Meetings/calls for real clients
+  continue to belong to that client's real Project as a Task/Activity/Shared Note — no new special
+  internal workflow was created.)
+
+`npx tsc --noEmit` (0 errors), `npx eslint src` (0 errors, the same 2 pre-existing unrelated
+warnings), and all four provider builds (`supabase`/`supabase-core`/`supabase-auth`/`mock`) passed
+clean. Uncommitted, pending manual acceptance; Phase 13C/13D/13E not started.
+
+**Final structural correction pass — Task Start Date + Task Timeline, Projects-index Gantt removed,
+single collapsible sidebar, Service page second redesign, Internal Project hidden from browsing.**
+Full detail in `docs/phase-13b-project-workspace-history-spec.md`'s "Final structural correction"
+section.
+- **Task Start Date**: new optional `Task.startDate` field — the Projects-index Gantt (contract
+  dates) was judged the wrong Gantt (Employees plan from Tasks, not Project contract periods) and
+  removed entirely; the real functional Gantt now lives on the Project workspace's own Tasks tab as
+  a `List | Timeline` switcher (List stays default everywhere, including the unaffected global
+  `/dashboard/tasks` page). Timeline renders a real duration bar only when both `startDate` and
+  `dueDate` exist, a deadline marker for due-only, a start marker for start-only, "No schedule" only
+  when genuinely neither exists, and nothing (never "No schedule") for real dates outside the
+  selected month. **New local, unapplied migration**
+  (`supabase/migrations/20260827090000_task_start_date.sql`): `tasks.start_date date null` + a
+  `start_date <= due_date` check constraint + `create_task`/`create_subtask` each extended with one
+  new defaulted parameter (every existing authorization check preserved verbatim — diffed and
+  confirmed unchanged); `update_task` needed no RPC/RLS change at all (it's a direct, already-gated
+  table update). **Not pushed to hosted Supabase** — local review only.
+- **Internal/Non-billable Project**: a new read-only `ProjectWithRelations.isInternal` (exposing the
+  Company's own already-fetched `is_internal` column — no RLS/access change) is now used to exclude
+  the Internal Project from the normal `/dashboard/projects` browsing experience for
+  Employee/Supervisor entirely; Superadmin still sees it, visually distinguished (muted row + a
+  "System" badge). The underlying fallback (self-added Task creation for an unstaffed Employee) is
+  completely untouched — only the Projects-index browsing surface was filtered.
+- **Sidebar**: the earlier "icon rail + separate wider nav panel" shell was replaced with one
+  `DesktopSidebar` component whose own width/content toggles between expanded and icon-only
+  collapsed — no second panel ever mounts alongside it. Every destination (including Projects/Team,
+  which the old rail excluded) is reachable in both states; tooltips only ever appear while
+  collapsed. "Client work" stays the section heading, unchanged.
+- **Service/Workstream page, second redesign**: removed the oversized Tasks-progress and Team cards
+  the first redesign still had; Team is now a compact inline "Lead + avatars" line, replaced by a
+  small 4-block Open/In Progress/Blocked-or-Waiting/Done strip; Activities now render directly as
+  the page's primary body (no wrapping outer Card) with real `TaskListRow`s; Time vs. Budget is
+  hidden entirely for Employee and compact/last for Supervisor/Superadmin.
+- All of the above was verified live via mock-mode screenshots (no credentials exist for the real
+  hosted Supabase project this session's `.env.local` points at) — real duration bars, correct
+  out-of-range/no-schedule distinction, Internal Project absent from a Supervisor's Projects index,
+  single-sidebar collapse/expand with working tooltips, and the redesigned Service page all
+  confirmed rendering correctly, including dark mode.
+- `npx tsc --noEmit` (0 errors), `npx eslint src` (0 errors, same 2 pre-existing warnings), all four
+  provider builds passed clean. Uncommitted, pending manual acceptance; Phase 13C/13D/13E not
+  started.
+
+**Pre-deployment review pass — migration security review + Task Priority signal-bar redesign +
+Internal-Project discovery cleanup.** Full detail in
+`docs/phase-13b-project-workspace-history-spec.md`'s "Pre-deployment review" section.
+- **`start_date` migration: SECURITY REVIEWED / HOSTED APPLY PENDING.** A complete, line-by-line
+  review compared the new `create_task`/`create_subtask` against their immediately-previous
+  canonical (already-hosted) versions: every authorization check (workstream/task access gates,
+  Activity auto-enable authorization, Employee/Supervisor/Superadmin assignee-resolution scope,
+  one-level Subtask nesting guard) is character-for-character unchanged — the only functional
+  addition in either function body is the new `start_date` column/parameter itself. `DROP FUNCTION`
+  signatures were confirmed to exactly match the live hosted signatures (verified against those
+  functions' own historical `revoke`/`grant` statements), so no overloaded/ambiguous function is
+  left behind. `REVOKE ... FROM public, anon` / `GRANT ... TO authenticated, service_role` preserved
+  exactly. `update_task`'s direct-table-update path needs no RLS/grant change (row-scoped,
+  column-unqualified policy and grant already cover the new column). `npx supabase db push
+  --dry-run` confirmed `20260827090000_task_start_date.sql` is the **only** pending hosted
+  migration. No defect was found — the migration was **not modified** in this pass. Still **NOT
+  applied** to hosted Supabase (`migration list` shows local-present/remote-absent).
+- **Task Priority redesign — completed** (the one piece missed in the prior structural-correction
+  pass): the existing shared `TaskPriorityBadge` (same export name, same `{ priority }` prop — zero
+  other files touched) now renders a compact 4-bar ascending signal indicator + plain text label,
+  replacing the earlier colored-pill capsule, matching `references/phase-13b/task-priority-
+  reference.png.png`'s visual language while reusing the app's own existing semantic priority
+  colors (not the reference's literal RGB values). Low=1 bar, Medium=2, High=3, Urgent=4 (bars +
+  its own destructive color, never color alone) — the real 4-value `TaskPriority` enum was not
+  changed. Every existing display surface (List, Board, Timeline, Quick View, full Task Properties,
+  Tasks Grid, My Day/Planner's shared summary item) already routed through this one component, so
+  all of them picked up the new look automatically; the separate, editable Priority *picker* was
+  deliberately left with its own existing pill-select treatment. Verified live in mock mode, light
+  and dark.
+- **Internal/Non-billable discovery cleanup**: re-audited the command palette (confirmed it has no
+  Project search category to filter), Related Projects/History (structurally already safe), and
+  found/fixed one genuine gap — the Client Report generation dialog's "Client" dropdown was letting
+  "Internal / Non-billable" be picked as a client for a client-facing report; fixed with a local
+  filter in that one dialog only. Every functional fallback selector (Task/Subtask creation, Daily
+  Updates, Visit Entries) remains completely untouched.
+- `npx tsc --noEmit` (0 errors), `npx eslint src` (0 errors, same 2 pre-existing warnings), all four
+  provider builds passed clean. Uncommitted, pending manual acceptance; Phase 13C/13D/13E not
+  started; migration still local-only, not applied.
+
+**Final UX completion pass — Task-derived Projects Gantt, deadline-block redesign, Company/Project
+identity avatars, hosted migration deployment.** Full detail in
+`docs/phase-13b-project-workspace-history-spec.md`'s "Final UX completion pass" section.
+- **Projects index gained a `List | Gantt` toggle** (List unchanged, still the default). Gantt is
+  powered entirely by each Project's own **Tasks'** `startDate`/`dueDate` (never
+  `contractStartDate`/`contractEndDate`) — 5 cases: a "Scheduled Work Window" bar only when both
+  start and due dates exist somewhere in the Project's Tasks; compact one-day deadline blocks
+  (count-badged if several share a date) for due-only; thin start markers for start-only; "No task
+  schedule" only when genuinely no Task has either date; nothing rendered (never "unscheduled")
+  when real dates fall outside the visible month. Own real month/day-grid header per status group.
+  Clicking a Project (name, bar, block, or marker) opens it — from Gantt specifically, deep-linked
+  to `?tab=tasks&view=timeline` (no new route; the existing Project detail page's `useSearchParams`
+  split now seeds `tab`/`taskView` via lazy `useState` initializers instead of a `useEffect`, fixing
+  a `react-hooks/set-state-in-effect` lint error along the way).
+- **Task Timeline's due-only marker**: the ◆ diamond was replaced with a compact one-day deadline
+  block using the exact same visual treatment as a true duration bar — navigation/click behavior
+  unchanged, never implies an earlier start.
+- **New Company/Project identity avatar system** — no new DB column, no migration. Three new
+  semantic tokens (`--identity-1/2/3`, never destructive/warning/success/info) and a deterministic
+  `identityColorForCompany(companyId)` hash (keyed on `companyId` only, so related Projects under
+  the same Company always match) power one shared `CompanyProjectAvatar` component — squircle
+  (`rounded-lg`), never circular, so it's never confused with a real person's avatar. Placed on the
+  Projects List/Gantt, Project detail header, Related Projects, the Service page's Project-context
+  link, and Superadmin Companies list/detail; deliberately **not** placed in dense rows (My
+  Day/Planner/Task List) or Project/Workstream picker dropdowns. The Internal/Non-billable Company
+  gets the correct neutral treatment everywhere `isInternal` is available (Projects surfaces); the
+  Superadmin Companies list/detail pages show it with an ordinary identity color instead, since the
+  base `Company`/`CompaniesProvider` types don't expose `is_internal` (only the Projects join does)
+  — a known, documented, low-risk simplification rather than adding a new provider query for one
+  surface.
+- `npx tsc --noEmit` (0 errors), `npx eslint src` (0 errors, same 2 pre-existing warnings), all four
+  provider builds clean, mock-mode Playwright visual verification (light + dark) with zero
+  console/page errors across every screenshot.
+- **`20260827090000_task_start_date.sql`: HOSTED / APPLIED / VERIFIED.** Gate re-verified
+  immediately before applying (`migration list` showed only this one pending; `db push --dry-run`
+  confirmed the same); the file's content was re-read and matched the prior review unmodified; `npx
+  supabase db push` (real, non-dry-run) succeeded against the linked hosted project
+  (`qxqxzuoaivyddwxqqoog`); `migration list` immediately after shows `local == remote ==
+  "20260827090000"`, zero pending migrations. One normal dev server was restarted (real
+  `.env.local`/`supabase` mode, port 3000) — booted clean, `/`, `/login`, `/dashboard/projects`,
+  `/dashboard/tasks` all `200` with no server-side errors. This session has no real authenticated
+  credentials, so the new column/RPCs could not be exercised through a live authenticated session
+  from here — the dev server was left running for the user's own manual acceptance test, per their
+  instruction not to create test data automatically.
+- **Phase 13B remains IMPLEMENTED / MANUAL ACCEPTANCE PENDING** (not complete) — the UI/UX work is
+  done and the migration is now live on hosted, but the user's own authenticated manual verification
+  has not yet happened. Uncommitted; HEAD and `origin/main` remain
+  `9ff7228b480a849d39acdc990d36cb667927d133`; Phase 13C/13D/13E not started.
+
+**Final visual + task-workflow polish pass — still Phase 13B, the prior "final UX completion pass"
+was provisional pending these refinements.** Full detail in
+`docs/phase-13b-project-workspace-history-spec.md`'s own final section.
+- **Projects: merged List + Gantt, no mode switcher.** The `List | Gantt` toggle from the previous
+  pass is removed — `/dashboard/projects` is now one integrated per-status-group layout (Project/
+  Services/Open Tasks/Team on the left, the same Task-derived Gantt on the right, in the same row,
+  always), matching `references/phase-13b/project-workspace-reference.png.png` directly. Fixed a
+  real bug: due-only deadline blocks rendered **blank** when exactly one Task was due that day
+  (`{count > 1 ? count : ""}`) — now always shows the numeral, never blank; the fuller "`N` due"
+  text was tried and rejected (doesn't fit a one-day-wide block) in favor of putting it in the
+  tooltip/aria-label instead.
+- **Shared Task List column headers.** New `TaskListHeader` component, one shared grid-template
+  constant with `TaskListRow` so the two can never misalign, and a `context: "global" | "project" |
+  "service"` prop controlling both the header labels and which columns exist at all (Service/Project
+  identity is dropped entirely — not just hidden — once the page around it already establishes that
+  context). Rendered on `/dashboard/tasks`, the Project workspace's Tasks tab, and each Service's
+  Activity Task cards; hidden while a status group is collapsed and on mobile (same responsive split
+  the rows already had).
+- **Company/Project identity avatar extended to Task surfaces**: Tasks List/Board, the full Task
+  page and Quick View breadcrumbs, and the shared `TaskSummaryItem` (Planner + Dashboard KPI
+  drawers) all now show the same `CompanyProjectAvatar`. A new `isLikelyInternalTask` heuristic
+  (`INTERNAL_COMPANY_ID`/`INTERNAL_PROJECT_ID` comparison) drives the neutral/Internal treatment on
+  these Task surfaces — reliable in mock data, a documented no-op in every Supabase-backed provider
+  mode (the real hosted Internal Company has its own random id, not the literal constant) — the
+  Project-scoped Tasks tab avoids this by passing the real `project.isInternal` through instead.
+- **Inline Service/Activity creation from Task Create — audited, not rebuilt.** Both capabilities
+  already existed, already correctly scoped, already hosted: `canCreateWorkstreamInProject` (Phase
+  8B) already lets an Employee create a Service inside a Project they can access (server-enforced
+  self-lead-only, via the real `create_workstream` RPC); `canExtendServiceActivities` (Phase 8C)
+  already lets the right role add an existing catalog Activity to the current Service atomically
+  with Task creation. The only real gap was `TaskFormDialog`'s own "+ New service" button being
+  gated by a blanket `!employeeView` check instead of the real, already-safe permission function —
+  **fixed as a pure UI change, zero backend/RLS/RPC/migration involved.** No literal "create a
+  brand-new Activity" capability exists anywhere in the app (confirmed by search) and none was
+  built — Activity stays a fixed, reusable, seeded catalog; the existing "enable an existing catalog
+  Activity" flow already satisfies the requested outcome.
+- `npx tsc --noEmit` (0 errors), `npx eslint src` (0 errors, same 2 pre-existing warnings), all four
+  provider builds clean, mock-mode Playwright visual verification (Superadmin + Employee, light +
+  dark, desktop + mobile) with zero console/page errors. `npx supabase migration list` unchanged —
+  `20260827090000` local==remote, zero pending; **no new migration was created or needed.**
+  Uncommitted; HEAD and `origin/main` remain `9ff7228b480a849d39acdc990d36cb667927d133`; Phase 13B
+  still IMPLEMENTED / MANUAL ACCEPTANCE PENDING, not complete; Phase 13C/13D/13E not started.
+
+**Final Task Identity + Activity UX pass — intended as the final Phase 13B implementation pass
+before manual acceptance/checkpoint.** Full detail in
+`docs/phase-13b-project-workspace-history-spec.md`'s own final section.
+- **Assignee stays Assignee** — no rename anywhere (DB/provider/permissions/UI). A new
+  `isAssigneeColumnRedundantForViewer` audits the *actual currently-displayed dataset* per page (an
+  Employee only loses the Assignee column when every visible Task is assigned solely to them —
+  never a blanket per-role hide; Supervisor/Superadmin always keep it). The shared
+  `TaskListHeader`/`TaskListRow` grid gained a second `showAssignee` axis alongside the existing
+  `context` axis, dropping the column from the grid template entirely (never just CSS-hidden) when
+  redundant.
+- **New `TaskStatusAvatar`** (`src/components/tasks/task-status-avatar.tsx`) — no DB field, no
+  migration. Title-derived initials ("Prepare VAT Return" → "PV", "Audit" → "A"), colored by the
+  Task's current status via the same canonical `STATUS_COLOR_VAR` map, `rounded-md` (distinct from
+  the squircle `CompanyProjectAvatar` and circular person `Avatar`). Added to every named Task
+  surface (List, Board, Timeline, Quick View, full Task page, `TaskSummaryItem`, Subtask rows) —
+  reusing one shared component throughout, never a second Subtask-specific avatar model. Verified
+  live that a status change repaints the avatar's color immediately (no stale/cached color, no
+  reload).
+- **Service Activity UX clarified, not redesigned.** Renamed the Task-Activity field to "Activity
+  for this Task" (still single-select — `Task.activityId` stays a single nullable FK, no array, no
+  Task↔Activity many-to-many). Added an always-visible "Activities in this Service" panel showing
+  every enabled Activity with the current Task's own selection tagged "Selected for Task" — fixes
+  the reported bug where staging a new Activity used to visually replace/hide the Service's other
+  already-enabled Activities. Audited `updateWorkstream`'s existing `activityIds` (a full
+  replace-all sync, already used by `WorkstreamFormDialog`'s own checkbox list) and found it already
+  supports a real multi-select "Add activities to Service" — but only for Supervisor/Superadmin,
+  since `updateWorkstream` is RLS-gated to those roles even for an Employee who leads the Workstream
+  (a deliberate, pre-existing boundary). Built a new `AddServiceActivitiesDialog` for
+  Supervisor/Superadmin that submits the full existing+new activity-id set; an Employee keeps their
+  exact pre-existing single-activity "stage it, persists on Task save" flow, unchanged. No brand-new
+  "create an Activity catalog definition" capability exists anywhere in the app or was built here —
+  confirmed by search, correctly deferred to a future catalog-admin phase. **Zero backend/RLS/RPC/
+  migration change for any of this pass.**
+- `npx tsc --noEmit` (0 errors), `npx eslint src` (0 errors, same 2 pre-existing warnings), all four
+  provider builds clean, mock-mode Playwright visual verification (Employee/Supervisor/Superadmin,
+  light + dark, desktop + mobile, live status-change reactivity) with zero console/page errors.
+  `npx supabase migration list` unchanged — `20260827090000` local==remote, zero pending; **no new
+  migration created.** Uncommitted; HEAD and `origin/main` remain
+  `9ff7228b480a849d39acdc990d36cb667927d133`; Phase 13B still IMPLEMENTED / MANUAL ACCEPTANCE
+  PENDING, not complete; Phase 13C/13D/13E not started.
+
+**Final boss-feedback consolidation pass — intended as the final substantive Phase 13B
+implementation pass before manual acceptance/checkpoint.** Full detail in
+`docs/phase-13b-project-workspace-history-spec.md`'s own final section.
+- **Locked hierarchy simplified to Project → Service → Activity → Task → Checklist** — Subtask
+  creation is retired from normal operational UI (no "+ Add Subtask" anywhere); existing historical
+  Subtasks stay fully viewable/navigable, and nothing about `parentTaskId`, the Subtask provider
+  methods, or their RLS/RPCs was touched or removed. Independently-trackable work becomes another
+  Task in the right Project/Service/Activity context going forward.
+- **Brand-new Activity creation from the Task form — the one genuinely new backend capability this
+  pass required.** Audited first: `departments`/`activities` were select-only for `authenticated`
+  (no safe insert path existed), and several brands (e.g. EdgeNovelty) have zero Departments at all
+  for their own service lines (confirmed live against the real seeded "IT/Digital" service line).
+  **New local, unapplied migration**
+  (`supabase/migrations/20260828090000_create_activity_for_workstream.sql`): one
+  `create_activity_for_workstream` RPC, authorization mirroring `create_task`'s own already-reviewed
+  `may_extend_activities` branch exactly (Employee: only a Service they lead; Supervisor: only one
+  led by someone they manage within a Project they can access; Superadmin: unconditional),
+  auto-resolving/creating the Department from the Workstream's own brand+service-line (never a
+  user-facing field), reusing a case-insensitive-matching existing Activity instead of duplicating
+  one. **Not applied to hosted Supabase** — `npx supabase db push --dry-run` confirms it as the only
+  pending migration. New Task-form UX: "+ Create Activity" alongside the existing "Activities in
+  this Service" panel and the Supervisor/Superadmin "Add existing activities to Service," available
+  to all three roles within their own already-legitimate scope. A real stale-cache bug (the new
+  Activity's raw id showing instead of its name, because catalog data is cached in a separate hook
+  from the Workstream list) was found and fixed during this pass's own live verification.
+- **Operational naming cleanup** — new shared `src/lib/data/project-display.ts`
+  (`operationalProjectIdentity`) makes the Company name the primary daily identity everywhere
+  ordinary work is shown (Projects List/Gantt, Project/Service headers, global Tasks List/Board, My
+  Day, Planner, Task Drawer, full Task breadcrumb), suppressing the redundant "Company name + year
+  range" Project name that used to repeat everywhere. Nothing in the database changed — Related
+  Projects, Client Report scheduling, and the Tasks-list Project filter (all genuine disambiguation/
+  selection contexts) deliberately keep showing the full Project name.
+- **Task Start Date now defaults to today's real local calendar date** on a brand-new Task only
+  (reusing the already-existing `todayDateOnly()` helper — no UTC-slice anti-pattern); editing an
+  existing Task, including one with a genuinely null legacy Start Date, is completely unaffected.
+- **Task Drawer redesigned** as a clean quick operational inspector on new shared
+  `src/components/ui/detail-drawer.tsx` primitives (Header/Body/Section/PropertyGrid/Footer) — ~500px
+  desktop, full width on mobile (both measured live), no repeated Client/Project chain, compact
+  Details/Checklist/Time, historical Subtasks shown only when they exist, never a giant card-in-card.
+- `npx tsc --noEmit` (0 errors), `npx eslint src` (0 errors, same 2 pre-existing warnings), all four
+  provider builds clean, mock-mode Playwright visual verification (Employee/Supervisor/Superadmin,
+  light + dark, desktop + 420px mobile) with zero console/page errors. `npx supabase migration list`
+  / `db push --dry-run` show only `20260828090000_create_activity_for_workstream.sql` pending
+  (**not applied**); `20260827090000` still local==remote. Uncommitted; HEAD and `origin/main` remain
+  `9ff7228b480a849d39acdc990d36cb667927d133`; Phase 13B still IMPLEMENTED / MANUAL ACCEPTANCE
+  PENDING, not complete; Phase 13C not started.
+
+**Two final corrections before hosted apply — still Phase 13B, still pre-apply.** Full detail in
+`docs/phase-13b-project-workspace-history-spec.md`'s own final section.
+- **Correction 1 — the previous pass's Employee Activity-creation scope ("own led Service") was too
+  narrow relative to the locked rule: an Employee who may legitimately create a normal Task in a
+  Workstream must also be able to create the Activity that Task needs, lead or not.** Audited (not
+  assumed) `create_task`'s real, current authorization boundary: `can_access_workstream`
+  (`20260814100000_hotfix_workstream_task_visibility.sql`), whose Employee-relevant branches are
+  `manages_user(w.lead_user_id)` (the lead) **and, separately, a `workstream_members` branch — true
+  for any team member, lead or not**. Confirmed against seed data that every seeded Employee is only
+  ever a plain member, never a lead — so the old lead-only Activity-RPC boundary was strictly
+  narrower than the real Task-creation boundary for every Employee today. **Corrected
+  `create_activity_for_workstream` (edited in place — same local, still-unapplied migration file, no
+  second migration) to call `public.can_access_workstream(p_workstream_id)` directly**, the literal
+  same function `create_task` itself uses, eliminating any future drift between the two boundaries;
+  mirrored identically in the mock provider. Superadmin/Supervisor scope unaffected. Six rollback-safe
+  probes (Employee-as-lead, Employee-as-non-lead-member, unrelated-Workstream rejection, no
+  cross-Service targeting possible, no membership/team/assignee mutation, duplicate-name reuse) all
+  run in-process against the mock db and rolled back with the process exit — no hosted test records.
+  **A related client-side bug was found and fixed during this same correction's own live
+  verification**: the Task form's "+ Create Activity" button was still gated on the old, narrower
+  `canExtendServiceActivities`, so a non-lead Employee's newly-correct backend access still couldn't
+  reach the button. Fixed with a new `canCreateNewActivity` gate (using `canAccessWorkstream`
+  directly); the separate, backend-untouched "+ Add an activity to this Service" flow keeps its own
+  original lead-only gate unchanged.
+- **Correction 2 — ordinary operational Project selectors were still showing the full
+  disambiguating "Company + year range" name; the locked rule is Company name only for normal daily
+  work.** Fixed the real remaining leaks: `TaskFormDialog`'s own Project selector (New/Edit Task),
+  `useProjectOptionsFromTasks`/`groupTasksBy` in the shared `use-task-filters.ts` hook (which
+  transitively fixed the global Tasks page's own filter/group-by AND Planner's, both reusing this one
+  hook), and My Day's `AddVisitDialog`/`DailyVisitHoursCard` and the Daily Update
+  `AddManualEntryDialog`. New shared helpers in `project-display.ts`
+  (`operationalProjectLabel`/`operationalProjectPickerLabels`) replace ad hoc per-component string
+  handling; the latter is collision-aware (falls back to a meaningful secondary label, or the full
+  name, only for entries that would otherwise collide within the same picker) but confirmed currently
+  inert everywhere, since `seed-projects.ts` gives every Company exactly one Project today — kept
+  rather than removed, per the explicit "report ambiguity, don't hide it" instruction, so a future
+  multi-Project Company doesn't silently produce indistinguishable rows. Confirmed unchanged, as
+  required: Related Projects, Client Report scheduling, Superadmin Project admin dialogs,
+  `WorkstreamFormDialog`/quick-add (no Project name shown at all).
+- `npx tsc --noEmit` (0 errors), `npx eslint src` (0 errors, same 2 pre-existing warnings), all four
+  provider builds clean, mock-mode Playwright visual verification (Employee/Supervisor/Superadmin,
+  including a live end-to-end Employee-non-lead Create Activity flow) with zero console/page errors.
+  `npx supabase db push --dry-run` still shows only
+  `20260828090000_create_activity_for_workstream.sql` pending (**not applied** — same file, edited in
+  place, no second migration created); `20260827090000` still local==remote. Uncommitted; HEAD and
+  `origin/main` remain `9ff7228b480a849d39acdc990d36cb667927d133`; Phase 13B still IMPLEMENTED /
+  MANUAL ACCEPTANCE PENDING, not complete; Phase 13C not started.
+
+**Accepted final Phase 13B architecture — COMPLETE / ACCEPTED.** Both pre-apply corrections above
+were reviewed and the Activity migration was applied to hosted Supabase; the user then accepted
+Phase 13B as a whole. Locked, accepted surface:
+- **Task Start Date hosted** — `20260827090000_task_start_date.sql`, local == remote.
+- **Create Activity hosted** — `20260828090000_create_activity_for_workstream.sql`, local == remote,
+  authorization aligned to `can_access_workstream` (the exact same boundary `create_task` itself
+  uses), covering any Employee who may legitimately create a normal Task in a Workstream — lead or
+  plain team member — not just the Workstream lead.
+- **Zero pending migrations** — `npx supabase db push --dry-run` reports the remote database up to
+  date.
+- **Subtask creation retired from normal UI**; historical Subtasks remain fully viewable.
+- **Task Status Avatar** — live status-color reactivity across all Task surfaces.
+- **Project operational identity cleanup** — Company name is the normal daily identity everywhere
+  ordinary work is shown (Task Create/Edit, global Task filters, Planner, My Day, quick-add, Project/
+  Service headers, breadcrumbs); the full "Company + year range" Project name is reserved for Client
+  Report generation, Related Projects, Project History, and Superadmin Project administration.
+- **Task Drawer system** — `DetailDrawer` primitives (Header/Body/Section/PropertyGrid/Footer), a
+  clean quick operational inspector.
+- **Merged Project List + Gantt** — one integrated Projects page, no mode switcher, real
+  Task-derived scheduling.
+- **Project History foundation** — permanent context, Shared Notes, Related Projects, laid down as
+  the base Phase 13C–13E will build on.
+- Uncommitted at time of writing this note; the checkpoint commit immediately following this update
+  is what actually commits/pushes this accepted state — see the commit hash recorded in this
+  document's own changelog once that checkpoint lands.
 
 **Revised Phase 13 delivery sequence:**
-- **13B** — Project Workspace History + Permanent Client Context: Client context inside Project,
+- **13B** — Project Workspace History + Permanent Client Context: permanent context inside Project,
   permanent Company Notes surfaced through Project, related/previous accessible Projects, Project
-  overview/history IA.
+  overview/history IA, a real Projects-index Gantt from genuine Project contract dates.
 - **13C** — Project Completed Work + Client Report History: completed Tasks/Subtasks, Project
   report history, filters/search.
 - **13D** — Safe Project Time + Team Intelligence: legitimate aggregates only, no raw coworker

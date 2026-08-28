@@ -77,12 +77,7 @@ export function TaskDetailContent({ task, onChanged, timer }: TaskDetailContentP
         <TaskChecklist task={task} onChanged={onChanged} />
       </div>
 
-      {!task.parentTaskId && (
-        <>
-          <Separator />
-          <TaskSubtasksSection parentTask={task} onChanged={onChanged} />
-        </>
-      )}
+      {!task.parentTaskId && <TaskSubtasksSection parentTask={task} />}
 
       <Separator />
       <TaskHandoffSection taskId={task.id} handoffs={handoffs} onChanged={refreshHandoffs} />

@@ -78,12 +78,12 @@ export function useWorkstreamOptionsFromTasks(tasks: TaskWithRelations[]) {
   }, [tasks]);
 }
 
-/** Unique Projects present in a task list, sorted by name — same idea as useCompanyOptionsFromTasks, scoped through each task's own workstream.projectId (a legacy not-yet-backfilled workstream with no Project is simply absent from this list, never a broken "unknown" entry). */
+/** Unique Projects present in a task list, sorted by label — same idea as useCompanyOptionsFromTasks, scoped through each task's own workstream.projectId (a legacy not-yet-backfilled workstream with no Project is simply absent from this list, never a broken "unknown" entry). Labeled by the Task's own Company name (the normal daily identity, per `project-display.ts`) rather than the redundant date-ranged Project name — every Company has exactly one Project in the current data model, so this can never yet produce two identically-labeled options. */
 export function useProjectOptionsFromTasks(tasks: TaskWithRelations[]) {
   return useMemo(() => {
     const byId = new Map<string, string>();
     for (const task of tasks) {
-      if (task.workstream.projectId) byId.set(task.workstream.projectId, task.workstream.projectName ?? "Untitled project");
+      if (task.workstream.projectId) byId.set(task.workstream.projectId, task.company.name);
     }
     return Array.from(byId, ([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
   }, [tasks]);
@@ -131,7 +131,7 @@ export function groupTasksBy(tasks: TaskWithRelations[], groupBy: TaskGroupBy): 
   for (const task of tasks) {
     switch (groupBy) {
       case "project":
-        if (task.workstream.projectId) addTo(task.workstream.projectId, task.workstream.projectName ?? "Untitled project", task);
+        if (task.workstream.projectId) addTo(task.workstream.projectId, task.company.name, task);
         else addTo("none", "No project", task);
         break;
       case "company":

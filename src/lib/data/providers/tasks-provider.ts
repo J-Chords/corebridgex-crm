@@ -66,6 +66,8 @@ export interface TaskInput {
   assigneeIds: string[];
   status: TaskStatus;
   priority: TaskPriority;
+  /** Optional planned/scheduled start date — never auto-populated or derived. */
+  startDate: string | null;
   dueDate: string | null;
   /** Optional time budget for this task, normalized to minutes — omit or pass null when not estimated. */
   expectedMinutes?: number | null;
@@ -94,6 +96,8 @@ export interface SubtaskInput {
   assigneeIds: string[];
   status: TaskStatus;
   priority: TaskPriority;
+  /** Optional planned/scheduled start date — never auto-populated or derived. */
+  startDate: string | null;
   dueDate: string | null;
   expectedMinutes?: number | null;
   checklistItems: TaskChecklistItemInput[];

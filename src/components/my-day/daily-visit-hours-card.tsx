@@ -6,6 +6,7 @@ import { useMyVisitEntries } from "@/lib/data/hooks/use-visit-entries";
 import { useProjects } from "@/lib/data/hooks/use-projects";
 import { formatMinutes } from "@/lib/format-minutes";
 import { todayDateOnly } from "@/lib/planner-dates";
+import { operationalProjectPickerLabels } from "@/lib/data/project-display";
 import type { VisitEntry } from "@/lib/data/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -48,7 +49,8 @@ export function DailyVisitHoursCard({ className, style }: DailyVisitHoursCardPro
   const [visitFormState, setVisitFormState] = useState<VisitFormState>(null);
   const [recordingVisit, setRecordingVisit] = useState<VisitEntry | null>(null);
 
-  const projectNameById = useMemo(() => new Map(projects.map((p) => [p.id, `${p.companyName} — ${p.name}`])), [projects]);
+  const projectLabels = useMemo(() => operationalProjectPickerLabels(projects), [projects]);
+  const projectNameById = useMemo(() => new Map(projects.map((p) => [p.id, projectLabels[p.id]])), [projects, projectLabels]);
 
   const today = todayDateOnly();
   const todayCompletedTotal = entries.reduce(

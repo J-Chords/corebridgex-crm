@@ -28,6 +28,7 @@ function taskToInput(task: TaskWithRelations, checklistItems: TaskChecklistItemI
     assigneeIds: task.assignees.map((a) => a.id),
     status: task.status,
     priority: task.priority,
+    startDate: task.startDate,
     dueDate: task.dueDate,
     expectedMinutes: task.expectedMinutes,
     checklistItems,

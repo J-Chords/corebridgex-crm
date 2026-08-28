@@ -17,6 +17,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
 import { ChecklistProgress } from "@/components/ui/checklist-progress";
 import { CompanyStatusBadge } from "@/components/companies/company-status-badge";
+import { CompanyProjectAvatar } from "@/components/companies/company-project-avatar";
 import { ClientHealthSummary } from "@/components/companies/client-health-badge";
 import { CompanyFormDialog } from "@/components/companies/company-form-dialog";
 import { ContactFormDialog } from "@/components/companies/contact-form-dialog";
@@ -112,6 +113,7 @@ export default function CompanyDetailPage({ params }: { params: Promise<{ id: st
         </Link>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-3">
+            <CompanyProjectAvatar companyId={company.id} companyName={company.name} />
             <h1 className="font-heading text-2xl font-semibold">{company.name}</h1>
             <CompanyStatusBadge status={company.status} />
             <Badge variant="neutral">{company.brand.name}</Badge>

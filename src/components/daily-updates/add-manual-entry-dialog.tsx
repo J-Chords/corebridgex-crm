@@ -5,6 +5,7 @@ import { AlertCircle } from "lucide-react";
 import { useCompanies } from "@/lib/data/hooks/use-companies";
 import { useProjects } from "@/lib/data/hooks/use-projects";
 import { useActivityCatalog } from "@/lib/data/hooks/use-activity-catalog";
+import { operationalProjectPickerLabels } from "@/lib/data/project-display";
 import type { AddManualDailyUpdateEntryInput } from "@/lib/data/providers/daily-updates-provider";
 import {
   Dialog,
@@ -50,6 +51,7 @@ export function AddManualEntryDialog({ open, onOpenChange, onSave }: AddManualEn
 
   const selectedCompany = companies.find((c) => c.id === companyId);
   const companyProjects = selectedCompany ? projects.filter((p) => p.companyId === selectedCompany.id) : [];
+  const companyProjectLabels = operationalProjectPickerLabels(companyProjects);
   const { departments } = useActivityCatalog(selectedCompany?.brand.id);
 
   useEffect(() => {
@@ -166,7 +168,7 @@ export function AddManualEntryDialog({ open, onOpenChange, onSave }: AddManualEn
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="manual-entry-project">Project (optional)</Label>
               <Select
-                items={{ [NO_PROJECT]: "No project", ...Object.fromEntries(companyProjects.map((p) => [p.id, p.name])) }}
+                items={{ [NO_PROJECT]: "No project", ...companyProjectLabels }}
                 value={projectId}
                 onValueChange={(v) => setProjectId(v ?? NO_PROJECT)}
               >
@@ -177,7 +179,7 @@ export function AddManualEntryDialog({ open, onOpenChange, onSave }: AddManualEn
                   <SelectItem value={NO_PROJECT}>No project</SelectItem>
                   {companyProjects.map((p) => (
                     <SelectItem key={p.id} value={p.id}>
-                      {p.name}
+                      {companyProjectLabels[p.id]}
                     </SelectItem>
                   ))}
                 </SelectContent>

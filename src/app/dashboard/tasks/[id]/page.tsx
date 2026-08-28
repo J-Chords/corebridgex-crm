@@ -11,6 +11,9 @@ import { tasksProvider } from "@/lib/data/providers";
 import type { TaskWithRelations } from "@/lib/data/providers/tasks-provider";
 import type { TaskStatus, User } from "@/lib/data/types";
 import { Badge } from "@/components/ui/badge";
+import { CompanyProjectAvatar } from "@/components/companies/company-project-avatar";
+import { TaskStatusAvatar } from "@/components/tasks/task-status-avatar";
+import { isLikelyInternalTask } from "@/lib/data/identity-color";
 import { TaskFormDialog } from "@/components/tasks/task-form-dialog";
 import { TaskDetailContent } from "@/components/tasks/task-detail-content";
 import { TaskTimerControl } from "@/components/tasks/task-timer-control";
@@ -125,14 +128,21 @@ function LoadedTaskDetailPage({ task, user, refresh }: { task: TaskWithRelations
                 <span className="text-muted-foreground/60">·</span>
               </>
             )}
-            <span>{task.company.name}</span>
-            {task.workstream.projectId && (
-              <>
-                <span className="text-muted-foreground/60">→</span>
-                <Link href={`/dashboard/projects/${task.workstream.projectId}`} className="hover:underline">
-                  {task.workstream.projectName ?? "Project"}
-                </Link>
-              </>
+            <CompanyProjectAvatar
+              companyId={task.company.id}
+              companyName={task.company.name}
+              size="sm"
+              isInternal={isLikelyInternalTask(task)}
+            />
+            {/* Phase 13B final boss-feedback pass — Company name is the daily operational identity
+                (never the redundant "Company → Project-with-year" chain); it still links to the
+                Task's own Project, just labeled by the name people actually recognize. */}
+            {task.workstream.projectId ? (
+              <Link href={`/dashboard/projects/${task.workstream.projectId}`} className="font-medium text-foreground hover:underline">
+                {task.company.name}
+              </Link>
+            ) : (
+              <span className="font-medium text-foreground">{task.company.name}</span>
             )}
             <span className="text-muted-foreground/60">→</span>
             <Link href={`/dashboard/workstreams/${task.workstream.id}`} className="hover:underline">
@@ -140,12 +150,15 @@ function LoadedTaskDetailPage({ task, user, refresh }: { task: TaskWithRelations
             </Link>
             {task.activity && (
               <>
-                <span className="text-muted-foreground/60">→</span>
+                <span className="text-muted-foreground/60">·</span>
                 <span>{task.activity.name}</span>
               </>
             )}
           </div>
-          <h1 className="font-heading text-2xl font-semibold">{task.title}</h1>
+          <h1 className="flex items-center gap-2 font-heading text-2xl font-semibold">
+            <TaskStatusAvatar title={task.title} status={task.status} />
+            <span className="truncate">{task.title}</span>
+          </h1>
         </div>
         {canEdit && (
           <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>

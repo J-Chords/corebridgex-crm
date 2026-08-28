@@ -7,6 +7,7 @@ import { useProjects } from "@/lib/data/hooks/use-projects";
 import { visitEntriesProvider } from "@/lib/data/providers";
 import { INTERNAL_COMPANY_ID } from "@/lib/data/constants";
 import { todayDateOnly } from "@/lib/planner-dates";
+import { operationalProjectLabel, operationalProjectPickerLabels } from "@/lib/data/project-display";
 import type { VisitEntry } from "@/lib/data/types";
 import {
   Dialog,
@@ -52,14 +53,11 @@ export function AddVisitDialog({ open, onOpenChange, onAdded, editVisit = null }
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const clientProjects = useMemo(() => projects.filter((p) => p.companyId !== INTERNAL_COMPANY_ID), [projects]);
-  const projectItems = useMemo(
-    () => Object.fromEntries(clientProjects.map((p) => [p.id, `${p.companyName} — ${p.name}`])),
-    [clientProjects]
-  );
+  const projectItems = useMemo(() => operationalProjectPickerLabels(clientProjects), [clientProjects]);
   const editingProjectLabel = useMemo(() => {
     if (!editVisit) return "";
     const project = projects.find((p) => p.id === editVisit.projectId);
-    return project ? `${project.companyName} — ${project.name}` : "Unknown Project";
+    return project ? operationalProjectLabel(project) : "Unknown Project";
   }, [projects, editVisit]);
 
   useEffect(() => {
@@ -133,7 +131,7 @@ export function AddVisitDialog({ open, onOpenChange, onAdded, editVisit = null }
                 <SelectContent>
                   {clientProjects.map((p) => (
                     <SelectItem key={p.id} value={p.id}>
-                      {p.companyName} — {p.name}
+                      {projectItems[p.id]}
                     </SelectItem>
                   ))}
                 </SelectContent>

@@ -28,6 +28,7 @@ import {
 } from "@/components/ui/table";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { CompanyStatusBadge, COMPANY_STATUS_SELECT_ITEMS } from "@/components/companies/company-status-badge";
+import { CompanyProjectAvatar } from "@/components/companies/company-project-avatar";
 import { ClientHealthBadge } from "@/components/companies/client-health-badge";
 import { CompanyFormDialog } from "@/components/companies/company-form-dialog";
 import { STAGGER_ITEM_CLASS, staggerDelay } from "@/lib/stagger";
@@ -246,9 +247,10 @@ function CompaniesPageContent() {
                 <TableCell className="font-medium">
                   <Link
                     href={`/dashboard/companies/${company.id}`}
-                    className="hover:underline"
+                    className="flex items-center gap-2 hover:underline"
                     onClick={(e) => e.stopPropagation()}
                   >
+                    <CompanyProjectAvatar companyId={company.id} companyName={company.name} size="sm" />
                     {company.name}
                   </Link>
                 </TableCell>

@@ -52,7 +52,7 @@ async function hydrate(projects: Project[]): Promise<ProjectWithRelations[]> {
   const ownerIds = Array.from(new Set(projects.map((p) => p.ownerId)));
 
   const [companiesRes, memberLinksRes, workstreamsRes] = await Promise.all([
-    supabase.from("companies").select("id, name").in("id", companyIds),
+    supabase.from("companies").select("id, name, is_internal").in("id", companyIds),
     supabase.from("project_members").select("project_id, user_id").in("project_id", projectIds),
     supabase.from("workstreams").select("id, name, project_id").in("project_id", projectIds),
   ]);
@@ -60,7 +60,7 @@ async function hydrate(projects: Project[]): Promise<ProjectWithRelations[]> {
   if (memberLinksRes.error) throw new Error(memberLinksRes.error.message);
   if (workstreamsRes.error) throw new Error(workstreamsRes.error.message);
 
-  const companies = (companiesRes.data ?? []) as { id: string; name: string }[];
+  const companies = (companiesRes.data ?? []) as { id: string; name: string; is_internal: boolean }[];
   const memberLinks = (memberLinksRes.data ?? []) as { project_id: string; user_id: string }[];
   const workstreams = (workstreamsRes.data ?? []) as { id: string; name: string; project_id: string | null }[];
   const allProfileIds = Array.from(new Set([...ownerIds, ...memberLinks.map((m) => m.user_id)]));
@@ -109,6 +109,7 @@ async function hydrate(projects: Project[]): Promise<ProjectWithRelations[]> {
     return {
       ...project,
       companyName: companyRow.name,
+      isInternal: companyRow.is_internal,
       owner,
       members,
       memberCount: members.length,

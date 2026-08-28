@@ -20,6 +20,11 @@ export interface ProjectServiceSummary {
 /** Project joined with the read-shape a list/detail screen actually needs — not a raw schema row. */
 export interface ProjectWithRelations extends Project {
   companyName: string;
+  /** True only for the one permanently-seeded Internal/Non-billable pseudo-Project — read-only
+   * exposure of the Company's own `is_internal` flag, never independently set. Phase 13B: used to
+   * keep this system fallback bucket out of the normal Projects browsing experience for
+   * Employee/Supervisor, without touching the underlying data, RLS, or its own fallback behavior. */
+  isInternal: boolean;
   owner: User;
   /** Every operational Project member — resolved through the same safe profile-directory
    * architecture as Task/Workstream relations (never a plain `profiles` select). */
