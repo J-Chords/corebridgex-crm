@@ -12,12 +12,15 @@ const MAX_PER_STATUS = 10;
 interface TaskStatusFocusContentProps {
   tasks: TaskWithRelations[];
   onOpenTask: (taskId: string) => void;
+  /** Task Action correction — both passed together or neither. */
+  onEdit?: (task: TaskWithRelations) => void;
+  onDeleted?: (taskId: string) => void;
 }
 
 /** The "Task(s) by Status" widget's own Focus View content — the same donut plus, for each status
  * that actually has tasks, a bounded list of the real underlying Tasks (no invented analytics, just
  * grouping already-loaded data by its existing `status` field). */
-export function TaskStatusFocusContent({ tasks, onOpenTask }: TaskStatusFocusContentProps) {
+export function TaskStatusFocusContent({ tasks, onOpenTask, onEdit, onDeleted }: TaskStatusFocusContentProps) {
   if (tasks.length === 0) {
     return <p className="text-sm text-muted-foreground">No tasks assigned yet.</p>;
   }
@@ -41,7 +44,7 @@ export function TaskStatusFocusContent({ tasks, onOpenTask }: TaskStatusFocusCon
             </div>
             <div className="flex flex-col gap-2">
               {statusTasks.slice(0, MAX_PER_STATUS).map((task) => (
-                <TaskSummaryItem key={task.id} task={task} onOpen={onOpenTask} showAssignee />
+                <TaskSummaryItem key={task.id} task={task} onOpen={onOpenTask} showAssignee onEdit={onEdit} onDeleted={onDeleted} />
               ))}
               {statusTasks.length > MAX_PER_STATUS && (
                 <p className="text-xs text-muted-foreground">

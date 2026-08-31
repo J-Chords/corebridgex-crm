@@ -2,10 +2,12 @@
 
 import { use, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { ArrowLeft, Pencil } from "lucide-react";
 import { useAuth } from "@/lib/auth/auth-context";
 import { useTask, useSubtasks } from "@/lib/data/hooks/use-tasks";
 import { useTaskTimer } from "@/lib/data/hooks/use-task-timer";
+import { useCompanyLookups } from "@/lib/data/hooks/use-companies";
 import { canEditTask, canProgressTask } from "@/lib/data/permissions";
 import { tasksProvider } from "@/lib/data/providers";
 import type { TaskWithRelations } from "@/lib/data/providers/tasks-provider";
@@ -15,6 +17,7 @@ import { CompanyProjectAvatar } from "@/components/companies/company-project-ava
 import { TaskStatusAvatar } from "@/components/tasks/task-status-avatar";
 import { isLikelyInternalTask } from "@/lib/data/identity-color";
 import { TaskFormDialog } from "@/components/tasks/task-form-dialog";
+import { TaskActionsMenu } from "@/components/tasks/task-actions-menu";
 import { TaskDetailContent } from "@/components/tasks/task-detail-content";
 import { TaskTimerControl } from "@/components/tasks/task-timer-control";
 import { TaskPropertiesRail } from "@/components/tasks/task-properties-rail";
@@ -67,15 +70,19 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
  * it — `canProgressTask`/`updateTaskStatus` themselves are completely unchanged.
  */
 function LoadedTaskDetailPage({ task, user, refresh }: { task: TaskWithRelations; user: User; refresh: () => void }) {
+  const router = useRouter();
   const [editOpen, setEditOpen] = useState(false);
   const [statusPending, setStatusPending] = useState(false);
   const [confirmDoneOpen, setConfirmDoneOpen] = useState(false);
   // The ONE authoritative timer instance for this page, shared by the right rail's timer widget and
   // the Time Activity history section below (via TaskDetailContent) — see use-task-timer.ts.
   const timer = useTaskTimer(task.id, task.assignees.map((a) => a.id));
-  const canEdit = canEditTask(user, task);
+  // Phase 13 security hardening — see task-actions-menu.tsx's own comment on why `assignableStaff`
+  // is the right "allUsers" convenience list for this UI-only gate.
+  const { assignableStaff } = useCompanyLookups();
   const assigneeIds = task.assignees.map((a) => a.id);
-  const canProgress = canProgressTask(user, { assigneeIds });
+  const canEdit = canEditTask(user, { ...task, assigneeIds }, assignableStaff);
+  const canProgress = canProgressTask(user, { assigneeIds, companyId: task.companyId }, assignableStaff);
 
   // Only a top-level Task can have Subtasks — this warning is a no-op for a Subtask itself.
   const { subtasks } = useSubtasks(task.parentTaskId ? null : task.id);
@@ -160,11 +167,21 @@ function LoadedTaskDetailPage({ task, user, refresh }: { task: TaskWithRelations
             <span className="truncate">{task.title}</span>
           </h1>
         </div>
-        {canEdit && (
-          <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
-            <Pencil /> Edit
-          </Button>
-        )}
+        <div className="flex items-center gap-1">
+          {canEdit && (
+            <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
+              <Pencil /> Edit
+            </Button>
+          )}
+          <TaskActionsMenu
+            task={task}
+            hideEditItem
+            onEdit={() => setEditOpen(true)}
+            onDeleted={() => {
+              router.push(task.workstream.projectId ? `/dashboard/projects/${task.workstream.projectId}?tab=tasks` : "/dashboard/tasks");
+            }}
+          />
+        </div>
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_320px]">

@@ -24,9 +24,13 @@ interface PlannerMonthViewProps {
   tasks: TaskWithRelations[];
   onOpen: (taskId: string) => void;
   runningTaskId: string | null;
+  /** Task Action correction — both passed together or neither, forwarded to each chip's own
+   * always-visible (never hover-only — no touch equivalent) `TaskActionsMenu`. */
+  onEdit?: (task: TaskWithRelations) => void;
+  onDeleted?: (taskId: string) => void;
 }
 
-export function PlannerMonthView({ anchorDate, onAnchorDateChange, onOpenDay, tasks, onOpen, runningTaskId }: PlannerMonthViewProps) {
+export function PlannerMonthView({ anchorDate, onAnchorDateChange, onOpenDay, tasks, onOpen, runningTaskId, onEdit, onDeleted }: PlannerMonthViewProps) {
   const anchor = parseDateOnly(anchorDate);
   const gridDates = monthGridDates(anchor);
   const today = todayDateOnly();
@@ -89,7 +93,15 @@ export function PlannerMonthView({ anchorDate, onAnchorDateChange, onOpenDay, ta
               </button>
               <div className="flex flex-col gap-1">
                 {dayTasks.slice(0, CHIPS_PER_DAY).map((task) => (
-                  <TaskSummaryItem key={task.id} task={task} onOpen={onOpen} isRunning={task.id === runningTaskId} variant="chip" />
+                  <TaskSummaryItem
+                    key={task.id}
+                    task={task}
+                    onOpen={onOpen}
+                    isRunning={task.id === runningTaskId}
+                    variant="chip"
+                    onEdit={onEdit}
+                    onDeleted={onDeleted}
+                  />
                 ))}
                 {dayTasks.length > CHIPS_PER_DAY && (
                   <button

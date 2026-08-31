@@ -37,25 +37,32 @@ const BAR_HEIGHTS = [5, 7, 9, 11];
  * them; they all pick up the new look for free. Text is never colored (color is supplemental, the
  * bars carry it) so legibility never depends on a per-priority contrast check. Urgent stays
  * visibly distinct from High by both an extra filled bar AND its own color (destructive vs
- * warning), never by color alone. The Priority *picker* (an editable control, not a read-only
- * label) intentionally keeps its own existing pill-select treatment — a different UI need, not a
- * display surface this component covers.
+ * warning), never by color alone. The ascending-bar indicator itself (`PriorityBars`, below) is
+ * shared with the compact `TaskPriorityPicker` (Phase 13 final visual polish — Create/Edit now uses
+ * the same bars in a compact dropdown, replacing its own earlier separate pill-row treatment), so a
+ * read-only display and the editable control can never drift apart.
  */
-export function TaskPriorityBadge({ priority, className }: { priority: TaskPriority; className?: string }) {
-  const meta = PRIORITY_META[priority];
+export function PriorityBars({ priority, className }: { priority: TaskPriority; className?: string }) {
   const level = PRIORITY_BAR_LEVEL[priority];
   const color = PRIORITY_COLOR_VAR[priority];
   return (
+    <span className={cn("flex items-end gap-[2px]", className)} aria-hidden="true">
+      {BAR_HEIGHTS.map((height, i) => (
+        <span
+          key={i}
+          className="w-[3px] shrink-0 rounded-[1px]"
+          style={{ height, backgroundColor: i < level ? color : "var(--border)" }}
+        />
+      ))}
+    </span>
+  );
+}
+
+export function TaskPriorityBadge({ priority, className }: { priority: TaskPriority; className?: string }) {
+  const meta = PRIORITY_META[priority];
+  return (
     <span className={cn("inline-flex items-center gap-1.5 whitespace-nowrap", className)}>
-      <span className="flex items-end gap-[2px]" aria-hidden="true">
-        {BAR_HEIGHTS.map((height, i) => (
-          <span
-            key={i}
-            className="w-[3px] shrink-0 rounded-[1px]"
-            style={{ height, backgroundColor: i < level ? color : "var(--border)" }}
-          />
-        ))}
-      </span>
+      <PriorityBars priority={priority} />
       <span className="text-xs font-medium text-foreground">{meta.label}</span>
     </span>
   );

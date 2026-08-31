@@ -7,6 +7,7 @@ import {
   canAccessTask,
   canAccessTaskDirectly,
   canAddTaskChecklistItem,
+  canDeleteTask,
   canEditTask,
   canProgressTask,
   isEmployee,
@@ -394,7 +395,7 @@ export const mockTasksProvider: TasksProvider = {
   async updateTask(viewer, id, input) {
     const existing = db.tasks.find((t) => t.id === id);
     if (!existing) throw new Error("Task not found.");
-    if (!canEditTask(viewer, existing)) {
+    if (!canEditTask(viewer, { ...existing, assigneeIds: taskAssigneeIds(id) }, db.users)) {
       throw new Error("You don't have permission to edit this task.");
     }
     const nextActivityId = input.activityId ?? null;
@@ -459,11 +460,34 @@ export const mockTasksProvider: TasksProvider = {
     return toTaskWithRelations(updated, viewer);
   },
 
+  async deleteTask(viewer, id) {
+    const existing = db.tasks.find((t) => t.id === id);
+    if (!existing) throw new Error("Task not found.");
+    if (!canDeleteTask(viewer, { ...existing, assigneeIds: taskAssigneeIds(id) }, db.users)) {
+      throw new Error("You don't have permission to delete this task.");
+    }
+    // Mirrors delete_task's own SECURITY DEFINER RPC exactly: never silently destroy logged time,
+    // Subtasks, or attached Notes — block with a truthful reason instead of a raw cascade.
+    if (db.timeEntries.some((e) => e.taskId === id)) {
+      throw new Error("This task has logged time against it and can't be deleted. Close it out instead of removing it.");
+    }
+    if (db.tasks.some((t) => t.parentTaskId === id)) {
+      throw new Error("This task has subtasks and can't be deleted. Remove or reassign its subtasks first.");
+    }
+    if (db.notes.some((n) => n.taskId === id)) {
+      throw new Error("This task has notes attached and can't be deleted.");
+    }
+    db.tasks = db.tasks.filter((t) => t.id !== id);
+    db.taskAssignees = db.taskAssignees.filter((ta) => ta.taskId !== id);
+    db.checklistItems = db.checklistItems.filter((c) => c.taskId !== id);
+    db.taskHandoffs = db.taskHandoffs.filter((h) => h.taskId !== id);
+  },
+
   async updateTaskStatus(viewer, id, status: TaskStatus) {
     const existing = db.tasks.find((t) => t.id === id);
     if (!existing) throw new Error("Task not found.");
     requireAccess(viewer, existing);
-    if (!canProgressTask(viewer, { assigneeIds: taskAssigneeIds(id) })) {
+    if (!canProgressTask(viewer, { assigneeIds: taskAssigneeIds(id), companyId: existing.companyId }, db.users)) {
       throw new Error("You don't have permission to update this task's status.");
     }
 
@@ -484,7 +508,7 @@ export const mockTasksProvider: TasksProvider = {
     const task = db.tasks.find((t) => t.id === taskId);
     if (!task) throw new Error("Task not found.");
     requireAccess(viewer, task);
-    if (!canProgressTask(viewer, { assigneeIds: taskAssigneeIds(taskId) })) {
+    if (!canProgressTask(viewer, { assigneeIds: taskAssigneeIds(taskId), companyId: task.companyId }, db.users)) {
       throw new Error("You don't have permission to update this task's checklist.");
     }
 
@@ -546,7 +570,7 @@ export const mockTasksProvider: TasksProvider = {
     // Phase 10 hierarchy-authorization hardening — this is a mutation, so direct access only;
     // being visible through a parent/child relationship must never grant this.
     requireDirectAccess(viewer, task);
-    if (!canAddTaskChecklistItem(viewer, { ...task, assigneeIds: taskAssigneeIds(taskId) })) {
+    if (!canAddTaskChecklistItem(viewer, { ...task, assigneeIds: taskAssigneeIds(taskId) }, db.users)) {
       throw new Error("You don't have permission to add a checklist item to this task.");
     }
     const trimmed = description.trim();

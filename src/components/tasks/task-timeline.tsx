@@ -12,6 +12,7 @@ import { STATUS_COLOR_VAR } from "@/components/tasks/task-status-badge";
 import { addDays, formatDateOnly, formatMonthLabel, startOfMonth } from "@/lib/planner-dates";
 import { cn } from "@/lib/utils";
 import { getInitials as initials } from "@/lib/initials";
+import { TaskActionsMenu } from "@/components/tasks/task-actions-menu";
 
 const DAY_WIDTH = 34;
 
@@ -75,9 +76,19 @@ function TaskAssigneeStack({ task }: { task: TaskWithRelations }) {
   );
 }
 
-export function TaskTimeline({ tasks }: { tasks: TaskWithRelations[] }) {
+interface TaskTimelineProps {
+  tasks: TaskWithRelations[];
+  /** Task Action correction — both passed together or neither: renders a `TaskActionsMenu` kebab as
+   * a trailing sibling of the left identity column (the Gantt bars on the right stay read-only —
+   * too narrow for a reliable kebab target). */
+  onEdit?: (task: TaskWithRelations) => void;
+  onDeleted?: (taskId: string) => void;
+}
+
+export function TaskTimeline({ tasks, onEdit, onDeleted }: TaskTimelineProps) {
   const router = useRouter();
   const [monthCursor, setMonthCursor] = useState(() => startOfMonth(new Date()));
+  const showActions = Boolean(onEdit && onDeleted);
 
   const days = useMemo(() => {
     const daysInMonth = new Date(monthCursor.getFullYear(), monthCursor.getMonth() + 1, 0).getDate();
@@ -102,10 +113,13 @@ export function TaskTimeline({ tasks }: { tasks: TaskWithRelations[] }) {
         {/* Left — compact Task identity columns, no Client/Company/Project column (Project is
             already known from context). */}
         <div className="min-w-0 flex-1 divide-y sm:border-r">
-          <div className="grid h-11 grid-cols-[1fr_100px_72px] items-center gap-2 border-b px-3 font-mono text-[10px] tracking-wide text-muted-foreground uppercase">
-            <span>Task</span>
-            <span>Priority</span>
-            <span>Assignee</span>
+          <div className="flex h-11 items-center gap-2 border-b px-3">
+            <div className="grid flex-1 grid-cols-[1fr_100px_72px] items-center gap-2 font-mono text-[10px] tracking-wide text-muted-foreground uppercase">
+              <span>Task</span>
+              <span>Priority</span>
+              <span>Assignee</span>
+            </div>
+            {showActions && <div className="size-7 shrink-0" aria-hidden="true" />}
           </div>
           {tasks.map((task) => (
             <div
@@ -119,20 +133,28 @@ export function TaskTimeline({ tasks }: { tasks: TaskWithRelations[] }) {
                   openTask(task.id);
                 }
               }}
-              className="grid h-10 cursor-pointer grid-cols-[1fr_100px_72px] items-center gap-2 px-3 text-sm transition-colors hover:bg-muted/50"
+              className="flex h-10 cursor-pointer items-center gap-2 px-3 text-sm transition-colors hover:bg-muted/50"
             >
-              <div className="flex min-w-0 items-center gap-2">
-                <TaskStatusAvatar title={task.title} status={task.status} size="sm" />
-                <div className="flex min-w-0 flex-col">
-                  <span className="truncate font-medium">{task.title}</span>
-                  <span className="truncate text-xs text-muted-foreground">
-                    {task.workstream.name}
-                    {task.activity && ` · ${task.activity.name}`}
-                  </span>
+              <div className="grid flex-1 grid-cols-[1fr_100px_72px] items-center gap-2">
+                <div className="flex min-w-0 items-center gap-2">
+                  <TaskStatusAvatar title={task.title} status={task.status} size="sm" />
+                  <div className="flex min-w-0 flex-col">
+                    <span className="truncate font-medium" title={task.title}>{task.title}</span>
+                    <span
+                      className="truncate text-xs text-muted-foreground"
+                      title={`${task.workstream.name}${task.activity ? ` · ${task.activity.name}` : ""}`}
+                    >
+                      {task.workstream.name}
+                      {task.activity && ` · ${task.activity.name}`}
+                    </span>
+                  </div>
                 </div>
+                <TaskPriorityBadge priority={task.priority} />
+                <TaskAssigneeStack task={task} />
               </div>
-              <TaskPriorityBadge priority={task.priority} />
-              <TaskAssigneeStack task={task} />
+              {showActions && (
+                <TaskActionsMenu task={task} onEdit={() => onEdit?.(task)} onDeleted={() => onDeleted?.(task.id)} />
+              )}
             </div>
           ))}
         </div>

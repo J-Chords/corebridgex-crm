@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AlertCircle, Check, History, Plus, X } from "lucide-react";
 import { useAuth } from "@/lib/auth/auth-context";
@@ -32,7 +32,15 @@ import { ReusePastTaskDialog } from "@/components/tasks/reuse-past-task-dialog";
 import { WorkstreamFormDialog } from "@/components/workstreams/workstream-form-dialog";
 import { AddServiceActivitiesDialog } from "@/components/workstreams/add-service-activities-dialog";
 import { CreateActivityDialog } from "@/components/workstreams/create-activity-dialog";
-import { Sheet, SheetContent, SheetFooter, SheetTitle, SheetDescription } from "@/components/ui/sheet";
+import {
+  FormDrawer,
+  FormDrawerHeader,
+  FormDrawerBody,
+  FormDrawerSection,
+  FormDrawerPropertyGrid,
+  FormDrawerField,
+  FormDrawerFooter,
+} from "@/components/ui/form-drawer";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -45,8 +53,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { cn } from "@/lib/utils";
-
 const NO_ACTIVITY = "none";
 
 const STOPWORDS = new Set(["the", "a", "an", "and", "or", "of", "for", "to", "in", "on", "at", "by", "with", "from"]);
@@ -121,16 +127,6 @@ function emptyForm(userId: string, defaultWorkstreamId?: string, defaultActivity
     expectedMinutes: null as number | null,
     checklist: [] as ChecklistBuilderRow[],
   };
-}
-
-/** Mono micro-label + bordered group — the "grouped sections, not one long stack" shape every group in this panel shares. */
-function FormSection({ label, children, className }: { label: string; children: ReactNode; className?: string }) {
-  return (
-    <div className={cn("flex flex-col gap-3 rounded-xl border bg-card p-4", className)}>
-      <span className="font-mono text-xs tracking-wider text-muted-foreground uppercase">{label}</span>
-      {children}
-    </div>
-  );
 }
 
 export function TaskFormDialog({
@@ -461,36 +457,42 @@ export function TaskFormDialog({
   }
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="flex w-full flex-col gap-0 p-0 sm:max-w-2xl">
-        <form onSubmit={handleSubmit} className="flex h-full min-h-0 flex-col">
-          <div className="min-h-0 flex-1 overflow-y-auto">
-            <div className="flex flex-col gap-2 px-6 pt-6 pb-2">
-              <SheetTitle className="font-mono text-xs tracking-wider text-muted-foreground uppercase">
-                {mode === "create" ? "New task" : "Edit task"}
-              </SheetTitle>
-              <SheetDescription className="sr-only">
-                {mode === "create" ? "Create a new task." : `Editing "${task?.title ?? "this task"}".`}
-              </SheetDescription>
-              <Input
-                autoFocus
-                value={form.title}
-                onChange={(e) => setForm((p) => ({ ...p, title: e.target.value }))}
-                placeholder="Task title"
-                aria-label="Task title"
-                className="h-auto rounded-none border-0 bg-transparent p-0 font-heading text-2xl font-semibold tracking-tight shadow-none focus-visible:ring-0"
-              />
-              <Textarea
-                value={form.description}
-                onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))}
-                placeholder="Add a description…"
-                rows={1}
-                className="min-h-0 resize-none rounded-none border-0 bg-transparent px-0 py-1 text-sm shadow-none focus-visible:ring-0"
-              />
-            </div>
+    <FormDrawer
+      open={open}
+      onOpenChange={onOpenChange}
+      srTitle={mode === "create" ? "New task" : `Editing "${task?.title ?? "this task"}"`}
+    >
+      <form onSubmit={handleSubmit} className="flex h-full min-h-0 flex-col">
+        <FormDrawerHeader
+          title={mode === "create" ? "New Task" : "Edit Task"}
+          context={selectedWorkstream ? selectedWorkstream.company.name : undefined}
+          secondaryContext={
+            selectedWorkstream
+              ? `${selectedWorkstream.name}${selectedActivityLabel ? ` · ${selectedActivityLabel}` : ""}`
+              : undefined
+          }
+        />
+        <FormDrawerBody>
+          <FormDrawerSection label="Task">
+            <Input
+              autoFocus
+              value={form.title}
+              onChange={(e) => setForm((p) => ({ ...p, title: e.target.value }))}
+              placeholder="Task title"
+              aria-label="Task title"
+              className="h-auto rounded-none border-0 bg-transparent p-0 text-xl font-semibold tracking-tight shadow-none focus-visible:ring-0"
+            />
+            <Textarea
+              value={form.description}
+              onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))}
+              placeholder="Add a description…"
+              rows={1}
+              className="min-h-0 resize-none rounded-none border-0 bg-transparent px-0 py-1 text-sm shadow-none focus-visible:ring-0"
+            />
+          </FormDrawerSection>
 
-            <div className="flex flex-col gap-4 px-6 py-4">
-              <FormSection label="Where it belongs">
+          <FormDrawerSection label="Context">
+              <div className="flex flex-col gap-4">
                 {contextLocked ? (
                   <div className="flex flex-col gap-1.5">
                     <Label>Client / Project / Service{selectedActivityLabel ? " / Activity" : ""}</Label>
@@ -775,87 +777,82 @@ export function TaskFormDialog({
                 </div>
                   </>
                 )}
-              </FormSection>
+              </div>
+          </FormDrawerSection>
 
-              <FormSection label="Details">
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  <div className="flex flex-col gap-1.5">
-                    <Label>Status</Label>
-                    <TaskStatusPicker
-                      value={form.status}
-                      onChange={(status) => setForm((p) => ({ ...p, status }))}
-                    />
-                  </div>
-                  <div className="flex flex-col gap-1.5">
-                    <Label>Priority</Label>
-                    <TaskPriorityPicker
-                      value={form.priority}
-                      onChange={(priority) => setForm((p) => ({ ...p, priority }))}
-                    />
-                  </div>
-                  <div className="flex flex-col gap-1.5">
-                    <Label htmlFor="task-start-date">Start date</Label>
-                    <Input
-                      id="task-start-date"
-                      type="date"
-                      value={form.startDate}
-                      onChange={(e) => setForm((p) => ({ ...p, startDate: e.target.value }))}
-                    />
-                  </div>
-                  <div className="flex flex-col gap-1.5">
-                    <Label htmlFor="task-due-date">Due date</Label>
-                    <Input
-                      id="task-due-date"
-                      type="date"
-                      value={form.dueDate}
-                      onChange={(e) => setForm((p) => ({ ...p, dueDate: e.target.value }))}
-                    />
-                  </div>
-                </div>
-              </FormSection>
-
-              {/* Phase 12B final correction — Employee assignment is always self, automatically,
-                  regardless of what this form shows or doesn't; a read-only "you" chip added no
-                  information an Employee didn't already know, so the whole section is dropped for
-                  them to keep the form cleaner. Supervisor/Superadmin keep full Assignees, unchanged. */}
-              {!employeeView && (
-                <FormSection label="People">
-                  <TaskAssigneeChips
-                    staff={assignableStaff}
-                    selectedIds={form.assigneeIds}
-                    onToggle={toggleAssignee}
-                  />
-                </FormSection>
-              )}
-
-              <FormSection label="Checklist">
-                <ChecklistBuilder
-                  items={form.checklist}
-                  onAdd={addChecklistRow}
-                  onUpdate={updateChecklistRow}
-                  onRemove={removeChecklistRow}
+          <FormDrawerSection label="Workflow">
+            <FormDrawerPropertyGrid>
+              <FormDrawerField label="Status">
+                <TaskStatusPicker
+                  value={form.status}
+                  onChange={(status) => setForm((p) => ({ ...p, status }))}
                 />
-              </FormSection>
+              </FormDrawerField>
+              <FormDrawerField label="Priority">
+                <TaskPriorityPicker
+                  value={form.priority}
+                  onChange={(priority) => setForm((p) => ({ ...p, priority }))}
+                />
+              </FormDrawerField>
+              <FormDrawerField label="Start date" htmlFor="task-start-date">
+                <Input
+                  id="task-start-date"
+                  type="date"
+                  value={form.startDate}
+                  onChange={(e) => setForm((p) => ({ ...p, startDate: e.target.value }))}
+                />
+              </FormDrawerField>
+              <FormDrawerField label="Due date" htmlFor="task-due-date">
+                <Input
+                  id="task-due-date"
+                  type="date"
+                  value={form.dueDate}
+                  onChange={(e) => setForm((p) => ({ ...p, dueDate: e.target.value }))}
+                />
+              </FormDrawerField>
+            </FormDrawerPropertyGrid>
 
-              {error && (
-                <Alert variant="destructive">
-                  <AlertCircle aria-hidden="true" />
-                  <AlertTitle>{error}</AlertTitle>
-                </Alert>
-              )}
-            </div>
-          </div>
+            {/* Phase 12B final correction — Employee assignment is always self, automatically,
+                regardless of what this form shows or doesn't; a read-only "you" chip added no
+                information an Employee didn't already know, so this is dropped for them entirely.
+                Supervisor/Superadmin keep full Assignees, unchanged. */}
+            {!employeeView && (
+              <FormDrawerField label="Assignee">
+                <TaskAssigneeChips
+                  staff={assignableStaff}
+                  selectedIds={form.assigneeIds}
+                  onToggle={toggleAssignee}
+                />
+              </FormDrawerField>
+            )}
+          </FormDrawerSection>
 
-          <SheetFooter className="flex-row justify-end gap-2 border-t bg-card">
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={!canSubmit}>
-              {isSubmitting ? "Saving…" : mode === "create" ? "Create task" : "Save changes"}
-            </Button>
-          </SheetFooter>
-        </form>
-      </SheetContent>
+          <FormDrawerSection label="Checklist">
+            <ChecklistBuilder
+              items={form.checklist}
+              onAdd={addChecklistRow}
+              onUpdate={updateChecklistRow}
+              onRemove={removeChecklistRow}
+            />
+          </FormDrawerSection>
+
+          {error && (
+            <Alert variant="destructive">
+              <AlertCircle aria-hidden="true" />
+              <AlertTitle>{error}</AlertTitle>
+            </Alert>
+          )}
+        </FormDrawerBody>
+
+        <FormDrawerFooter>
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <Button type="submit" disabled={!canSubmit}>
+            {isSubmitting ? "Saving…" : mode === "create" ? "Create task" : "Save changes"}
+          </Button>
+        </FormDrawerFooter>
+      </form>
       {form.activityId !== NO_ACTIVITY && selectedActivityLabel && (
         <ReusePastTaskDialog
           open={reuseOpen}
@@ -899,6 +896,6 @@ export function TaskFormDialog({
           onCreated={handleActivityCreated}
         />
       )}
-    </Sheet>
+    </FormDrawer>
   );
 }

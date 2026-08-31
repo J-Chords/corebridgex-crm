@@ -24,6 +24,7 @@ import { GenerateOccurrenceDialog } from "@/components/workstreams/generate-occu
 import { QuickAddFromActivityDialog } from "@/components/workstreams/quick-add-from-activity-dialog";
 import { WorkstreamActivityTasks } from "@/components/workstreams/workstream-activity-tasks";
 import { TaskFormDialog } from "@/components/tasks/task-form-dialog";
+import type { TaskWithRelations } from "@/lib/data/providers/tasks-provider";
 import { STATUS_COLOR_VAR } from "@/components/tasks/task-status-badge";
 
 import { getInitials as initials } from "@/lib/initials";
@@ -48,6 +49,7 @@ export default function WorkstreamDetailPage({ params }: { params: Promise<{ id:
 
   const [editOpen, setEditOpen] = useState(false);
   const [taskDialogOpen, setTaskDialogOpen] = useState(false);
+  const [editingTask, setEditingTask] = useState<TaskWithRelations | null>(null);
   const [taskDialogActivityId, setTaskDialogActivityId] = useState<string | undefined>(undefined);
   const [generateOpen, setGenerateOpen] = useState(false);
   const [quickAddOpen, setQuickAddOpen] = useState(false);
@@ -216,6 +218,8 @@ export default function WorkstreamDetailPage({ params }: { params: Promise<{ id:
           isLoading={tasksLoading}
           runningTaskId={runningTaskId}
           onAddTask={openAddTask}
+          onEdit={setEditingTask}
+          onDeleted={refreshTasks}
         />
       </div>
 
@@ -251,6 +255,15 @@ export default function WorkstreamDetailPage({ params }: { params: Promise<{ id:
         defaultActivityId={taskDialogActivityId}
         onSaved={refreshTasks}
       />
+      {editingTask && (
+        <TaskFormDialog
+          open={Boolean(editingTask)}
+          onOpenChange={(open) => !open && setEditingTask(null)}
+          mode="edit"
+          task={editingTask}
+          onSaved={refreshTasks}
+        />
+      )}
       {canManage && (
         <QuickAddFromActivityDialog
           open={quickAddOpen}

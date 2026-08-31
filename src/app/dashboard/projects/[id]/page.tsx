@@ -30,6 +30,7 @@ import { canCreateWorkstreamInProject, canManageProjects, isEmployee } from "@/l
 import { workstreamDisplayHeading } from "@/lib/data/workstream-name";
 import { ROLE_LABELS } from "@/lib/data/role-labels";
 import type { TaskStatus } from "@/lib/data/types";
+import type { TaskWithRelations } from "@/lib/data/providers/tasks-provider";
 import { STATUS_COLOR_VAR, STATUS_META } from "@/components/tasks/task-status-badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -46,6 +47,11 @@ import { TaskListSection } from "@/components/tasks/task-list-section";
 import { TaskTimeline } from "@/components/tasks/task-timeline";
 import { TaskFormDialog } from "@/components/tasks/task-form-dialog";
 import { SharedNotesSection } from "@/components/notes/shared-notes-section";
+import { ProjectCompletedWork } from "@/components/projects/project-completed-work";
+import { ProjectTimeTeam } from "@/components/projects/project-time-team";
+import { ProjectTimeline } from "@/components/projects/project-timeline";
+import { ClientReportsTable } from "@/components/client-reports/client-reports-table";
+import { useClientReports } from "@/lib/data/hooks/use-client-reports";
 import { getInitials as initials } from "@/lib/initials";
 
 function formatDate(value: string | null) {
@@ -61,6 +67,15 @@ const TABS: { key: TabKey; label: string }[] = [
   { key: "services", label: "Services" },
   { key: "team", label: "Team" },
   { key: "history", label: "History" },
+];
+
+type HistorySectionKey = "context" | "completed" | "reports" | "time" | "timeline";
+const HISTORY_SECTIONS: { key: HistorySectionKey; label: string }[] = [
+  { key: "context", label: "Context" },
+  { key: "completed", label: "Completed Work" },
+  { key: "reports", label: "Client Reports" },
+  { key: "time", label: "Time & Team" },
+  { key: "timeline", label: "Timeline" },
 ];
 
 const STATUS_ORDER: TaskStatus[] = ["todo", "in-progress", "blocked", "waiting-on-client", "done"];
@@ -143,6 +158,13 @@ function LoadedProjectDetailPage({
   const { notes, refresh: refreshNotes } = useCompanyNotes(project.companyId);
   const { runningTimer } = useRunningTimer();
   const { projects: allProjects } = useProjects();
+  // Phase 13C — Client Reports are org-wide-authorized (canViewClientReport), never re-derived here;
+  // this only narrows an already-authorized set down to this Project's own reports.
+  const { reports: allAuthorizedReports } = useClientReports();
+  const projectReports = useMemo(
+    () => allAuthorizedReports.filter((r) => r.projectId === project.id),
+    [allAuthorizedReports, project.id]
+  );
 
   // Deep-link seeding — e.g. the Projects Gantt (Part B) links to
   // `/dashboard/projects/[id]?tab=tasks&view=timeline` so clicking a Project's scheduled-work bar
@@ -166,6 +188,8 @@ function LoadedProjectDetailPage({
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
   const [createTaskOpen, setCreateTaskOpen] = useState(false);
   const [createTaskDefaultStatus, setCreateTaskDefaultStatus] = useState<TaskStatus | undefined>(undefined);
+  const [editingTask, setEditingTask] = useState<TaskWithRelations | null>(null);
+  const [historySection, setHistorySection] = useState<HistorySectionKey>("context");
 
   function openCreateTask(defaultStatus?: TaskStatus) {
     setCreateTaskDefaultStatus(defaultStatus);
@@ -296,23 +320,6 @@ function LoadedProjectDetailPage({
 
       {tab === "overview" && (
         <div className="flex flex-col gap-4">
-          {project.description && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Description</CardTitle>
-              </CardHeader>
-              <CardContent className="text-sm text-muted-foreground">{project.description}</CardContent>
-            </Card>
-          )}
-
-          <SharedNotesSection
-            notes={notes}
-            onAddNote={async (input) => {
-              await notesProvider.createCompanyNote(user, project.companyId, input);
-              refreshNotes();
-            }}
-          />
-
           <Card>
             <CardHeader className="flex items-center justify-between">
               <CardTitle className="text-base">Current Services</CardTitle>
@@ -386,7 +393,7 @@ function LoadedProjectDetailPage({
           {tasksLoading ? (
             <p className="p-6 text-sm text-muted-foreground">Loading tasks…</p>
           ) : taskView === "timeline" ? (
-            <TaskTimeline tasks={filteredTasks} />
+            <TaskTimeline tasks={filteredTasks} onEdit={setEditingTask} onDeleted={refreshTasks} />
           ) : taskGroups.length === 0 ? (
             <Card className="p-10 text-center text-sm text-muted-foreground">No tasks match this view.</Card>
           ) : (
@@ -403,6 +410,8 @@ function LoadedProjectDetailPage({
                 context="project"
                 projectIsInternal={project.isInternal}
                 showAssignee={showAssignee}
+                onEdit={setEditingTask}
+                onDeleted={refreshTasks}
               />
             ))
           )}
@@ -483,39 +492,90 @@ function LoadedProjectDetailPage({
 
       {tab === "history" && (
         <div className="flex flex-col gap-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Related Projects</CardTitle>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-1">
-              {relatedProjects.length === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  No other related Projects yet.
-                </p>
-              ) : (
-                relatedProjects.map((p, i) => (
-                  <div key={p.id}>
-                    {i > 0 && <Separator className="my-3" />}
-                    <Link
-                      href={`/dashboard/projects/${p.id}`}
-                      className="flex flex-wrap items-center justify-between gap-3 rounded-md py-1 hover:underline"
-                    >
-                      <div className="flex items-center gap-2.5">
-                        <CompanyProjectAvatar companyId={p.companyId} companyName={p.companyName} size="sm" isInternal={p.isInternal} />
-                        <div className="flex flex-col gap-1">
-                          <span className="text-sm font-medium">{p.name}</span>
-                          <span className="text-xs text-muted-foreground">
-                            {formatDate(p.contractStartDate)} – {formatDate(p.contractEndDate)}
-                          </span>
-                        </div>
-                      </div>
-                      <ProjectStatusBadge status={p.status} />
-                    </Link>
-                  </div>
-                ))
+          <div className="flex flex-wrap items-center gap-1 rounded-lg border bg-muted/20 p-1">
+            {HISTORY_SECTIONS.map((s) => (
+              <button
+                key={s.key}
+                type="button"
+                onClick={() => setHistorySection(s.key)}
+                className={
+                  "rounded-md px-3 py-1.5 text-sm font-medium transition-colors " +
+                  (historySection === s.key ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")
+                }
+              >
+                {s.label}
+              </button>
+            ))}
+          </div>
+
+          {historySection === "context" && (
+            <div className="flex flex-col gap-4">
+              {project.description && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">Description</CardTitle>
+                  </CardHeader>
+                  <CardContent className="text-sm text-muted-foreground">{project.description}</CardContent>
+                </Card>
               )}
-            </CardContent>
-          </Card>
+
+              <SharedNotesSection
+                notes={notes}
+                onAddNote={async (input) => {
+                  await notesProvider.createCompanyNote(user, project.companyId, input);
+                  refreshNotes();
+                }}
+              />
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">Related Projects</CardTitle>
+                </CardHeader>
+                <CardContent className="flex flex-col gap-1">
+                  {relatedProjects.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No other related Projects yet.</p>
+                  ) : (
+                    relatedProjects.map((p, i) => (
+                      <div key={p.id}>
+                        {i > 0 && <Separator className="my-3" />}
+                        <Link
+                          href={`/dashboard/projects/${p.id}`}
+                          className="flex flex-wrap items-center justify-between gap-3 rounded-md py-1 hover:underline"
+                        >
+                          <div className="flex items-center gap-2.5">
+                            <CompanyProjectAvatar companyId={p.companyId} companyName={p.companyName} size="sm" isInternal={p.isInternal} />
+                            <div className="flex flex-col gap-1">
+                              <span className="text-sm font-medium">{p.name}</span>
+                              <span className="text-xs text-muted-foreground">
+                                {formatDate(p.contractStartDate)} – {formatDate(p.contractEndDate)}
+                              </span>
+                            </div>
+                          </div>
+                          <ProjectStatusBadge status={p.status} />
+                        </Link>
+                      </div>
+                    ))
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
+          {historySection === "completed" && <ProjectCompletedWork tasks={tasks} />}
+
+          {historySection === "reports" && (
+            <ClientReportsTable
+              reports={projectReports}
+              isLoading={false}
+              emptyMessage="No Client Reports generated for this Project yet."
+            />
+          )}
+
+          {historySection === "time" && <ProjectTimeTeam user={user} tasks={tasks} />}
+
+          {historySection === "timeline" && (
+            <ProjectTimeline tasks={tasks} notes={notes} reports={projectReports} workstreams={workstreams} />
+          )}
         </div>
       )}
 
@@ -540,6 +600,15 @@ function LoadedProjectDetailPage({
           mode="create"
           defaultWorkstreamId={workstreams[0].id}
           defaultStatus={createTaskDefaultStatus}
+          onSaved={refreshTasks}
+        />
+      )}
+      {editingTask && (
+        <TaskFormDialog
+          open={Boolean(editingTask)}
+          onOpenChange={(open) => !open && setEditingTask(null)}
+          mode="edit"
+          task={editingTask}
           onSaved={refreshTasks}
         />
       )}

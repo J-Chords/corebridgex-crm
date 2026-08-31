@@ -6,6 +6,7 @@ import { ArrowUpRight, ListChecks, Pencil } from "lucide-react";
 import { useAuth } from "@/lib/auth/auth-context";
 import { useTask, useSubtasks } from "@/lib/data/hooks/use-tasks";
 import { useTaskTimer } from "@/lib/data/hooks/use-task-timer";
+import { useCompanyLookups } from "@/lib/data/hooks/use-companies";
 import { canEditTask } from "@/lib/data/permissions";
 import type { TaskWithRelations } from "@/lib/data/providers/tasks-provider";
 import type { User } from "@/lib/data/types";
@@ -14,6 +15,7 @@ import { TaskStatusBadge } from "@/components/tasks/task-status-badge";
 import { TaskPriorityBadge } from "@/components/tasks/task-priority-badge";
 import { TaskTimerControl } from "@/components/tasks/task-timer-control";
 import { TaskFormDialog } from "@/components/tasks/task-form-dialog";
+import { TaskActionsMenu } from "@/components/tasks/task-actions-menu";
 import { TaskRowList } from "@/components/tasks/task-row";
 import {
   DetailDrawer,
@@ -77,7 +79,7 @@ export function TaskDrawer({ taskId, onOpenChange, onChanged, onTimerChanged }: 
           <p className="text-sm text-muted-foreground">This task doesn&apos;t exist, or you no longer have access to it.</p>
         </div>
       ) : (
-        <LoadedTaskQuickView task={task} user={user} onChanged={onChanged} onTimerChanged={onTimerChanged} />
+        <LoadedTaskQuickView task={task} user={user} onChanged={onChanged} onTimerChanged={onTimerChanged} onOpenChange={onOpenChange} />
       )}
     </DetailDrawer>
   );
@@ -97,18 +99,23 @@ function LoadedTaskQuickView({
   user,
   onChanged,
   onTimerChanged,
+  onOpenChange,
 }: {
   task: TaskWithRelations;
   user: User;
   onChanged: () => void;
   onTimerChanged?: () => void;
+  onOpenChange: (open: boolean) => void;
 }) {
   const [editOpen, setEditOpen] = useState(false);
   const timer = useTaskTimer(task.id, task.assignees.map((a) => a.id));
   // Only a top-level Task has (historical) Subtasks — useSubtasks(null) is a safe no-op for a Subtask itself.
   const { subtasks } = useSubtasks(task.parentTaskId ? null : task.id);
+  // Phase 13 security hardening — see task-actions-menu.tsx's own comment on why `assignableStaff`
+  // is the right "allUsers" convenience list for this UI-only gate.
+  const { assignableStaff } = useCompanyLookups();
 
-  const canEdit = canEditTask(user, task);
+  const canEdit = canEditTask(user, { ...task, assigneeIds: task.assignees.map((a) => a.id) }, assignableStaff);
   const checklistTotal = task.checklistItems.length;
   const checklistDone = task.checklistItems.filter((ci) => ci.isDone).length;
 
@@ -225,6 +232,16 @@ function LoadedTaskQuickView({
         <Button nativeButton={false} render={<Link href={`/dashboard/tasks/${task.id}`} />}>
           <ArrowUpRight /> Open full task
         </Button>
+        <TaskActionsMenu
+          task={task}
+          hideEditItem
+          onEdit={() => setEditOpen(true)}
+          onDeleted={() => {
+            onOpenChange(false);
+            onChanged();
+          }}
+          className="ml-auto"
+        />
       </DetailDrawerFooter>
 
       {canEdit && <TaskFormDialog open={editOpen} onOpenChange={setEditOpen} mode="edit" task={task} onSaved={onChanged} />}

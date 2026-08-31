@@ -344,6 +344,18 @@ export const supabaseTasksProvider: TasksProvider = {
     return hydrated;
   },
 
+  /**
+   * Phase 13 Task Action correction — calls `delete_task` (local-only, unapplied migration
+   * `20260828100000_delete_task.sql` as of this writing; requires security review/hosted apply
+   * before this path works against real Supabase). Authorization and the logged-time/Subtask/Note
+   * safety guards all live in the RPC itself — see that migration's own doc comment.
+   */
+  async deleteTask(_viewer, id) {
+    const supabase = createClient();
+    const { error } = await supabase.rpc("delete_task", { p_task_id: id });
+    if (error) throw new Error(error.message);
+  },
+
   async updateTaskStatus(_viewer, id, status) {
     const supabase = createClient();
     const { data, error } = await supabase.rpc("update_task_status", { target_task_id: id, new_status: status });

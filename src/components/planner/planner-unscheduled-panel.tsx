@@ -10,6 +10,9 @@ interface PlannerUnscheduledPanelProps {
   tasks: TaskWithRelations[];
   onOpen: (taskId: string) => void;
   runningTaskId: string | null;
+  /** Task Action correction — both passed together or neither. */
+  onEdit?: (task: TaskWithRelations) => void;
+  onDeleted?: (taskId: string) => void;
 }
 
 /**
@@ -18,7 +21,7 @@ interface PlannerUnscheduledPanelProps {
  * view already shows every Task, unscheduled included, within its own groups, so it doesn't need
  * this panel repeated).
  */
-export function PlannerUnscheduledPanel({ tasks, onOpen, runningTaskId }: PlannerUnscheduledPanelProps) {
+export function PlannerUnscheduledPanel({ tasks, onOpen, runningTaskId, onEdit, onDeleted }: PlannerUnscheduledPanelProps) {
   const [open, setOpen] = useState(false);
   const unscheduled = tasks.filter((t) => t.dueDate == null);
 
@@ -41,7 +44,15 @@ export function PlannerUnscheduledPanel({ tasks, onOpen, runningTaskId }: Planne
             <TaskSummaryEmptyState message="Nothing unscheduled — every visible Task has a due date." />
           ) : (
             unscheduled.map((task) => (
-              <TaskSummaryItem key={task.id} task={task} onOpen={onOpen} isRunning={task.id === runningTaskId} showAssignee />
+              <TaskSummaryItem
+                key={task.id}
+                task={task}
+                onOpen={onOpen}
+                isRunning={task.id === runningTaskId}
+                showAssignee
+                onEdit={onEdit}
+                onDeleted={onDeleted}
+              />
             ))
           )}
         </div>

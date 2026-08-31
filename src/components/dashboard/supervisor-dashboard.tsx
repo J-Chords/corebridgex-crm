@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { ListChecks, Plus, Square } from "lucide-react";
 import type { User } from "@/lib/data/types";
+import type { TaskWithRelations } from "@/lib/data/providers/tasks-provider";
 import { useTasks, useMyTasks } from "@/lib/data/hooks/use-tasks";
 import { useCompanies, useCompanyLookups } from "@/lib/data/hooks/use-companies";
 import { useWorkstreams } from "@/lib/data/hooks/use-workstreams";
@@ -58,7 +59,7 @@ const HEALTH_LABEL: Record<string, string> = {
 };
 
 export function SupervisorDashboard({ user }: { user: User }) {
-  const { tasks } = useTasks();
+  const { tasks, refresh: refreshTasks } = useTasks();
   const { tasks: myTasks, isLoading: myTasksLoading, refresh: refreshMyTasks } = useMyTasks();
   const { entries: myEntries, refresh: refreshMyEntries } = useMyTimeEntries();
   const { companies } = useCompanies();
@@ -66,7 +67,13 @@ export function SupervisorDashboard({ user }: { user: User }) {
   const { assignableStaff } = useCompanyLookups();
   const { handoffs } = useRecentHandoffs();
   const [taskDialogOpen, setTaskDialogOpen] = useState(false);
+  const [editingTask, setEditingTask] = useState<TaskWithRelations | null>(null);
   const [isStopping, setIsStopping] = useState(false);
+
+  function refreshAllTasks() {
+    refreshTasks();
+    refreshMyTasks();
+  }
   const [drawerTaskId, setDrawerTaskId] = useState<string | null>(null);
   const [myTasksFocusOpen, setMyTasksFocusOpen] = useState(false);
   const [timeFocusOpen, setTimeFocusOpen] = useState(false);
@@ -136,6 +143,11 @@ export function SupervisorDashboard({ user }: { user: User }) {
                   close();
                   setDrawerTaskId(id);
                 }}
+                onEdit={(task) => {
+                  close();
+                  setEditingTask(task);
+                }}
+                onDeleted={refreshAllTasks}
               />
             ),
           }}
@@ -158,6 +170,11 @@ export function SupervisorDashboard({ user }: { user: User }) {
                   close();
                   setDrawerTaskId(id);
                 }}
+                onEdit={(task) => {
+                  close();
+                  setEditingTask(task);
+                }}
+                onDeleted={refreshAllTasks}
               />
             ),
           }}
@@ -179,6 +196,11 @@ export function SupervisorDashboard({ user }: { user: User }) {
                   close();
                   setDrawerTaskId(id);
                 }}
+                onEdit={(task) => {
+                  close();
+                  setEditingTask(task);
+                }}
+                onDeleted={refreshAllTasks}
               />
             ),
           }}
@@ -397,6 +419,11 @@ export function SupervisorDashboard({ user }: { user: User }) {
             setTaskStatusFocusOpen(false);
             setDrawerTaskId(id);
           }}
+          onEdit={(task) => {
+            setTaskStatusFocusOpen(false);
+            setEditingTask(task);
+          }}
+          onDeleted={refreshAllTasks}
         />
       </DashboardWidgetFocusDialog>
 
@@ -413,6 +440,15 @@ export function SupervisorDashboard({ user }: { user: User }) {
       </div>
 
       <TaskFormDialog open={taskDialogOpen} onOpenChange={setTaskDialogOpen} mode="create" onSaved={refreshMyTasks} />
+      {editingTask && (
+        <TaskFormDialog
+          open={Boolean(editingTask)}
+          onOpenChange={(open) => !open && setEditingTask(null)}
+          mode="edit"
+          task={editingTask}
+          onSaved={refreshAllTasks}
+        />
+      )}
       <TaskDrawer
         taskId={drawerTaskId}
         onOpenChange={(open) => !open && setDrawerTaskId(null)}

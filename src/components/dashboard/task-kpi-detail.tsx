@@ -10,6 +10,10 @@ interface TaskKpiDetailProps {
   emptyMessage: string;
   runningTaskId?: string | null;
   onOpenTask: (taskId: string) => void;
+  /** Task Action correction — both passed together or neither, forwarded straight to every
+   * `TaskSummaryItem` row's own `TaskActionsMenu`. */
+  onEdit?: (task: TaskWithRelations) => void;
+  onDeleted?: (taskId: string) => void;
 }
 
 /**
@@ -19,7 +23,7 @@ interface TaskKpiDetailProps {
  * then open the real Task Drawer (see each dashboard's own wiring) — clean sequencing rather than
  * stacking two overlays.
  */
-export function TaskKpiDetail({ tasks, emptyMessage, runningTaskId = null, onOpenTask }: TaskKpiDetailProps) {
+export function TaskKpiDetail({ tasks, emptyMessage, runningTaskId = null, onOpenTask, onEdit, onDeleted }: TaskKpiDetailProps) {
   if (tasks.length === 0) {
     return <TaskSummaryEmptyState message={emptyMessage} />;
   }
@@ -33,6 +37,8 @@ export function TaskKpiDetail({ tasks, emptyMessage, runningTaskId = null, onOpe
           isRunning={task.id === runningTaskId}
           showDueDate
           showAssignee
+          onEdit={onEdit}
+          onDeleted={onDeleted}
         />
       ))}
       {tasks.length > MAX_ROWS && (

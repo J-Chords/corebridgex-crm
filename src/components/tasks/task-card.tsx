@@ -8,6 +8,7 @@ import { TaskStatusAvatar } from "@/components/tasks/task-status-avatar";
 import { isTaskOverdue, formatDueDateShort, taskServiceLabel } from "@/lib/data/task-display";
 import { isLikelyInternalTask } from "@/lib/data/identity-color";
 import { cn } from "@/lib/utils";
+import { TaskActionsMenu } from "@/components/tasks/task-actions-menu";
 
 import { getInitials as initials } from "@/lib/initials";
 
@@ -18,6 +19,11 @@ interface TaskCardProps {
   /** Derived client-side from the already-fetched task list (see `subtaskSummary`) — never a
    * per-card fetch. Omitted entirely (not "0/0") for a Subtask, which can't have children. */
   subtaskCount?: { total: number; done: number };
+  /** Task Action correction — both passed together or neither: renders a `TaskActionsMenu` kebab in
+   * the card's top-right corner. Its trigger stops click/pointerdown propagation so it never starts
+   * a Board drag or triggers the card's own navigate-on-click. */
+  onEdit?: (task: TaskWithRelations) => void;
+  onDeleted?: (taskId: string) => void;
 }
 
 /**
@@ -27,7 +33,7 @@ interface TaskCardProps {
  * large status badge (status is already the column) — status stays legible via the thin left
  * accent only, matching `TaskGridCard`'s own existing convention.
  */
-export function TaskCard({ task, isRunning, subtaskCount }: TaskCardProps) {
+export function TaskCard({ task, isRunning, subtaskCount, onEdit, onDeleted }: TaskCardProps) {
   const overdue = isTaskOverdue(task);
   const checklistTotal = task.checklistItems.length;
   const checklistDone = task.checklistItems.filter((c) => c.isDone).length;
@@ -43,19 +49,25 @@ export function TaskCard({ task, isRunning, subtaskCount }: TaskCardProps) {
               <span className="relative inline-flex size-1.5 rounded-full" style={{ backgroundColor: "var(--info)" }} />
             </span>
           )}
-          <span className="truncate">{task.title}</span>
+          <span className="truncate" title={task.title}>{task.title}</span>
           {task.parentTaskId && (
             <Badge variant="neutral" className="shrink-0 text-[10px]">
               SUBTASK
             </Badge>
           )}
         </span>
+        {onEdit && onDeleted && (
+          <TaskActionsMenu task={task} onEdit={() => onEdit(task)} onDeleted={() => onDeleted(task.id)} className="-mt-1 -mr-1" />
+        )}
       </div>
       <span className="flex min-w-0 items-center gap-1.5 truncate text-xs text-muted-foreground">
         {!task.parentTask && (
           <CompanyProjectAvatar companyId={task.company.id} companyName={task.company.name} size="sm" isInternal={isLikelyInternalTask(task)} />
         )}
-        <span className="truncate">
+        <span
+          className="truncate"
+          title={task.parentTask ? `Parent: ${task.parentTask.title}` : `${task.company.name} · ${taskServiceLabel(task)}`}
+        >
           {task.parentTask ? `Parent: ${task.parentTask.title}` : `${task.company.name} · ${taskServiceLabel(task)}`}
         </span>
       </span>

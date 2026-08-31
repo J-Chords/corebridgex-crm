@@ -119,6 +119,13 @@ export interface TasksProvider {
   getTask(viewer: User, id: string): Promise<TaskWithRelations | null>;
   createTask(viewer: User, input: TaskInput): Promise<TaskWithRelations>;
   updateTask(viewer: User, id: string, input: TaskInput): Promise<TaskWithRelations>;
+  /**
+   * Phase 13 Task Action correction — a genuinely new capability (no authenticated role could
+   * delete a Task at all before this). Authorized by `canDeleteTask` (identical to `canEditTask`).
+   * Rejects with a specific, truthful message when the Task has logged time, Subtasks, or attached
+   * Notes — never silently destroys that history. See `20260828100000_delete_task.sql`.
+   */
+  deleteTask(viewer: User, id: string): Promise<void>;
   updateTaskStatus(viewer: User, id: string, status: TaskStatus): Promise<TaskWithRelations>;
   toggleChecklistItem(
     viewer: User,

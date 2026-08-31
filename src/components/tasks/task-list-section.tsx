@@ -26,6 +26,10 @@ interface TaskListSectionProps {
    * `isAssigneeColumnRedundantForViewer` (Employee only; Supervisor/Superadmin always pass true).
    * Defaults to true (today's exact behavior). */
   showAssignee?: boolean;
+  /** Task Action correction — both passed together or neither, forwarded straight through to every
+   * `TaskListRow` this section renders. See `TaskListRow`'s own doc comment. */
+  onEdit?: (task: TaskWithRelations) => void;
+  onDeleted?: (taskId: string) => void;
 }
 
 /**
@@ -47,6 +51,8 @@ export function TaskListSection({
   context = "global",
   projectIsInternal,
   showAssignee = true,
+  onEdit,
+  onDeleted,
 }: TaskListSectionProps) {
   const statusColor = groupBy === "status" ? STATUS_COLOR_VAR[group.key as TaskStatus] : null;
 
@@ -90,7 +96,7 @@ export function TaskListSection({
       </button>
       {!isCollapsed && (
         <div>
-          <TaskListHeader context={context} showAssignee={showAssignee} />
+          <TaskListHeader context={context} showAssignee={showAssignee} showActions={Boolean(onEdit && onDeleted)} />
           {group.tasks.map((task, i) => (
             <TaskListRow
               key={task.id}
@@ -101,6 +107,8 @@ export function TaskListSection({
               context={context}
               projectIsInternal={projectIsInternal}
               showAssignee={showAssignee}
+              onEdit={onEdit}
+              onDeleted={onDeleted}
             />
           ))}
         </div>
@@ -117,6 +125,8 @@ export function FlatTaskList({
   context = "global",
   projectIsInternal,
   showAssignee = true,
+  onEdit,
+  onDeleted,
 }: {
   tasks: TaskWithRelations[];
   allTasks: TaskWithRelations[];
@@ -124,10 +134,12 @@ export function FlatTaskList({
   context?: TaskListContext;
   projectIsInternal?: boolean;
   showAssignee?: boolean;
+  onEdit?: (task: TaskWithRelations) => void;
+  onDeleted?: (taskId: string) => void;
 }) {
   return (
     <div className="overflow-hidden rounded-lg border">
-      <TaskListHeader context={context} showAssignee={showAssignee} />
+      <TaskListHeader context={context} showAssignee={showAssignee} showActions={Boolean(onEdit && onDeleted)} />
       {tasks.map((task, i) => (
         <TaskListRow
           key={task.id}
@@ -138,6 +150,8 @@ export function FlatTaskList({
           context={context}
           projectIsInternal={projectIsInternal}
           showAssignee={showAssignee}
+          onEdit={onEdit}
+          onDeleted={onDeleted}
         />
       ))}
     </div>

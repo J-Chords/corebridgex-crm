@@ -17,6 +17,8 @@ interface ConfirmDialogProps {
   description: string;
   confirmLabel?: string;
   cancelLabel?: string;
+  /** Defaults to the normal primary button — pass "destructive" for an irreversible action like delete. */
+  confirmVariant?: "default" | "destructive";
   onConfirm: () => void;
 }
 
@@ -28,7 +30,7 @@ interface ConfirmDialogProps {
  * user may dismiss and still proceed past, never a hard block. Generic enough to reuse for any
  * future "are you sure" gate rather than hand-rolling another one.
  */
-export function ConfirmDialog({ open, onOpenChange, title, description, confirmLabel = "Continue", cancelLabel = "Cancel", onConfirm }: ConfirmDialogProps) {
+export function ConfirmDialog({ open, onOpenChange, title, description, confirmLabel = "Continue", cancelLabel = "Cancel", confirmVariant = "default", onConfirm }: ConfirmDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-sm">
@@ -41,6 +43,7 @@ export function ConfirmDialog({ open, onOpenChange, title, description, confirmL
             {cancelLabel}
           </Button>
           <Button
+            variant={confirmVariant}
             onClick={() => {
               onOpenChange(false);
               onConfirm();

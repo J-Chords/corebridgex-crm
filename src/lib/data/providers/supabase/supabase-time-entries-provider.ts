@@ -174,6 +174,18 @@ export const supabaseTimeEntriesProvider: TimeEntriesProvider = {
     return withUserAndTask((data ?? []).map(toTimeEntry));
   },
 
+  async listTimeEntriesForTasks(_viewer, taskIds) {
+    if (taskIds.length === 0) return [];
+    const supabase = createClient();
+    const { data, error } = await supabase
+      .from("time_entries")
+      .select("*")
+      .in("task_id", taskIds)
+      .order("start_time", { ascending: false });
+    if (error) throw new Error(error.message);
+    return withUserAndTask((data ?? []).map(toTimeEntry));
+  },
+
   async getRunningTimer(viewer) {
     const supabase = createClient();
     const { data, error } = await supabase.from("time_entries").select("*").eq("user_id", viewer.id).is("duration_minutes", null).maybeSingle();

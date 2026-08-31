@@ -1273,7 +1273,9 @@ unaffected; only the recommended UI location changed.
 
 ### Phase 13B — Project Workspace History + Permanent Client Context
 
-**Status: COMPLETE / ACCEPTED.** Full write-up in
+**Status: COMPLETE / ACCEPTED / CHECKPOINTED.** Checkpoint commit
+`128205acb58093f3687297b611e5f15a44d440d3` ("checkpoint: complete phase 13b project workspace
+foundation"), pushed to `origin/main`. Full write-up in
 `docs/phase-13b-project-workspace-history-spec.md`. Two migrations shipped and hosted (see
 "Accepted final Phase 13B architecture" below).
 
@@ -1726,9 +1728,10 @@ Phase 13B as a whole. Locked, accepted surface:
   Task-derived scheduling.
 - **Project History foundation** — permanent context, Shared Notes, Related Projects, laid down as
   the base Phase 13C–13E will build on.
-- Uncommitted at time of writing this note; the checkpoint commit immediately following this update
-  is what actually commits/pushes this accepted state — see the commit hash recorded in this
-  document's own changelog once that checkpoint lands.
+- **Checkpointed and pushed** as commit `128205acb58093f3687297b611e5f15a44d440d3` ("checkpoint:
+  complete phase 13b project workspace foundation") — `HEAD`/`origin/main` both at this hash before
+  Phase 13C–13E work began. `references/`, `.claude/settings.local.json`, `.env*` excluded from
+  staging.
 
 **Revised Phase 13 delivery sequence:**
 - **13B** — Project Workspace History + Permanent Client Context: permanent context inside Project,
@@ -1740,6 +1743,201 @@ Phase 13B as a whole. Locked, accepted surface:
   TimeEntry visibility broadening.
 - **13E** — Project Operational Timeline: factual events only, no surveillance-shaped entries,
   paginated.
+
+### Phase 13C–13E — Project Completed Work, Client Reports, Time & Team, Timeline, Task Actions, Form Drawers
+
+**Status: COMPLETE / ACCEPTED** — Phase 13C: COMPLETE / ACCEPTED; Phase 13D: COMPLETE / ACCEPTED;
+Phase 13E: COMPLETE / ACCEPTED. Full write-up in
+`docs/phase-13c-13e-project-history-intelligence-spec.md`. One combined pass following Phase 13B's
+checkpoint (`128205a`), followed by a final completion pass (security review, gap closure, date
+correctness, hosted apply), then final security hardening and a final visual polish pass (both
+recorded in their own sections below) — the user has given final manual acceptance
+("PHASE 13 FINAL VISUAL ACCEPTED") to all of it together. Locked surface:
+- **Task Edit/Delete correction: IMPLEMENTED.** Audited first: no authenticated role could delete a
+  Task at all before this work (no grant, no RLS policy). `delete_task` RPC (authorized via the same
+  `can_edit_task` boundary edit already uses) blocks deletion whenever the Task has logged
+  TimeEntries, Subtasks, or attached Notes. **Final security review found and fixed a real TOCTOU
+  race** — a `select ... for update` row lock now runs before any dependency check, closing the
+  window a concurrent TimeEntry/Note/Subtask insert could otherwise have slipped through and been
+  silently cascaded away. Legacy Subtask policy: an otherwise-safe Subtask (no time/notes) may be
+  deleted like any other Task — an explicit, documented decision, not an oversight. 12/12 rollback-
+  safe mock probes passed (Superadmin/Supervisor/Employee-legitimate all succeed; unauthorized
+  Employee, logged-time, attached-note, and live-Subtask cases all correctly rejected; structural
+  cascade confirmed to spare TimeEntries/Notes/Client Report snapshots/Company-Project membership;
+  repeated delete of an already-deleted id fails safely). Shared `TaskActionsMenu` wired into every
+  Task surface: Global Tasks List/Board, Project Tasks List/Timeline, Service Activity Tasks, My Day,
+  Task Drawer, full Task page, **and (closed in the final pass) Planner (Day/Group/Unscheduled) and
+  every Dashboard Task-summary/KPI-detail surface** — Week/Month Planner views intentionally keep
+  their read-only "chip" rows (too small a target), and Dashboard's separate Quick View Drawer keeps
+  its own unchanged `[Edit] [⋯]`, never duplicated.
+- **Delete migration: HOSTED / VERIFIED.** `supabase/migrations/20260828100000_delete_task.sql` —
+  reviewed, race-safety-fixed, probed, and **applied to hosted Supabase**. `20260827090000`,
+  `20260828090000`, and `20260828100000` are all local == remote; zero pending migrations; `db push
+  --dry-run` reports the remote database up to date.
+- **Form Drawer design system** — `src/components/ui/form-drawer.tsx` primitive family (distinct
+  from `DetailDrawer`); Task Create/Edit and Service Create/Edit rebuilt on it (Header/Body/Section/
+  PropertyGrid/Field/Footer, 540px desktop, full-width mobile). Activity creation's existing compact
+  one-field Dialog was left as-is (already the right shape). No nested-drawer changes.
+- **13C — Completed Work + Client Report History.** History pill sub-nav (Context / Completed Work /
+  Client Reports / Time & Team / Timeline); Description/Shared Notes/Related Projects moved from
+  Overview into History's own Context sub-tab. Completed Work groups top-level (non-Subtask) done
+  Tasks by real LOCAL calendar month. **Completion-date truthfulness (final pass)**: `updatedAt` is
+  no longer used as a silent fallback for the displayed completion date — a legacy Task with no real
+  `statusChangedAt` now falls into its own "Completion date unavailable" bucket (sorted last, shown
+  as "—") instead of a fabricated date; no such legacy row exists in current seed data, so this
+  bucket is currently inert everywhere, kept per the "report ambiguity, don't hide it" rule. Client
+  Report History reuses the existing `useClientReports()`/`ClientReportsTable` (already
+  `canViewClientReport`-authorized, narrowed client-side to this Project — Project access never
+  substitutes for report authorization), no Draft/Finalized regression; re-confirmed in the final
+  pass.
+- **13D — Safe Project Time + Team Intelligence.** `listTimeEntriesForTasks` provider method (no new
+  RPC/migration — a plain read the existing `time_entries_select` RLS already scopes correctly).
+  Truthful total label by role: "Total Project Time" (Superadmin only, genuinely complete), "Visible
+  Team Time" (Supervisor), "Your Time" (Employee). Breakdown by Service/Activity; a Team snapshot
+  (open/completed-in-range counts, non-Employee only) — no ranking, no productivity score, no
+  idle/geolocation tracking. **Local calendar date correctness (final pass)**: "This Month"/"Last 30
+  Days" (now exactly 30 local calendar dates including today, not 31)/Custom all use
+  `planner-dates.ts`'s local-date helpers instead of UTC `toISOString().slice(...)`; TimeEntry range
+  membership uses each entry's own local calendar day; a reversed Custom range now shows a validation
+  warning instead of silently returning confusing data; the "completed this period" count no longer
+  silently uses `updatedAt` for a Task without a genuine completion timestamp.
+- **13E — Project Operational Timeline.** No generic audit table; aggregates Task completion/
+  status-change, Client Report generation, Shared Note creation, and Service creation from records
+  this Project workspace already fetched, sorted by absolute chronology and **grouped by LOCAL
+  calendar day (fixed in the final pass — the grouping key previously used a UTC slice while the
+  visible label already used local formatting, a real mismatch risk near local midnight)** with
+  "Load older activity". Report date-only fields (`rangeStart`/`rangeEnd`) deliberately keep the
+  existing report-formatting convention rather than being run through timezone logic — a separate,
+  already-settled domain.
+- `npx tsc --noEmit` (0 errors), `npx eslint src` (0 errors, same 2 pre-existing warnings), all four
+  provider builds clean (re-run after every change in the final pass), mock-mode Playwright visual
+  verification (Employee/Supervisor/Superadmin, light + dark, desktop + mobile) including a full
+  create→delete round trip, a live safety-block on a real seeded Task with logged time, and (final
+  pass) Planner/Dashboard kebab wiring and History date-correctness — zero console/page errors
+  throughout. Phase 13C–13E: **COMPLETE / ACCEPTED.**
+
+### Phase 13 — Final security hardening: Supervisor Task-mutation scope + Planner consistency
+
+**Status: COMPLETE / ACCEPTED.** Full write-up in
+`docs/phase-13c-13e-project-history-intelligence-spec.md`, "Part 6". Triggered by re-reading the
+final Phase 13 report, which surfaced an older latent authorization gap unrelated to the delete
+work: **discovered** — `can_edit_task`/`can_progress_task` (both defined once, in
+`20260814090002_tasks.sql`, never redefined by any later migration) were role-global for
+Supervisor (`is_supervisor() OR is_superadmin() OR ...`), letting any Supervisor edit/progress/
+delete/checklist-mutate ANY Task org-wide, including Tasks with no legitimate relationship to them
+— a direct conflict with the locked product model (Supervisor is never org-wide).
+- **Fix — hosted migration applied.** `supabase/migrations/20260828110000_supervisor_task_mutation_
+  scope_hardening.sql` (new, forward-only — the already-hosted `delete_task.sql` from the prior pass
+  was never edited; it inherits the fix automatically since it calls `can_edit_task` by name).
+  `can_edit_task`/`can_progress_task` narrowed to `is_superadmin() OR (is_supervisor() AND
+  can_access_task_directly(target_task_id)) OR <existing Employee self-added/assignee rule,
+  unchanged>`. Deliberately composed `can_access_task_directly` (the function's own doc comment
+  names it as the correct mutation-authorization gate), not the broader `can_access_task` (which
+  additionally grants one-hop parent/child Subtask hierarchy READ visibility that would over-grant
+  mutation rights if reused here) — an audited, justified deviation from a literal instruction
+  sketch. `can_log_time_on_task` untouched (already correctly assignee-scoped). Recursion-safety
+  proved by full manual dependency tracing: a clean DAG with no cycle back into `can_edit_task`/
+  `can_progress_task`. Reviewed, dry-run verified, and **applied to hosted Supabase** — confirmed
+  local == remote, zero pending migrations.
+- **Mock/frontend parity.** `canEditTask`/`canDeleteTask`/`canProgressTask`/
+  `canAddTaskChecklistItem` in `src/lib/data/permissions.ts` widened to require `assigneeIds`/
+  `companyId` plus a new `allUsers: User[]` parameter, narrowing the Supervisor branch to the
+  mock's own pre-existing `canAccessTaskDirectly` helper — never "the UI wouldn't pass that Task"
+  reasoning. Provider layer (`mock-tasks-provider.ts`, 5 call sites) passes `db.users`; UI call
+  sites (`task-actions-menu.tsx`, `task-drawer.tsx`, `task-checklist.tsx`, `task-board.tsx`,
+  `bucket-task-grid.tsx`, `tasks/[id]/page.tsx`) pass `useCompanyLookups().assignableStaff` (a
+  Supervisor's own team / a Superadmin's everyone) — an explicitly UI-only convenience gate, with
+  the provider/RPC still the real enforcement boundary. 11/11 rollback-safe mock probes passed:
+  Supervisor editing/progressing/deleting her own direct report's Task succeeds; the same Supervisor
+  acting on an out-of-hierarchy Task (a different Supervisor's report) is correctly rejected on
+  edit, progress, delete, and checklist mutation; Employee self-added and assignee rules unchanged;
+  Superadmin unconditional; time-logging untouched and still assignee-only.
+- **Planner Week/Month action consistency — closed.** The prior pass's read-only "chip" rows in
+  Week/Month were the one remaining Task-surface gap. Hover-reveal (raised as the preferred option)
+  was deliberately rejected — no touch-device equivalent, and the component can't reliably detect
+  input method. Fixed instead with an always-visible, standard-sized `TaskActionsMenu` added as a
+  flex sibling inside `TaskSummaryItem`'s "chip" variant (never shrunk below the app's normal kebab
+  size), threaded through `PlannerWeekView`/`PlannerMonthView`/`planner/page.tsx`. Every Task surface
+  in the app now has direct Edit/Delete through the same canonical `TaskActionsMenu`.
+- `npx tsc --noEmit` (0 errors), `npx eslint src` (0 errors, same pre-existing warnings), all four
+  provider builds clean, mock-mode Playwright visual verification across Planner Day/Week/Month/
+  Group/Unscheduled × Employee/Supervisor/Superadmin (light + dark, desktop + mobile) plus spot-
+  checks of Global Tasks List/Board/Dashboard Quick View/Project Tasks — all kebabs intact, zero
+  console/page errors. **Status: COMPLETE / ACCEPTED.**
+
+### Phase 13 — Final visual polish pass
+
+**Status: COMPLETE / ACCEPTED** (a visual/UX pass only — no architecture, role semantics, RLS, or
+migration change). Full write-up in `docs/phase-13c-13e-project-history-intelligence-spec.md`,
+"Part 7".
+Driven by four external UI references used as inspiration only — Reference 1 → Task/Service
+Create/Edit hierarchy; Reference 2 → Full Task page; Reference 3 → minor field-pairing influence
+only; Reference 4 → Task Quick View / compact property language.
+- **Status/Priority are now one compact dropdown everywhere they're editable.** Create/Edit Task's
+  Status and Priority previously rendered as a row of always-visible colored pill buttons
+  (`PillSelect`) — a "giant" segmented control. Replaced with a compact `[ ● To do  ▾ ]` /
+  `[ ▮▮▮ High  ▾ ]` dropdown (new shared `PropertySelect` primitive), reusing the exact same colored
+  dot/bar language every status/priority badge already uses. The already-accepted property-rail
+  status control (`TaskStatusRail`, Full Task page) was left untouched. A Workstream's own Status
+  picker (Service Create/Edit) was converted the same way, so Task and Service forms read as one
+  product. The now-unused `PillSelect` primitive was deleted.
+- **Reserved action-column slot, independent of per-task authorization.** Root cause of the
+  observed "rows don't stay aligned" issue: `TaskActionsMenu` returned `null` outright for a Task
+  the current viewer can't act on, collapsing its footprint and shifting that one row's Due/
+  Assignee columns relative to its neighbors. Fixed by rendering an invisible, same-size
+  `ReservedActionSlot` instead of `null` — one change in the shared component, cascading correctly
+  to every List row/Board card/Timeline row/Planner chip without touching any of them.
+  Confirmed via mock-mode screenshot: an Employee's own Task list shows a kebab only on the one Task
+  she's authorized for, with every column still perfectly aligned across the whole status group.
+- **Truncation accessibility** — `title` attributes added to every truncated Task title and
+  Project/Service/Activity context string across the shared row/card components.
+- Everything else audited (row grid, Full Task's two-column layout, Quick View's single-identity
+  header, Form Drawer/Service Drawer structure, Activity's compact dialog) already matched this
+  pass's targets from prior phases — confirmed via source read and screenshots, not rebuilt.
+- `npx tsc --noEmit` (0 errors), `npx eslint src` (0 errors, same pre-existing warnings), all four
+  provider builds clean, mock-mode Playwright screenshots (light + dark, desktop + mobile) of
+  Create/Edit Task, the Task List across all five status groups for every role, the Full Task page,
+  Board, the Service Create drawer, and a Planner spot-check — zero console/page errors. No
+  migration created or applied; migrations confirmed local == remote, zero pending, both before and
+  after this pass. **Status: COMPLETE / ACCEPTED.**
+
+### Phase 13 — Final status: COMPLETE / ACCEPTED / CHECKPOINTING
+
+**The user has given final acceptance: "PHASE 13 FINAL VISUAL ACCEPTED."** Phase 13 implementation,
+security hardening, and final visual polish are complete and accepted in full; this repository
+state is being checkpointed as the new safe baseline. Final acceptance covers, together:
+- Project History foundation (13A audit, 13B Project workspace + permanent Client context — already
+  checkpointed as `128205a`).
+- Completed Work (13C).
+- Client Report History (13C).
+- Safe Project Time + Team Intelligence (13D).
+- Project Operational Timeline (13E).
+- Task Edit/Delete (canonical `TaskActionsMenu`/`TaskFormDialog`/`deleteTask` everywhere).
+- `delete_task` hosted security boundary (`20260828100000`, race-safety-locked, dependency-blocked,
+  hosted and verified).
+- Supervisor Task-mutation scope hardening (`20260828110000`, hosted and verified — Supervisor is
+  never org-wide for Task edit/progress/delete).
+- Planner actions across Day/Week/Month/Group/Unscheduled (every view has direct Edit/Delete through
+  the same canonical `TaskActionsMenu`).
+- Task/Service FormDrawer system (shared primitive family, both forms on one visual grammar).
+- Compact Status dropdown (`[ ● To do  ▾ ]`, `PropertySelect` + `StatusDot`).
+- Compact Priority dropdown with cellular bars (`[ ▮▮▮ High  ▾ ]`, `PropertySelect` + `PriorityBars`).
+- Fixed Task action-column alignment (`ReservedActionSlot` — a row's columns never shift based on
+  per-task authorization).
+- Long-title/context truncation (native `title` tooltips on every truncated Task/Project/Service/
+  Activity string).
+- Task Quick View polish (single-identity header, compact property language).
+- Full Task property-rail consistency (same Status/Priority language as Create/Edit and every other
+  surface).
+- Activity compact-dialog flow (one field, no nested drawer).
+- Final mobile/dark/accessibility visual acceptance (desktop + 390px mobile, light + dark, zero
+  console/page errors throughout every verification pass).
+- Zero pending Supabase migrations — `20260827090000`, `20260828090000`, `20260828100000`,
+  `20260828110000` all local == remote, `db push --dry-run` reports the remote database up to date.
+
+Phase 13 as a whole: **COMPLETE / ACCEPTED / CHECKPOINTING.** Phase 14 has not been started or
+scoped. Phase 13 final checkpoint: see current Git HEAD (checkpointed via
+`checkpoint: complete phase 13 project history and intelligence`).
 
 ## Next roadmap
 

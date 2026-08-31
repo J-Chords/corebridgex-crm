@@ -48,6 +48,14 @@ export interface TimeEntriesProvider {
   listMyTimeEntries(viewer: User): Promise<TimeEntryWithTask[]>;
   /** Every entry (any visible user, any task) whose `startTime` falls on `date` (YYYY-MM-DD) — powers Team Time. Gated per-entry by `canViewTimeForUser`, so a supervisor only ever gets their own + their direct reports', never the whole org. */
   listTimeEntriesForDate(viewer: User, date: string): Promise<TimeEntryWithUserAndTask[]>;
+  /**
+   * Phase 13D — every entry logged against any of `taskIds` (a Project's own Tasks, gathered by the
+   * caller via its Workstreams), gated per-entry by the exact same `canViewTimeForUser` boundary
+   * `listTimeEntriesForDate` already uses — an Employee gets only their own, a Supervisor their own
+   * + direct reports', a Superadmin everyone's. No new authorization concept, no new migration: a
+   * plain filtered read the existing `time_entries_select` RLS policy already scopes correctly.
+   */
+  listTimeEntriesForTasks(viewer: User, taskIds: string[]): Promise<TimeEntryWithUserAndTask[]>;
   /** The viewer's own currently-running timer, if any — regardless of which task it's on. Carries the task's own title so a cross-task hint elsewhere can name it specifically. */
   getRunningTimer(viewer: User): Promise<TimeEntryWithTask | null>;
   /** The viewer's single most-recently-paused entry, across all tasks — a "you have something paused" hint, not a per-task authority (see `TimeEntriesProvider` docs on `pauseTimer`/`resumeTimer`). Null once anything newer (a fresh start, a stop, a manual entry) has happened for the viewer. */

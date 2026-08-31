@@ -10,6 +10,7 @@ import { isTaskOverdue, formatDueDateShort } from "@/lib/data/task-display";
 import { isLikelyInternalTask } from "@/lib/data/identity-color";
 import { STAGGER_ITEM_CLASS, staggerDelay } from "@/lib/stagger";
 import { cn } from "@/lib/utils";
+import { TaskActionsMenu } from "@/components/tasks/task-actions-menu";
 
 import { getInitials as initials } from "@/lib/initials";
 
@@ -49,19 +50,32 @@ export function taskListHeaderLabels(context: TaskListContext, showAssignee = tr
  * `taskListGridCols` template. Desktop-only, matching the row's own `hidden sm:grid` split — the
  * mobile stacked-card layout never shows column headers, since its content isn't columnar.
  */
-export function TaskListHeader({ context = "global", showAssignee = true }: { context?: TaskListContext; showAssignee?: boolean }) {
+export function TaskListHeader({
+  context = "global",
+  showAssignee = true,
+  showActions = false,
+}: {
+  context?: TaskListContext;
+  showAssignee?: boolean;
+  /** Reserves the same trailing width as each row's `TaskActionsMenu` kebab so the grid columns
+   * above stay aligned with the rows below — never shown itself, just a spacer. */
+  showActions?: boolean;
+}) {
   return (
-    <div
-      className={cn(
-        "hidden h-8 items-center gap-3 border-b bg-muted/20 px-3 font-mono text-[10px] tracking-wide text-muted-foreground uppercase sm:grid",
-        taskListGridCols(context, showAssignee)
-      )}
-    >
-      {taskListHeaderLabels(context, showAssignee).map((label) => (
-        <span key={label} className="truncate">
-          {label}
-        </span>
-      ))}
+    <div className="hidden items-center gap-2 border-b bg-muted/20 px-3 sm:flex">
+      <div
+        className={cn(
+          "grid h-8 flex-1 items-center gap-3 font-mono text-[10px] tracking-wide text-muted-foreground uppercase",
+          taskListGridCols(context, showAssignee)
+        )}
+      >
+        {taskListHeaderLabels(context, showAssignee).map((label) => (
+          <span key={label} className="truncate">
+            {label}
+          </span>
+        ))}
+      </div>
+      {showActions && <div className="size-7 shrink-0" aria-hidden="true" />}
     </div>
   );
 }
@@ -86,6 +100,11 @@ interface TaskListRowProps {
   /** Defaults to true (today's behavior). The caller (page-level) decides this per the audited
    * "is it actually redundant for this viewer/dataset" rule — never a blanket per-role toggle here. */
   showAssignee?: boolean;
+  /** Task Action correction — both passed together or neither: renders a `TaskActionsMenu` kebab
+   * (Edit/Delete, permission-gated internally) as a trailing sibling of the row content. Omit both
+   * to keep a row plain (no caller passes only one of the two). */
+  onEdit?: (task: TaskWithRelations) => void;
+  onDeleted?: (taskId: string) => void;
 }
 
 function isLikelyInternal(task: TaskWithRelations, projectIsInternal?: boolean): boolean {
@@ -104,7 +123,7 @@ function TitleCell({ task, isRunning, subtaskCount }: Pick<TaskListRowProps, "ta
       <div className="flex min-w-0 flex-col gap-0.5">
         <span className="flex min-w-0 items-center gap-1.5 font-medium">
           {isRunning && <Play className="size-3 shrink-0" style={{ color: "var(--info)" }} aria-hidden="true" />}
-          <span className="truncate">{task.title}</span>
+          <span className="truncate" title={task.title}>{task.title}</span>
           {task.parentTaskId && (
             <Badge variant="neutral" className="shrink-0 text-[10px]">
               SUBTASK
@@ -151,9 +170,11 @@ function ContextCell({ task, context, projectIsInternal }: { task: TaskWithRelat
       )}
       <div className="min-w-0">
         {showProjectIdentity && (
-          <span className="block truncate font-medium text-foreground">{task.company.name}</span>
+          <span className="block truncate font-medium text-foreground" title={task.company.name}>
+            {task.company.name}
+          </span>
         )}
-        <span className="block truncate">
+        <span className="block truncate" title={`${task.workstream.name}${task.activity ? ` · ${task.activity.name}` : ""}`}>
           {task.workstream.name}
           {task.activity && ` · ${task.activity.name}`}
         </span>
@@ -195,9 +216,12 @@ export function TaskListRow({
   context = "global",
   projectIsInternal,
   showAssignee = true,
+  onEdit,
+  onDeleted,
 }: TaskListRowProps) {
   const router = useRouter();
   const overdue = isTaskOverdue(task);
+  const showActions = Boolean(onEdit && onDeleted);
 
   function navigate() {
     if (onOpen) onOpen(task.id);
@@ -215,37 +239,46 @@ export function TaskListRow({
           navigate();
         }
       }}
-      className={cn("w-full cursor-pointer border-b px-3 py-2 text-left text-sm transition-colors last:border-b-0 hover:bg-muted/50", STAGGER_ITEM_CLASS)}
+      className={cn("flex w-full items-center gap-2 cursor-pointer border-b px-3 py-2 text-left text-sm transition-colors last:border-b-0 hover:bg-muted/50", STAGGER_ITEM_CLASS)}
       style={staggerDelay(index)}
     >
-      {/* Mobile — compact stacked block */}
-      <div className="flex flex-col gap-1.5 sm:hidden">
-        <TitleCell task={task} isRunning={isRunning} subtaskCount={subtaskCount} />
-        <div className="flex flex-wrap items-center gap-2">
-          <TaskPriorityBadge priority={task.priority} />
-          {context !== "service" && (
-            <span className="truncate text-xs text-muted-foreground">
-              {context === "global" ? task.company.name : task.workstream.name}
+      <div className="min-w-0 flex-1">
+        {/* Mobile — compact stacked block */}
+        <div className="flex flex-col gap-1.5 sm:hidden">
+          <TitleCell task={task} isRunning={isRunning} subtaskCount={subtaskCount} />
+          <div className="flex flex-wrap items-center gap-2">
+            <TaskPriorityBadge priority={task.priority} />
+            {context !== "service" && (
+              <span className="truncate text-xs text-muted-foreground">
+                {context === "global" ? task.company.name : task.workstream.name}
+              </span>
+            )}
+            <span className={cn("ml-auto text-xs", overdue ? "font-medium text-warning" : "text-muted-foreground")}>
+              {task.dueDate ? formatDueDateShort(task.dueDate) : "—"}
             </span>
-          )}
-          <span className={cn("ml-auto text-xs", overdue ? "font-medium text-warning" : "text-muted-foreground")}>
+            {showAssignee && <AssigneeAvatars task={task} />}
+          </div>
+        </div>
+        {/* Desktop — true aligned grid row, template shared with TaskListHeader */}
+        <div className={cn("hidden min-h-7 items-center gap-3 sm:grid", taskListGridCols(context, showAssignee))}>
+          <TitleCell task={task} isRunning={isRunning} subtaskCount={subtaskCount} />
+          <div>
+            <TaskPriorityBadge priority={task.priority} />
+          </div>
+          {context !== "service" && <ContextCell task={task} context={context} projectIsInternal={projectIsInternal} />}
+          <div className={cn("text-xs", overdue ? "font-medium text-warning" : "text-muted-foreground")}>
             {task.dueDate ? formatDueDateShort(task.dueDate) : "—"}
-          </span>
+          </div>
           {showAssignee && <AssigneeAvatars task={task} />}
         </div>
       </div>
-      {/* Desktop — true aligned grid row, template shared with TaskListHeader */}
-      <div className={cn("hidden min-h-7 items-center gap-3 sm:grid", taskListGridCols(context, showAssignee))}>
-        <TitleCell task={task} isRunning={isRunning} subtaskCount={subtaskCount} />
-        <div>
-          <TaskPriorityBadge priority={task.priority} />
-        </div>
-        {context !== "service" && <ContextCell task={task} context={context} projectIsInternal={projectIsInternal} />}
-        <div className={cn("text-xs", overdue ? "font-medium text-warning" : "text-muted-foreground")}>
-          {task.dueDate ? formatDueDateShort(task.dueDate) : "—"}
-        </div>
-        {showAssignee && <AssigneeAvatars task={task} />}
-      </div>
+      {showActions && (
+        <TaskActionsMenu
+          task={task}
+          onEdit={() => onEdit?.(task)}
+          onDeleted={() => onDeleted?.(task.id)}
+        />
+      )}
     </div>
   );
 }

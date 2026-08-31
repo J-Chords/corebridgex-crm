@@ -18,9 +18,11 @@ import {
 import { isEmployee, isSupervisor } from "@/lib/data/permissions";
 import type { TaskGroupBy } from "@/lib/data/types";
 import { todayDateOnly, formatDateOnly, startOfWeekMonday } from "@/lib/planner-dates";
+import type { TaskWithRelations } from "@/lib/data/providers/tasks-provider";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { TaskFilterBar, type TaskFilterField } from "@/components/tasks/task-filter-bar";
+import { TaskFormDialog } from "@/components/tasks/task-form-dialog";
 import { PlannerDayView } from "@/components/planner/planner-day-view";
 import { PlannerWeekView } from "@/components/planner/planner-week-view";
 import { PlannerMonthView } from "@/components/planner/planner-month-view";
@@ -31,7 +33,7 @@ type PlannerView = "day" | "week" | "month" | "group";
 
 export default function PlannerPage() {
   const { user } = useAuth();
-  const { tasks, isLoading } = useTasks();
+  const { tasks, isLoading, refresh } = useTasks();
   const { companies } = useCompanies();
   const { workstreams } = useWorkstreams();
   const { assignableStaff } = useCompanyLookups();
@@ -44,6 +46,7 @@ export default function PlannerPage() {
   const [monthAnchor, setMonthAnchor] = useState(() => todayDateOnly());
   const [groupBy, setGroupBy] = useState<TaskGroupBy>("project");
   const [teamScope, setTeamScope] = useState(false);
+  const [editingTask, setEditingTask] = useState<TaskWithRelations | null>(null);
 
   const { filters, patch } = useTaskFilters();
 
@@ -170,6 +173,8 @@ export default function PlannerPage() {
                 onOpen={openTask}
                 runningTaskId={runningTaskId}
                 showAssignee={showAssignee}
+                onEdit={setEditingTask}
+                onDeleted={refresh}
               />
             )}
             {view === "week" && (
@@ -180,6 +185,8 @@ export default function PlannerPage() {
                 tasks={filteredTasks}
                 onOpen={openTask}
                 runningTaskId={runningTaskId}
+                onEdit={setEditingTask}
+                onDeleted={refresh}
               />
             )}
             {view === "month" && (
@@ -190,6 +197,8 @@ export default function PlannerPage() {
                 tasks={filteredTasks}
                 onOpen={openTask}
                 runningTaskId={runningTaskId}
+                onEdit={setEditingTask}
+                onDeleted={refresh}
               />
             )}
             {view === "group" && (
@@ -201,15 +210,33 @@ export default function PlannerPage() {
                 runningTaskId={runningTaskId}
                 showAssignee={showAssignee}
                 allowAssigneeGrouping={!employeeView}
+                onEdit={setEditingTask}
+                onDeleted={refresh}
               />
             )}
 
             {view !== "group" && (
-              <PlannerUnscheduledPanel tasks={filteredTasks} onOpen={openTask} runningTaskId={runningTaskId} />
+              <PlannerUnscheduledPanel
+                tasks={filteredTasks}
+                onOpen={openTask}
+                runningTaskId={runningTaskId}
+                onEdit={setEditingTask}
+                onDeleted={refresh}
+              />
             )}
           </>
         )}
       </Card>
+
+      {editingTask && (
+        <TaskFormDialog
+          open={Boolean(editingTask)}
+          onOpenChange={(open) => !open && setEditingTask(null)}
+          mode="edit"
+          task={editingTask}
+          onSaved={refresh}
+        />
+      )}
     </div>
   );
 }

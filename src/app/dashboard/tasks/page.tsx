@@ -19,6 +19,7 @@ import {
 import { isEmployee } from "@/lib/data/permissions";
 import { isAssigneeColumnRedundantForViewer } from "@/lib/data/task-display";
 import type { TaskStatus } from "@/lib/data/types";
+import type { TaskWithRelations } from "@/lib/data/providers/tasks-provider";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -60,6 +61,7 @@ function TasksPageContent() {
 
   const [createOpen, setCreateOpen] = useState(false);
   const [createDefaultStatus, setCreateDefaultStatus] = useState<TaskStatus | undefined>(undefined);
+  const [editingTask, setEditingTask] = useState<TaskWithRelations | null>(null);
   // Phase 12B final correction — List is the default Tasks Home view for every role; Board remains
   // one click away. Local component state only (no persisted user preference exists in the
   // current data model — per instruction, not inventing one), so this always starts fresh at
@@ -310,7 +312,14 @@ function TasksPageContent() {
         filtered.length === 0 ? (
           <Card className="p-10 text-center text-sm text-muted-foreground">No tasks match this view.</Card>
         ) : (
-          <FlatTaskList tasks={filtered} allTasks={tasks} runningTaskId={runningTaskId} showAssignee={showAssignee} />
+          <FlatTaskList
+            tasks={filtered}
+            allTasks={tasks}
+            runningTaskId={runningTaskId}
+            showAssignee={showAssignee}
+            onEdit={setEditingTask}
+            onDeleted={refresh}
+          />
         )
       ) : (
         <div className="flex flex-col gap-3">
@@ -328,6 +337,8 @@ function TasksPageContent() {
               onToggleCollapse={() => toggleGroup(group.key)}
               onAddTask={openCreate}
               showAssignee={showAssignee}
+              onEdit={setEditingTask}
+              onDeleted={refresh}
             />
           ))}
         </div>
@@ -340,6 +351,15 @@ function TasksPageContent() {
         defaultStatus={createDefaultStatus}
         onSaved={refresh}
       />
+      {editingTask && (
+        <TaskFormDialog
+          open={Boolean(editingTask)}
+          onOpenChange={(open) => !open && setEditingTask(null)}
+          mode="edit"
+          task={editingTask}
+          onSaved={refresh}
+        />
+      )}
     </div>
   );
 }

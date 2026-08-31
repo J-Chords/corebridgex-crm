@@ -1,6 +1,7 @@
 import type { CSSProperties } from "react";
 import { Badge } from "@/components/ui/badge";
 import type { TaskStatus } from "@/lib/data/types";
+import { cn } from "@/lib/utils";
 
 export const STATUS_META: Record<
   TaskStatus,
@@ -40,6 +41,19 @@ export function statusChipStyle(status: TaskStatus, strength: "solid" | "subtle"
     borderColor: `color-mix(in oklch, ${c} ${borderPercent}%, transparent)`,
     color: `color-mix(in oklch, ${c} 72%, var(--foreground))`,
   };
+}
+
+/** One canonical status dot — same `STATUS_COLOR_VAR` every status-colored surface reads from.
+ * Shared by the compact `TaskStatusPicker` (Create/Edit) and any select-item list that needs a
+ * status legend, so a dot's color can never drift from what the badge/avatar already mean. */
+export function StatusDot({ status, className }: { status: TaskStatus; className?: string }) {
+  return (
+    <span
+      className={cn("size-2 shrink-0 rounded-full", className)}
+      style={{ backgroundColor: STATUS_COLOR_VAR[status] }}
+      aria-hidden="true"
+    />
+  );
 }
 
 export function TaskStatusBadge({ status }: { status: TaskStatus }) {

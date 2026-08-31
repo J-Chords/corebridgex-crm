@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { ListChecks, Plus, Square } from "lucide-react";
 import type { User } from "@/lib/data/types";
+import type { TaskWithRelations } from "@/lib/data/providers/tasks-provider";
 import { useMyTasks } from "@/lib/data/hooks/use-tasks";
 import { useWorkstreams } from "@/lib/data/hooks/use-workstreams";
 import { useMyTimeEntries } from "@/lib/data/hooks/use-time-entries";
@@ -60,6 +61,7 @@ export function EmployeeDashboard({ user }: { user: User }) {
   const { workstreams } = useWorkstreams();
   const { entries, refresh: refreshEntries } = useMyTimeEntries();
   const [taskDialogOpen, setTaskDialogOpen] = useState(false);
+  const [editingTask, setEditingTask] = useState<TaskWithRelations | null>(null);
   const [isStopping, setIsStopping] = useState(false);
   const [drawerTaskId, setDrawerTaskId] = useState<string | null>(null);
   const [workstreamsFocusOpen, setWorkstreamsFocusOpen] = useState(false);
@@ -141,6 +143,11 @@ export function EmployeeDashboard({ user }: { user: User }) {
                   close();
                   setDrawerTaskId(id);
                 }}
+                onEdit={(task) => {
+                  close();
+                  setEditingTask(task);
+                }}
+                onDeleted={refresh}
               />
             ),
           }}
@@ -163,6 +170,11 @@ export function EmployeeDashboard({ user }: { user: User }) {
                   close();
                   setDrawerTaskId(id);
                 }}
+                onEdit={(task) => {
+                  close();
+                  setEditingTask(task);
+                }}
+                onDeleted={refresh}
               />
             ),
           }}
@@ -186,6 +198,11 @@ export function EmployeeDashboard({ user }: { user: User }) {
                   close();
                   setDrawerTaskId(id);
                 }}
+                onEdit={(task) => {
+                  close();
+                  setEditingTask(task);
+                }}
+                onDeleted={refresh}
               />
             ),
           }}
@@ -405,6 +422,11 @@ export function EmployeeDashboard({ user }: { user: User }) {
             setTaskStatusFocusOpen(false);
             setDrawerTaskId(id);
           }}
+          onEdit={(task) => {
+            setTaskStatusFocusOpen(false);
+            setEditingTask(task);
+          }}
+          onDeleted={refresh}
         />
       </DashboardWidgetFocusDialog>
 
@@ -498,6 +520,15 @@ export function EmployeeDashboard({ user }: { user: User }) {
       <RecentNotificationsCard />
 
       <TaskFormDialog open={taskDialogOpen} onOpenChange={setTaskDialogOpen} mode="create" onSaved={refresh} />
+      {editingTask && (
+        <TaskFormDialog
+          open={Boolean(editingTask)}
+          onOpenChange={(open) => !open && setEditingTask(null)}
+          mode="edit"
+          task={editingTask}
+          onSaved={refresh}
+        />
+      )}
       <TaskDrawer
         taskId={drawerTaskId}
         onOpenChange={(open) => !open && setDrawerTaskId(null)}

@@ -13,9 +13,12 @@ interface PlannerDayViewProps {
   onOpen: (taskId: string) => void;
   runningTaskId: string | null;
   showAssignee: boolean;
+  /** Task Action correction — both passed together or neither. */
+  onEdit?: (task: TaskWithRelations) => void;
+  onDeleted?: (taskId: string) => void;
 }
 
-export function PlannerDayView({ selectedDate, onSelectedDateChange, tasks, onOpen, runningTaskId, showAssignee }: PlannerDayViewProps) {
+export function PlannerDayView({ selectedDate, onSelectedDateChange, tasks, onOpen, runningTaskId, showAssignee, onEdit, onDeleted }: PlannerDayViewProps) {
   const date = parseDateOnly(selectedDate);
   const dayTasks = tasks.filter((t) => t.dueDate === selectedDate);
 
@@ -51,6 +54,8 @@ export function PlannerDayView({ selectedDate, onSelectedDateChange, tasks, onOp
               onOpen={onOpen}
               isRunning={task.id === runningTaskId}
               showAssignee={showAssignee}
+              onEdit={onEdit}
+              onDeleted={onDeleted}
             />
           ))
         )}

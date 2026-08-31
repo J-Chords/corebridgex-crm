@@ -101,6 +101,14 @@ export function dateKeyFromTimestamp(isoTimestamp: string): string {
   return formatDateOnly(new Date(isoTimestamp));
 }
 
+/** The LOCAL calendar month (`YYYY-MM`) a timestamp falls on — the month-grouping counterpart of
+ * `dateKeyFromTimestamp`, for surfaces that group by month (e.g. Project Completed Work) rather than
+ * by day. Never `timestamp.slice(0, 7)` — same UTC-vs-local reasoning as `dateKeyFromTimestamp`. */
+export function monthKeyFromTimestamp(isoTimestamp: string): string {
+  const d = new Date(isoTimestamp);
+  return `${d.getFullYear()}-${PAD2(d.getMonth() + 1)}`;
+}
+
 /**
  * The local calendar day `dateKey` (`YYYY-MM-DD`), expressed as a half-open UTC instant range
  * (`startUtc <= timestamp < endUtc`) suitable for a Postgres `timestamptz` query — local midnight

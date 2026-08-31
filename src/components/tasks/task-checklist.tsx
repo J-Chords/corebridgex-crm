@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Plus, X } from "lucide-react";
 import { useAuth } from "@/lib/auth/auth-context";
 import { tasksProvider } from "@/lib/data/providers";
+import { useCompanyLookups } from "@/lib/data/hooks/use-companies";
 import { canAddTaskChecklistItem, canEditTask, canProgressTask } from "@/lib/data/permissions";
 import type { TaskInput, TaskChecklistItemInput } from "@/lib/data/providers/tasks-provider";
 import type { TaskWithRelations } from "@/lib/data/providers/tasks-provider";
@@ -57,11 +58,17 @@ export function TaskChecklist({ task, onChanged }: TaskChecklistProps) {
   const [isAdding, setIsAdding] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
 
+  // Phase 13 security hardening — see task-actions-menu.tsx's own comment on why `assignableStaff`
+  // is the right "allUsers" convenience list for this UI-only gate. Hook called unconditionally
+  // (before the `!user` early return) to satisfy the Rules of Hooks.
+  const { assignableStaff } = useCompanyLookups();
+
   if (!user) return null;
   const items = task.checklistItems;
-  const canProgress = canProgressTask(user, { assigneeIds: task.assignees.map((a) => a.id) });
-  const canAdd = canAddTaskChecklistItem(user, { ...task, assigneeIds: task.assignees.map((a) => a.id) });
-  const canEdit = canEditTask(user, task);
+  const assigneeIds = task.assignees.map((a) => a.id);
+  const canProgress = canProgressTask(user, { assigneeIds, companyId: task.companyId }, assignableStaff);
+  const canAdd = canAddTaskChecklistItem(user, { ...task, assigneeIds }, assignableStaff);
+  const canEdit = canEditTask(user, { ...task, assigneeIds }, assignableStaff);
 
   async function handleToggle(itemId: string, isDone: boolean) {
     if (!user) return;

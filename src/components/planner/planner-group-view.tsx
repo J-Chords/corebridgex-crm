@@ -22,6 +22,9 @@ interface PlannerGroupViewProps {
   runningTaskId: string | null;
   showAssignee: boolean;
   allowAssigneeGrouping: boolean;
+  /** Task Action correction — both passed together or neither. */
+  onEdit?: (task: TaskWithRelations) => void;
+  onDeleted?: (taskId: string) => void;
 }
 
 export function PlannerGroupView({
@@ -32,6 +35,8 @@ export function PlannerGroupView({
   runningTaskId,
   showAssignee,
   allowAssigneeGrouping,
+  onEdit,
+  onDeleted,
 }: PlannerGroupViewProps) {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const options = allowAssigneeGrouping ? PLANNER_GROUP_OPTIONS : PLANNER_GROUP_OPTIONS.filter((o) => o !== "assignee");
@@ -80,6 +85,8 @@ export function PlannerGroupView({
                         onOpen={onOpen}
                         isRunning={task.id === runningTaskId}
                         showAssignee={showAssignee}
+                        onEdit={onEdit}
+                        onDeleted={onDeleted}
                       />
                     ))}
                   </div>

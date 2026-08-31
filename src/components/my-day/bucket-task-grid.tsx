@@ -4,6 +4,7 @@ import { useState, type ReactNode } from "react";
 import type { User, TaskStatus } from "@/lib/data/types";
 import type { TaskWithRelations } from "@/lib/data/providers/tasks-provider";
 import { tasksProvider } from "@/lib/data/providers";
+import { useCompanyLookups } from "@/lib/data/hooks/use-companies";
 import { canProgressTask } from "@/lib/data/permissions";
 import { TaskGridCard } from "@/components/tasks/task-grid-card";
 import { STAGGER_ITEM_CLASS, staggerDelay } from "@/lib/stagger";
@@ -24,6 +25,9 @@ interface BucketTaskGridProps {
    * but rendered *here*, not branched on by the caller — see the component doc comment for why.
    */
   emptyMessage: ReactNode;
+  /** Task Action correction — both passed together or neither, forwarded to every `TaskGridCard`. */
+  onEdit?: (task: TaskWithRelations) => void;
+  onDeleted?: (taskId: string) => void;
 }
 
 /**
@@ -42,8 +46,11 @@ interface BucketTaskGridProps {
  * still-exiting snapshot is folded in — means the grid stays mounted for the whole exit animation
  * regardless of whether it was the bucket's last remaining task.
  */
-export function BucketTaskGrid({ user, tasks, selectedStatus, focusTaskId, onChanged, emptyMessage }: BucketTaskGridProps) {
+export function BucketTaskGrid({ user, tasks, selectedStatus, focusTaskId, onChanged, emptyMessage, onEdit, onDeleted }: BucketTaskGridProps) {
   const [exiting, setExiting] = useState<Record<string, TaskWithRelations>>({});
+  // Phase 13 security hardening — see task-actions-menu.tsx's own comment on why `assignableStaff`
+  // is the right "allUsers" convenience list for this UI-only gate.
+  const { assignableStaff } = useCompanyLookups();
 
   async function handleMarkDone(task: TaskWithRelations) {
     setExiting((prev) => ({ ...prev, [task.id]: task }));
@@ -82,10 +89,13 @@ export function BucketTaskGrid({ user, tasks, selectedStatus, focusTaskId, onCha
             isExiting={isExiting}
             onExitEnd={() => handleExitEnd(task.id)}
             onMarkDone={
-              !isExiting && canProgressTask(user, { assigneeIds: task.assignees.map((a) => a.id) })
+              !isExiting &&
+              canProgressTask(user, { assigneeIds: task.assignees.map((a) => a.id), companyId: task.companyId }, assignableStaff)
                 ? () => handleMarkDone(task)
                 : undefined
             }
+            onEdit={onEdit}
+            onDeleted={onDeleted}
           />
         );
       })}

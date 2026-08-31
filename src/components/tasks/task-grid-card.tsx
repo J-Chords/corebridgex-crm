@@ -14,6 +14,7 @@ import { ChecklistProgress } from "@/components/ui/checklist-progress";
 import { Checkbox } from "@/components/ui/checkbox";
 import { isTaskOverdue, formatDueDateShort } from "@/lib/data/task-display";
 import { cn } from "@/lib/utils";
+import { TaskActionsMenu } from "@/components/tasks/task-actions-menu";
 
 /** How long the checkbox's own "gentle check" pop plays before the card starts easing out — long enough to register as a distinct beat, short enough to still feel quick. */
 const MARK_DONE_POP_MS = 220;
@@ -39,6 +40,12 @@ interface TaskGridCardProps {
    * Day) omits this and keeps its Link-navigate-to-full-page default per the locked navigation
    * rule. */
   onOpen?: (taskId: string) => void;
+  /** Task Action correction — both passed together or neither: renders a `TaskActionsMenu` kebab as
+   * an absolutely-positioned overlay in the top-right corner. A sibling of the card's own `<button>`/
+   * `<Link>` (never nested inside it — a `<button>` can't legally nest in either), so it needs its
+   * own click/pointerdown propagation stop, already handled by `TaskActionsMenu` itself. */
+  onEdit?: (task: TaskWithRelations) => void;
+  onDeleted?: (taskId: string) => void;
 }
 
 /**
@@ -48,7 +55,7 @@ interface TaskGridCardProps {
  * due date since a grouped-by-anything grid can't rely on column/status position to imply status
  * the way a Kanban column does.
  */
-export function TaskGridCard({ task, className, style, isFocusTask, onMarkDone, isExiting, onExitEnd, isRunning, onOpen }: TaskGridCardProps) {
+export function TaskGridCard({ task, className, style, isFocusTask, onMarkDone, isExiting, onExitEnd, isRunning, onOpen, onEdit, onDeleted }: TaskGridCardProps) {
   const [justChecked, setJustChecked] = useState(false);
   const isOverdue = isTaskOverdue(task);
 
@@ -96,7 +103,7 @@ export function TaskGridCard({ task, className, style, isFocusTask, onMarkDone, 
         )}
         <TaskStatusAvatar title={task.title} status={task.status} size="sm" className="mt-0.5" />
         <span className="sr-only">{TASK_STATUS_SELECT_ITEMS[task.status]}</span>
-        <span className="min-w-0 flex-1 text-sm font-medium break-words group-hover/card:underline">
+        <span className="min-w-0 flex-1 text-sm font-medium break-words group-hover/card:underline" title={task.title}>
           {task.title}
           {task.parentTaskId && (
             <Badge variant="neutral" className="ml-1.5 align-middle text-[10px] no-underline">
@@ -107,7 +114,14 @@ export function TaskGridCard({ task, className, style, isFocusTask, onMarkDone, 
         <TaskPriorityBadge priority={task.priority} />
       </div>
 
-      <p className="truncate text-xs text-muted-foreground">
+      <p
+        className="truncate text-xs text-muted-foreground"
+        title={
+          task.parentTask
+            ? `Subtask of ${task.parentTask.title}`
+            : `${task.company.name} · ${task.workstream.name}${task.activity ? ` · ${task.activity.name}` : ""}`
+        }
+      >
         {task.parentTask ? (
           `Subtask of ${task.parentTask.title}`
         ) : (
@@ -144,30 +158,40 @@ export function TaskGridCard({ task, className, style, isFocusTask, onMarkDone, 
     </>
   );
 
-  if (onOpen) {
-    return (
-      <button
-        type="button"
-        onClick={() => onOpen(task.id)}
-        style={cardStyle}
-        aria-disabled={isExiting}
-        onAnimationEnd={isExiting ? onExitEnd : undefined}
-        className={cardClassName}
-      >
-        {content}
-      </button>
-    );
-  }
+  const showActions = Boolean(onEdit && onDeleted);
 
   return (
-    <Link
-      href={`/dashboard/tasks/${task.id}`}
-      style={cardStyle}
-      aria-disabled={isExiting}
-      onAnimationEnd={isExiting ? onExitEnd : undefined}
-      className={cardClassName}
-    >
-      {content}
-    </Link>
+    <div className="relative">
+      {onOpen ? (
+        <button
+          type="button"
+          onClick={() => onOpen(task.id)}
+          style={cardStyle}
+          aria-disabled={isExiting}
+          onAnimationEnd={isExiting ? onExitEnd : undefined}
+          className={cardClassName}
+        >
+          {content}
+        </button>
+      ) : (
+        <Link
+          href={`/dashboard/tasks/${task.id}`}
+          style={cardStyle}
+          aria-disabled={isExiting}
+          onAnimationEnd={isExiting ? onExitEnd : undefined}
+          className={cardClassName}
+        >
+          {content}
+        </Link>
+      )}
+      {showActions && (
+        <TaskActionsMenu
+          task={task}
+          onEdit={() => onEdit?.(task)}
+          onDeleted={() => onDeleted?.(task.id)}
+          className="absolute top-2 right-2 bg-card/90 backdrop-blur-sm hover:bg-accent"
+        />
+      )}
+    </div>
   );
 }

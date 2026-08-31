@@ -160,17 +160,60 @@ export function canManageTasks(user: User): boolean {
   return isSupervisor(user) || isSuperadmin(user);
 }
 
+/**
+ * Phase 13 final security hardening — Supervisor's own branch was previously role-global
+ * (`canManageTasks(viewer)`, true for ANY Supervisor over ANY Task in the org), mirroring the same
+ * bug found and fixed hosted-side in `can_edit_task` (see `20260828110000_supervisor_task_mutation_
+ * scope_hardening.sql`). Narrowed to `isSupervisor(viewer) && canAccessTaskDirectly(viewer, task,
+ * allUsers)` — the same mutation-safe (never hierarchy-inclusive `canAccessTask`) helper already
+ * used by `canCreateHandoff`/the Notes/Time-Entry/Task providers. Superadmin and the Employee
+ * self-added-creator branch are completely unchanged. `allUsers` only needs to contain the actual
+ * candidates `canAccessTaskDirectly`'s own Supervisor branch needs to resolve (this Task's own
+ * assignees' `supervisorId`, and — for the rare unassigned-Task case — the viewer's full team's
+ * `assignedCompanyIds`) — passing `assignableStaffFor(viewer, ...)`'s own already-team-scoped
+ * result works correctly here (filtering an already-team-scoped list by `managesUser` again is a
+ * no-op), which is exactly what every UI call site already has on hand via `useCompanyLookups()`.
+ */
 export function canEditTask(
   viewer: User,
-  task: { createdById: string; selfAdded: boolean }
+  task: { createdById: string; selfAdded: boolean; assigneeIds: string[]; companyId: string },
+  allUsers: User[]
 ): boolean {
-  if (canManageTasks(viewer)) return true;
+  if (isSuperadmin(viewer)) return true;
+  if (isSupervisor(viewer)) return canAccessTaskDirectly(viewer, task, allUsers);
   return task.selfAdded && task.createdById === viewer.id;
 }
 
-/** Progressing a task (status changes, ticking checklist items) — any assignee, or a manager. */
-export function canProgressTask(viewer: User, task: { assigneeIds: string[] }): boolean {
-  return canManageTasks(viewer) || task.assigneeIds.includes(viewer.id);
+/**
+ * Deleting a task — deliberately the exact same boundary as `canEditTask`, not a separate
+ * role-based guess: an Employee may delete a Task only under the identical condition they may
+ * already edit every field of it (self-added, still theirs). This is a UI-only convenience
+ * gate — `delete_task`'s own SECURITY DEFINER RPC re-derives and enforces this itself via
+ * `can_edit_task`, and additionally blocks deletion outright whenever the Task has logged time,
+ * Subtasks, or attached Notes (never exposed as a permission the client can bypass by hiding UI).
+ */
+export function canDeleteTask(
+  viewer: User,
+  task: { createdById: string; selfAdded: boolean; assigneeIds: string[]; companyId: string },
+  allUsers: User[]
+): boolean {
+  return canEditTask(viewer, task, allUsers);
+}
+
+/**
+ * Progressing a task (status changes, ticking checklist items): any assignee, or a manager whose
+ * own scope legitimately reaches this Task. Same Phase 13 hardening as `canEditTask` — Supervisor's
+ * branch is narrowed from role-global to `canAccessTaskDirectly`; Superadmin and the plain-assignee
+ * branch (which already covers Employee) are unchanged.
+ */
+export function canProgressTask(
+  viewer: User,
+  task: { assigneeIds: string[]; companyId: string },
+  allUsers: User[]
+): boolean {
+  if (isSuperadmin(viewer)) return true;
+  if (isSupervisor(viewer)) return canAccessTaskDirectly(viewer, task, allUsers);
+  return task.assigneeIds.includes(viewer.id);
 }
 
 /**
@@ -193,9 +236,10 @@ export function canProgressTask(viewer: User, task: { assigneeIds: string[] }): 
  */
 export function canAddTaskChecklistItem(
   viewer: User,
-  task: { assigneeIds: string[]; createdById: string; selfAdded: boolean }
+  task: { assigneeIds: string[]; createdById: string; selfAdded: boolean; companyId: string },
+  allUsers: User[]
 ): boolean {
-  return canEditTask(viewer, task) || task.assigneeIds.includes(viewer.id);
+  return canEditTask(viewer, task, allUsers) || task.assigneeIds.includes(viewer.id);
 }
 
 /**

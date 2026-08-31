@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth/auth-context";
 import { useCompanyLookups } from "@/lib/data/hooks/use-companies";
 import { useActivityCatalog } from "@/lib/data/hooks/use-activity-catalog";
@@ -14,14 +14,20 @@ import { FREQUENCY_LABEL } from "@/lib/data/recurrence";
 import { deriveWorkstreamName, splitWorkstreamQualifier } from "@/lib/data/workstream-name";
 import { WorkstreamStatusPicker } from "@/components/workstreams/workstream-status-picker";
 import { TaskAssigneeChips } from "@/components/tasks/task-assignee-chips";
-import { Sheet, SheetContent, SheetFooter, SheetTitle, SheetDescription } from "@/components/ui/sheet";
+import {
+  FormDrawer,
+  FormDrawerHeader,
+  FormDrawerBody,
+  FormDrawerSection,
+  FormDrawerPropertyGrid,
+  FormDrawerField,
+  FormDrawerFooter,
+} from "@/components/ui/form-drawer";
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Badge } from "@/components/ui/badge";
 import { Alert, AlertTitle } from "@/components/ui/alert";
 import { AlertCircle } from "lucide-react";
 import {
@@ -31,8 +37,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { cn } from "@/lib/utils";
-
 const NO_SERVICE_LINE = "none";
 
 interface WorkstreamFormDialogProps {
@@ -67,16 +71,6 @@ function emptyForm(defaultLeadId: string) {
     recurrenceAnchorDate: "",
     recurrenceCustomIntervalDays: "",
   };
-}
-
-/** Mono micro-label + bordered group — the exact "grouped sections, not one long stack" shape the Task form panel established. */
-function FormSection({ label, children, className }: { label: string; children: ReactNode; className?: string }) {
-  return (
-    <div className={cn("flex flex-col gap-4 rounded-xl border bg-card p-4", className)}>
-      <span className="font-mono text-xs tracking-wider text-muted-foreground uppercase">{label}</span>
-      {children}
-    </div>
-  );
 }
 
 export function WorkstreamFormDialog({
@@ -245,20 +239,20 @@ export function WorkstreamFormDialog({
   }
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="flex w-full flex-col gap-0 p-0 sm:max-w-2xl">
-        <form onSubmit={handleSubmit} className="flex h-full min-h-0 flex-col">
-          <div className="min-h-0 flex-1 overflow-y-auto">
-            <div className="flex flex-col gap-2 px-6 pt-6 pb-2">
-              <SheetTitle className="font-mono text-xs tracking-wider text-muted-foreground uppercase">
-                {mode === "create" ? "New service" : "Edit service"}
-              </SheetTitle>
-              <SheetDescription className="sr-only">
-                {mode === "create"
-                  ? `Add a new service for ${company.name}.`
-                  : `Editing "${workstream?.name ?? "this service"}".`}
-              </SheetDescription>
-
+    <FormDrawer
+      open={open}
+      onOpenChange={onOpenChange}
+      srTitle={mode === "create" ? `New service for ${company.name}` : `Editing "${workstream?.name ?? "this service"}"`}
+    >
+      <form onSubmit={handleSubmit} className="flex h-full min-h-0 flex-col">
+        <FormDrawerHeader
+          title={mode === "create" ? "New Service" : "Edit Service"}
+          context={company.name}
+          secondaryContext={`Partner brand: ${company.brand.name}`}
+        />
+        <FormDrawerBody>
+          <FormDrawerSection label="Service">
+            <div className="flex flex-col gap-1.5">
               <Select
                 items={{
                   ...(allowNoService ? { [NO_SERVICE_LINE]: "Select a service…" } : {}),
@@ -271,7 +265,7 @@ export function WorkstreamFormDialog({
                   autoFocus
                   id="workstream-service-line"
                   aria-label="Service / Workstream"
-                  className="h-auto w-full justify-start gap-2 rounded-none border-0 bg-transparent p-0 font-heading text-2xl font-semibold tracking-tight shadow-none focus-visible:ring-0"
+                  className="h-auto w-full justify-start gap-2 rounded-none border-0 bg-transparent p-0 text-xl font-semibold tracking-tight shadow-none focus-visible:ring-0"
                 >
                   <SelectValue placeholder="Select a service…" />
                 </SelectTrigger>
@@ -287,237 +281,212 @@ export function WorkstreamFormDialog({
               {!serviceSatisfied && (
                 <p className="text-xs text-warning">Required — every client workstream represents one service.</p>
               )}
+            </div>
 
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="workstream-qualifier">Reference / qualifier (optional)</Label>
-                <Input
-                  id="workstream-qualifier"
-                  value={form.qualifier}
-                  onChange={(e) => setForm((p) => ({ ...p, qualifier: e.target.value }))}
-                  placeholder="e.g. UK Payroll, Monthly Payroll, 2026"
-                />
-              </div>
-
-              <Textarea
-                value={form.description}
-                onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))}
-                placeholder="Add a description…"
-                rows={1}
-                className="min-h-0 resize-none rounded-none border-0 bg-transparent px-0 py-1 text-sm shadow-none focus-visible:ring-0"
+            <FormDrawerField label="Reference / qualifier (optional)" htmlFor="workstream-qualifier">
+              <Input
+                id="workstream-qualifier"
+                value={form.qualifier}
+                onChange={(e) => setForm((p) => ({ ...p, qualifier: e.target.value }))}
+                placeholder="e.g. UK Payroll, Monthly Payroll, 2026"
               />
-            </div>
+            </FormDrawerField>
 
-            <div className="flex flex-col gap-4 px-6 py-4">
-              <FormSection label="Client">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex flex-col gap-1.5">
-                    <span className="font-mono text-xs tracking-wide text-muted-foreground uppercase">Company</span>
-                    <p className="text-sm font-medium">{company.name}</p>
-                  </div>
-                  <div className="flex flex-col items-end gap-1.5">
-                    <span className="font-mono text-xs tracking-wide text-muted-foreground uppercase">
-                      Partner brand
-                    </span>
-                    <Badge variant="neutral">{company.brand.name}</Badge>
-                  </div>
-                </div>
-              </FormSection>
+            <Textarea
+              value={form.description}
+              onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))}
+              placeholder="Add a description…"
+              rows={1}
+              className="min-h-0 resize-none rounded-none border-0 bg-transparent px-0 py-1 text-sm shadow-none focus-visible:ring-0"
+            />
+          </FormDrawerSection>
 
-              <FormSection
-                label={selectedServiceLine ? `Available ${selectedServiceLine.name} Activities` : "Activities"}
-              >
-                {form.serviceLineId === NO_SERVICE_LINE ? (
-                  <p className="text-sm text-muted-foreground">Select a service to configure its activities.</p>
-                ) : activityDepartments.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No activities set up for this service yet.</p>
-                ) : (
-                  <>
-                    <p className="text-xs text-muted-foreground">
-                      Select the Activities this Project will use for this Service.
-                    </p>
-                    <div className="flex max-h-64 flex-col gap-3 overflow-y-auto pr-1">
-                      {activityDepartments.map((dept) => (
-                        <div key={dept.id} className="flex flex-col gap-1.5">
-                          {activityDepartments.length > 1 && (
-                            <span className="text-xs font-medium text-muted-foreground">{dept.name}</span>
-                          )}
-                          <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
-                            {dept.activities.map((activity) => (
-                              <label key={activity.id} className="flex items-center gap-2 text-sm">
-                                <Checkbox
-                                  checked={form.activityIds.includes(activity.id)}
-                                  onCheckedChange={(checked) => toggleActivity(activity.id, checked === true)}
-                                />
-                                {activity.name}
-                              </label>
-                            ))}
-                          </div>
-                        </div>
+          <FormDrawerSection label="Ownership">
+            {isEmployee(user) ? (
+              <FormDrawerField label="Lead">
+                <p className="text-sm text-muted-foreground">You — Services you create are always your own.</p>
+              </FormDrawerField>
+            ) : (
+              <>
+                <FormDrawerField label="Lead" htmlFor="workstream-lead">
+                  <Select
+                    items={Object.fromEntries(assignableStaff.map((s) => [s.id, s.fullName]))}
+                    value={form.leadUserId}
+                    onValueChange={(v) => setLead(v ?? "")}
+                  >
+                    <SelectTrigger id="workstream-lead" className="w-full">
+                      <SelectValue placeholder="Select lead" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {assignableStaff.map((staff) => (
+                        <SelectItem key={staff.id} value={staff.id}>
+                          {staff.fullName}
+                        </SelectItem>
                       ))}
-                    </div>
-                    {!activitiesSatisfied && (
-                      <p className="text-xs text-warning">Select at least one activity to continue.</p>
-                    )}
-                  </>
-                )}
-              </FormSection>
+                    </SelectContent>
+                  </Select>
+                </FormDrawerField>
 
-              <FormSection label="Details">
-                <div className="flex flex-col gap-1.5">
-                  <Label>Status</Label>
-                  <WorkstreamStatusPicker value={form.status} onChange={(status) => setForm((p) => ({ ...p, status }))} />
-                </div>
+                <FormDrawerField label="Team">
+                  <TaskAssigneeChips staff={assignableStaff} selectedIds={form.teamUserIds} onToggle={toggleTeamMember} />
+                </FormDrawerField>
+              </>
+            )}
+          </FormDrawerSection>
 
-                {isEmployee(user) ? (
-                  <div className="flex flex-col gap-1.5">
-                    <Label>Lead</Label>
-                    <p className="text-sm text-muted-foreground">You — Services you create are always your own.</p>
-                  </div>
-                ) : (
-                  <>
-                    <div className="flex flex-col gap-1.5">
-                      <Label htmlFor="workstream-lead">Lead</Label>
-                      <Select
-                        items={Object.fromEntries(assignableStaff.map((s) => [s.id, s.fullName]))}
-                        value={form.leadUserId}
-                        onValueChange={(v) => setLead(v ?? "")}
-                      >
-                        <SelectTrigger id="workstream-lead" className="w-full">
-                          <SelectValue placeholder="Select lead" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {assignableStaff.map((staff) => (
-                            <SelectItem key={staff.id} value={staff.id}>
-                              {staff.fullName}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
+          <FormDrawerSection label="Schedule">
+            <FormDrawerPropertyGrid>
+              <FormDrawerField label="Status">
+                <WorkstreamStatusPicker value={form.status} onChange={(status) => setForm((p) => ({ ...p, status }))} />
+              </FormDrawerField>
+              <div />
+              <FormDrawerField label="Start date" htmlFor="workstream-start-date">
+                <Input
+                  id="workstream-start-date"
+                  type="date"
+                  value={form.startDate}
+                  onChange={(e) => setForm((p) => ({ ...p, startDate: e.target.value }))}
+                />
+              </FormDrawerField>
+              <FormDrawerField label="Service end date" htmlFor="workstream-end-date">
+                <Input
+                  id="workstream-end-date"
+                  type="date"
+                  value={form.endDate}
+                  onChange={(e) => setForm((p) => ({ ...p, endDate: e.target.value }))}
+                />
+              </FormDrawerField>
+            </FormDrawerPropertyGrid>
+            <p className="text-xs text-muted-foreground">
+              Start/end are both optional — an ongoing service doesn&apos;t need a fixed end date.
+            </p>
 
-                    <div className="flex flex-col gap-1.5">
-                      <Label>Team</Label>
-                      <TaskAssigneeChips staff={assignableStaff} selectedIds={form.teamUserIds} onToggle={toggleTeamMember} />
-                    </div>
-                  </>
-                )}
+            <label className="flex items-center justify-between gap-4 rounded-lg border bg-muted/20 p-3">
+              <div className="flex flex-col gap-0.5">
+                <span className="text-sm font-medium">This service recurs</span>
+                <span className="text-xs text-muted-foreground">
+                  Set a cadence so &quot;Generate next occurrence&quot; knows when the next period is due.
+                </span>
+              </div>
+              <Switch
+                checked={form.recurring}
+                onCheckedChange={(checked) =>
+                  setForm((p) => ({
+                    ...p,
+                    recurring: checked,
+                    recurrenceAnchorDate: p.recurrenceAnchorDate || p.startDate,
+                  }))
+                }
+              />
+            </label>
 
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  <div className="flex flex-col gap-1.5">
-                    <Label htmlFor="workstream-start-date">Start date</Label>
-                    <Input
-                      id="workstream-start-date"
-                      type="date"
-                      value={form.startDate}
-                      onChange={(e) => setForm((p) => ({ ...p, startDate: e.target.value }))}
-                    />
-                  </div>
-                  <div className="flex flex-col gap-1.5">
-                    <Label htmlFor="workstream-end-date">Service end date</Label>
-                    <Input
-                      id="workstream-end-date"
-                      type="date"
-                      value={form.endDate}
-                      onChange={(e) => setForm((p) => ({ ...p, endDate: e.target.value }))}
-                    />
-                  </div>
-                  <p className="col-span-1 text-xs text-muted-foreground sm:col-span-2">
-                    Both optional — an ongoing service doesn&apos;t need a fixed end date.
-                  </p>
-                </div>
-              </FormSection>
-
-              <FormSection label="Recurrence (optional)">
-                <label className="flex items-center justify-between gap-4">
-                  <div className="flex flex-col gap-0.5">
-                    <span className="text-sm font-medium">This service recurs</span>
-                    <span className="text-xs text-muted-foreground">
-                      Set a cadence so &quot;Generate next occurrence&quot; knows when the next period is due.
-                    </span>
-                  </div>
-                  <Switch
-                    checked={form.recurring}
-                    onCheckedChange={(checked) =>
-                      setForm((p) => ({
-                        ...p,
-                        recurring: checked,
-                        recurrenceAnchorDate: p.recurrenceAnchorDate || p.startDate,
-                      }))
+            {/* Progressive disclosure via the Switch itself, not a separate "More options" toggle —
+                recurrence is either on or off, so its own on/off control IS the disclosure trigger. */}
+            {form.recurring && (
+              <FormDrawerPropertyGrid>
+                <FormDrawerField label="Frequency" htmlFor="workstream-recurrence-frequency">
+                  <Select
+                    items={FREQUENCY_LABEL}
+                    value={form.recurrenceFrequency}
+                    onValueChange={(v) =>
+                      setForm((p) => ({ ...p, recurrenceFrequency: (v ?? "monthly") as RecurrenceFrequency }))
                     }
+                  >
+                    <SelectTrigger id="workstream-recurrence-frequency" className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Object.entries(FREQUENCY_LABEL).map(([value, label]) => (
+                        <SelectItem key={value} value={value}>
+                          {label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </FormDrawerField>
+                <FormDrawerField label="Anchor date" htmlFor="workstream-recurrence-anchor">
+                  <Input
+                    id="workstream-recurrence-anchor"
+                    type="date"
+                    value={form.recurrenceAnchorDate}
+                    onChange={(e) => setForm((p) => ({ ...p, recurrenceAnchorDate: e.target.value }))}
                   />
-                </label>
-
-                {form.recurring && (
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                    <div className="flex flex-col gap-1.5">
-                      <Label htmlFor="workstream-recurrence-frequency">Frequency</Label>
-                      <Select
-                        items={FREQUENCY_LABEL}
-                        value={form.recurrenceFrequency}
-                        onValueChange={(v) =>
-                          setForm((p) => ({ ...p, recurrenceFrequency: (v ?? "monthly") as RecurrenceFrequency }))
-                        }
-                      >
-                        <SelectTrigger id="workstream-recurrence-frequency" className="w-full">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {Object.entries(FREQUENCY_LABEL).map(([value, label]) => (
-                            <SelectItem key={value} value={value}>
-                              {label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="flex flex-col gap-1.5">
-                      <Label htmlFor="workstream-recurrence-anchor">Anchor date</Label>
+                </FormDrawerField>
+                {form.recurrenceFrequency === "custom" && (
+                  <div className="col-span-2">
+                    <FormDrawerField label="Repeat every (days)" htmlFor="workstream-recurrence-custom-days">
                       <Input
-                        id="workstream-recurrence-anchor"
-                        type="date"
-                        value={form.recurrenceAnchorDate}
-                        onChange={(e) => setForm((p) => ({ ...p, recurrenceAnchorDate: e.target.value }))}
+                        id="workstream-recurrence-custom-days"
+                        type="number"
+                        min="1"
+                        value={form.recurrenceCustomIntervalDays}
+                        onChange={(e) => setForm((p) => ({ ...p, recurrenceCustomIntervalDays: e.target.value }))}
                       />
-                    </div>
-                    {form.recurrenceFrequency === "custom" && (
-                      <div className="col-span-1 flex flex-col gap-1.5 sm:col-span-2">
-                        <Label htmlFor="workstream-recurrence-custom-days">Repeat every (days)</Label>
-                        <Input
-                          id="workstream-recurrence-custom-days"
-                          type="number"
-                          min="1"
-                          value={form.recurrenceCustomIntervalDays}
-                          onChange={(e) => setForm((p) => ({ ...p, recurrenceCustomIntervalDays: e.target.value }))}
-                        />
-                      </div>
-                    )}
-                    <p className="col-span-1 text-xs text-muted-foreground sm:col-span-2">
-                      The anchor is the fixed reference date the cadence steps from — it stays put even as new
-                      occurrences get generated, so the schedule never drifts.
-                    </p>
+                    </FormDrawerField>
                   </div>
                 )}
-              </FormSection>
+                <p className="col-span-2 text-xs text-muted-foreground">
+                  The anchor is the fixed reference date the cadence steps from — it stays put even as new
+                  occurrences get generated, so the schedule never drifts.
+                </p>
+              </FormDrawerPropertyGrid>
+            )}
+          </FormDrawerSection>
 
-              {error && (
-                <Alert variant="destructive">
-                  <AlertCircle aria-hidden="true" />
-                  <AlertTitle>{error}</AlertTitle>
-                </Alert>
-              )}
-            </div>
-          </div>
+          <FormDrawerSection label={selectedServiceLine ? `${selectedServiceLine.name} Activities` : "Activities"}>
+            {form.serviceLineId === NO_SERVICE_LINE ? (
+              <p className="text-sm text-muted-foreground">Select a service to configure its activities.</p>
+            ) : activityDepartments.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No activities set up for this service yet.</p>
+            ) : (
+              <>
+                <p className="text-xs text-muted-foreground">
+                  Select the Activities this Project will use for this Service.
+                </p>
+                <div className="flex max-h-64 flex-col gap-3 overflow-y-auto pr-1">
+                  {activityDepartments.map((dept) => (
+                    <div key={dept.id} className="flex flex-col gap-1.5">
+                      {activityDepartments.length > 1 && (
+                        <span className="text-xs font-medium text-muted-foreground">{dept.name}</span>
+                      )}
+                      <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+                        {dept.activities.map((activity) => (
+                          <label key={activity.id} className="flex items-center gap-2 text-sm">
+                            <Checkbox
+                              checked={form.activityIds.includes(activity.id)}
+                              onCheckedChange={(checked) => toggleActivity(activity.id, checked === true)}
+                            />
+                            {activity.name}
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                {!activitiesSatisfied && (
+                  <p className="text-xs text-warning">Select at least one activity to continue.</p>
+                )}
+              </>
+            )}
+          </FormDrawerSection>
 
-          <SheetFooter className="flex-row justify-end gap-2 border-t bg-card">
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={!canSubmit}>
-              {isSubmitting ? "Saving…" : mode === "create" ? "Create service" : "Save changes"}
-            </Button>
-          </SheetFooter>
-        </form>
-      </SheetContent>
-    </Sheet>
+          {error && (
+            <Alert variant="destructive">
+              <AlertCircle aria-hidden="true" />
+              <AlertTitle>{error}</AlertTitle>
+            </Alert>
+          )}
+        </FormDrawerBody>
+
+        <FormDrawerFooter>
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <Button type="submit" disabled={!canSubmit}>
+            {isSubmitting ? "Saving…" : mode === "create" ? "Create service" : "Save changes"}
+          </Button>
+        </FormDrawerFooter>
+      </form>
+    </FormDrawer>
   );
 }

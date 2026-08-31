@@ -21,6 +21,10 @@ interface WorkstreamActivityTasksProps {
   runningTaskId: string | null;
   /** Opens the (shared, page-level) Task form pre-filled with this workstream — and this activity, if given. */
   onAddTask: (activityId?: string) => void;
+  /** Task Action correction — both passed together or neither, forwarded through every section down
+   * to the shared `TaskListRow`. */
+  onEdit?: (task: TaskWithRelations) => void;
+  onDeleted?: (taskId: string) => void;
 }
 
 /** Row-level rendering shared with every other List-view surface (Tasks Home, the Project
@@ -33,15 +37,19 @@ function ActivityTaskRows({
   allTasks,
   runningTaskId,
   showAssignee,
+  onEdit,
+  onDeleted,
 }: {
   tasks: TaskWithRelations[];
   allTasks: TaskWithRelations[];
   runningTaskId: string | null;
   showAssignee: boolean;
+  onEdit?: (task: TaskWithRelations) => void;
+  onDeleted?: (taskId: string) => void;
 }) {
   return (
     <div className="flex flex-col">
-      <TaskListHeader context="service" showAssignee={showAssignee} />
+      <TaskListHeader context="service" showAssignee={showAssignee} showActions={Boolean(onEdit && onDeleted)} />
       <div className="flex flex-col divide-y">
         {tasks.map((task, i) => (
           <TaskListRow
@@ -52,6 +60,8 @@ function ActivityTaskRows({
             subtaskCount={task.parentTaskId ? undefined : subtaskSummary(task.id, allTasks)}
             context="service"
             showAssignee={showAssignee}
+            onEdit={onEdit}
+            onDeleted={onDeleted}
           />
         ))}
       </div>
@@ -93,6 +103,8 @@ function ActivityCard({
   runningTaskId,
   onAddTask,
   showAssignee,
+  onEdit,
+  onDeleted,
 }: {
   activity: Activity;
   tasks: TaskWithRelations[];
@@ -101,6 +113,8 @@ function ActivityCard({
   runningTaskId: string | null;
   onAddTask: (activityId?: string) => void;
   showAssignee: boolean;
+  onEdit?: (task: TaskWithRelations) => void;
+  onDeleted?: (taskId: string) => void;
 }) {
   const isEmpty = !isLoading && tasks.length === 0;
   return (
@@ -125,7 +139,14 @@ function ActivityCard({
       {isEmpty ? (
         <p className="text-sm text-muted-foreground">No tasks yet under this activity.</p>
       ) : (
-        <ActivityTaskRows tasks={tasks} allTasks={allTasks} runningTaskId={runningTaskId} showAssignee={showAssignee} />
+        <ActivityTaskRows
+          tasks={tasks}
+          allTasks={allTasks}
+          runningTaskId={runningTaskId}
+          showAssignee={showAssignee}
+          onEdit={onEdit}
+          onDeleted={onDeleted}
+        />
       )}
     </div>
   );
@@ -139,6 +160,8 @@ function Section({
   runningTaskId,
   onAddTask,
   showAssignee,
+  onEdit,
+  onDeleted,
 }: {
   label: string | null;
   groups: ActivityGroup[];
@@ -147,6 +170,8 @@ function Section({
   runningTaskId: string | null;
   onAddTask: (activityId?: string) => void;
   showAssignee: boolean;
+  onEdit?: (task: TaskWithRelations) => void;
+  onDeleted?: (taskId: string) => void;
 }) {
   if (groups.length === 0) return null;
   return (
@@ -163,6 +188,8 @@ function Section({
             runningTaskId={runningTaskId}
             onAddTask={onAddTask}
             showAssignee={showAssignee}
+            onEdit={onEdit}
+            onDeleted={onDeleted}
           />
         ))}
       </div>
@@ -184,7 +211,7 @@ function Section({
  * Inside every activity, tasks are ordered by actionable status first (in-progress/blocked/waiting,
  * then todo, then done last).
  */
-export function WorkstreamActivityTasks({ departments, catalogLoading, tasks, isLoading, runningTaskId, onAddTask }: WorkstreamActivityTasksProps) {
+export function WorkstreamActivityTasks({ departments, catalogLoading, tasks, isLoading, runningTaskId, onAddTask, onEdit, onDeleted }: WorkstreamActivityTasksProps) {
   const { user } = useAuth();
   const activities = departments.flatMap((d) => d.activities);
   // Phase 13B final polish (Part B) — same audited rule as every other Task List surface:
@@ -199,7 +226,14 @@ export function WorkstreamActivityTasks({ departments, catalogLoading, tasks, is
         {tasks.length === 0 ? (
           !isLoading && <p className="text-sm text-muted-foreground">No tasks on this workstream yet.</p>
         ) : (
-          <ActivityTaskRows tasks={tasks} allTasks={tasks} runningTaskId={runningTaskId} showAssignee={showAssignee} />
+          <ActivityTaskRows
+            tasks={tasks}
+            allTasks={tasks}
+            runningTaskId={runningTaskId}
+            showAssignee={showAssignee}
+            onEdit={onEdit}
+            onDeleted={onDeleted}
+          />
         )}
       </div>
     );
@@ -263,6 +297,8 @@ export function WorkstreamActivityTasks({ departments, catalogLoading, tasks, is
           runningTaskId={runningTaskId}
           onAddTask={onAddTask}
           showAssignee={showAssignee}
+          onEdit={onEdit}
+          onDeleted={onDeleted}
         />
       ))}
 
@@ -277,7 +313,14 @@ export function WorkstreamActivityTasks({ departments, catalogLoading, tasks, is
           {untaggedTasks.length === 0 ? (
             !isLoading && <p className="text-sm text-muted-foreground">No untagged tasks.</p>
           ) : (
-            <ActivityTaskRows tasks={untaggedTasks} allTasks={tasks} runningTaskId={runningTaskId} showAssignee={showAssignee} />
+            <ActivityTaskRows
+              tasks={untaggedTasks}
+              allTasks={tasks}
+              runningTaskId={runningTaskId}
+              showAssignee={showAssignee}
+              onEdit={onEdit}
+              onDeleted={onDeleted}
+            />
           )}
         </div>
       )}

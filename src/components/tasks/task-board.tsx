@@ -17,6 +17,7 @@ import type { User } from "@/lib/data/types";
 import type { TaskStatus } from "@/lib/data/types";
 import type { TaskWithRelations } from "@/lib/data/providers/tasks-provider";
 import { canProgressTask } from "@/lib/data/permissions";
+import { useCompanyLookups } from "@/lib/data/hooks/use-companies";
 import { tasksProvider } from "@/lib/data/providers";
 import { subtaskSummary } from "@/lib/data/task-display";
 import { TaskCard } from "@/components/tasks/task-card";
@@ -40,9 +41,11 @@ interface BoardCardProps {
   isRunning: boolean;
   subtaskCount?: { total: number; done: number };
   onNavigate: () => void;
+  onEdit: (task: TaskWithRelations) => void;
+  onDeleted: (taskId: string) => void;
 }
 
-function BoardCard({ task, canDrag, isRunning, subtaskCount, onNavigate }: BoardCardProps) {
+function BoardCard({ task, canDrag, isRunning, subtaskCount, onNavigate, onEdit, onDeleted }: BoardCardProps) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: task.id,
     disabled: !canDrag,
@@ -70,7 +73,7 @@ function BoardCard({ task, canDrag, isRunning, subtaskCount, onNavigate }: Board
         isDragging && "opacity-50"
       )}
     >
-      <TaskCard task={task} isRunning={isRunning} subtaskCount={subtaskCount} />
+      <TaskCard task={task} isRunning={isRunning} subtaskCount={subtaskCount} onEdit={onEdit} onDeleted={onDeleted} />
     </div>
   );
 }
@@ -81,15 +84,18 @@ interface BoardColumnProps {
   tasks: TaskWithRelations[];
   allTasks: TaskWithRelations[];
   user: User;
+  assignableStaff: User[];
   runningTaskId: string | null;
   canAdd: boolean;
   onNavigate: (taskId: string) => void;
   onAddTask: (status: TaskStatus) => void;
+  onEdit: (task: TaskWithRelations) => void;
+  onDeleted: (taskId: string) => void;
 }
 
 /** Phase 12B — compact column header (dot + title + count) matching Reference 2's density, and a
  * bottom "+ Add task" affordance instead of the old boxed column chrome. */
-function BoardColumn({ status, label, tasks, allTasks, user, runningTaskId, canAdd, onNavigate, onAddTask }: BoardColumnProps) {
+function BoardColumn({ status, label, tasks, allTasks, user, assignableStaff, runningTaskId, canAdd, onNavigate, onAddTask, onEdit, onDeleted }: BoardColumnProps) {
   const { setNodeRef, isOver } = useDroppable({ id: status });
   const color = STATUS_COLOR_VAR[status];
 
@@ -125,10 +131,12 @@ function BoardColumn({ status, label, tasks, allTasks, user, runningTaskId, canA
             <BoardCard
               key={task.id}
               task={task}
-              canDrag={canProgressTask(user, { assigneeIds: task.assignees.map((a) => a.id) })}
+              canDrag={canProgressTask(user, { assigneeIds: task.assignees.map((a) => a.id), companyId: task.companyId }, assignableStaff)}
               isRunning={task.id === runningTaskId}
               subtaskCount={task.parentTaskId ? undefined : subtaskSummary(task.id, allTasks)}
               onNavigate={() => onNavigate(task.id)}
+              onEdit={onEdit}
+              onDeleted={onDeleted}
             />
           ))
         )}
@@ -158,12 +166,16 @@ interface TaskBoardProps {
 /** Kanban view of the same task list a screen already fetched — columns are fixed by status, cards drag between them to change status (permission-gated per card via canProgressTask). */
 export function TaskBoard({ user, tasks, onChanged, runningTaskId = null, onOpenTask }: TaskBoardProps) {
   const router = useRouter();
+  // Phase 13 security hardening — see task-actions-menu.tsx's own comment on why `assignableStaff`
+  // is the right "allUsers" convenience list for this UI-only gate.
+  const { assignableStaff } = useCompanyLookups();
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
   // Section 22 — dragging a parent Task with open Subtasks into Done needs the same confirmation the
   // drawer's status Select shows. Derived from the already-fetched `tasks` list (no extra fetch —
   // Section 49's N+1 avoidance), never stored.
   const [pendingDoneTaskId, setPendingDoneTaskId] = useState<string | null>(null);
   const [addStatus, setAddStatus] = useState<TaskStatus | null>(null);
+  const [editingTask, setEditingTask] = useState<TaskWithRelations | null>(null);
 
   const grouped = new Map<TaskStatus, TaskWithRelations[]>(COLUMNS.map((c) => [c.key, []]));
   for (const task of tasks) grouped.get(task.status)?.push(task);
@@ -180,7 +192,7 @@ export function TaskBoard({ user, tasks, onChanged, runningTaskId = null, onOpen
     const newStatus = over.id as TaskStatus;
     const task = tasks.find((t) => t.id === taskId);
     if (!task || task.status === newStatus) return;
-    if (!canProgressTask(user, { assigneeIds: task.assignees.map((a) => a.id) })) return;
+    if (!canProgressTask(user, { assigneeIds: task.assignees.map((a) => a.id), companyId: task.companyId }, assignableStaff)) return;
     if (newStatus === "done" && !task.parentTaskId && tasks.some((t) => t.parentTaskId === taskId && t.status !== "done")) {
       setPendingDoneTaskId(taskId);
       return;
@@ -204,10 +216,13 @@ export function TaskBoard({ user, tasks, onChanged, runningTaskId = null, onOpen
             tasks={grouped.get(key) ?? []}
             allTasks={tasks}
             user={user}
+            assignableStaff={assignableStaff}
             runningTaskId={runningTaskId}
             canAdd
             onNavigate={navigate}
             onAddTask={setAddStatus}
+            onEdit={setEditingTask}
+            onDeleted={onChanged}
           />
         ))}
       </div>
@@ -233,6 +248,15 @@ export function TaskBoard({ user, tasks, onChanged, runningTaskId = null, onOpen
           onChanged();
         }}
       />
+      {editingTask && (
+        <TaskFormDialog
+          open={Boolean(editingTask)}
+          onOpenChange={(open) => !open && setEditingTask(null)}
+          mode="edit"
+          task={editingTask}
+          onSaved={onChanged}
+        />
+      )}
     </DndContext>
   );
 }

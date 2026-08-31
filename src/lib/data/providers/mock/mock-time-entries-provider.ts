@@ -139,6 +139,14 @@ export const mockTimeEntriesProvider: TimeEntriesProvider = {
       .map(toTimeEntryWithUserAndTask);
   },
 
+  async listTimeEntriesForTasks(viewer, taskIds) {
+    const idSet = new Set(taskIds);
+    return db.timeEntries
+      .filter((te) => idSet.has(te.taskId) && canViewTimeForUser(viewer, te.userId, db.users))
+      .sort((a, b) => (a.startTime < b.startTime ? 1 : -1))
+      .map(toTimeEntryWithUserAndTask);
+  },
+
   async getRunningTimer(viewer) {
     const running = db.timeEntries.find((te) => te.userId === viewer.id && te.durationMinutes === null);
     return running ? toTimeEntryWithTask(running) : null;

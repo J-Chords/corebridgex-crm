@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { SectionBreak } from "@/components/ui/section-break";
 import { TaskFormDialog } from "@/components/tasks/task-form-dialog";
+import type { TaskWithRelations } from "@/lib/data/providers/tasks-provider";
 import { TaskFilterBar } from "@/components/tasks/task-filter-bar";
 import { SavedViewsBar } from "@/components/tasks/saved-views-bar";
 import { TASK_STATUS_SELECT_ITEMS } from "@/components/tasks/task-status-badge";
@@ -46,6 +47,7 @@ interface EmployeeMyDayProps {
 export function EmployeeMyDay({ user }: EmployeeMyDayProps) {
   const { tasks, isLoading: tasksLoading, refresh: refreshTasks } = useMyTasks();
   const [taskDialogOpen, setTaskDialogOpen] = useState(false);
+  const [editingTask, setEditingTask] = useState<TaskWithRelations | null>(null);
   const [selectedStatus, setSelectedStatus] = useState<TaskStatus>("in-progress");
   const { filters, patch } = useTaskFilters();
   const companyOptions = useCompanyOptionsFromTasks(tasks);
@@ -131,6 +133,8 @@ export function EmployeeMyDay({ user }: EmployeeMyDayProps) {
                 ? EMPTY_BUCKET_COPY[selectedStatus]
                 : `No ${TASK_STATUS_SELECT_ITEMS[selectedStatus].toLowerCase()} tasks match your filters.`
             }
+            onEdit={setEditingTask}
+            onDeleted={refreshTasks}
           />
         </>
       )}
@@ -151,6 +155,15 @@ export function EmployeeMyDay({ user }: EmployeeMyDayProps) {
       <RecentNotificationsCard />
 
       <TaskFormDialog open={taskDialogOpen} onOpenChange={setTaskDialogOpen} mode="create" onSaved={refreshTasks} />
+      {editingTask && (
+        <TaskFormDialog
+          open={Boolean(editingTask)}
+          onOpenChange={(open) => !open && setEditingTask(null)}
+          mode="edit"
+          task={editingTask}
+          onSaved={refreshTasks}
+        />
+      )}
     </div>
   );
 }
