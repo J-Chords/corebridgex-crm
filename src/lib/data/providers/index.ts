@@ -33,6 +33,8 @@ import { mockVisitEntriesProvider } from "./mock/mock-visit-entries-provider";
 import { supabaseVisitEntriesProvider } from "./supabase/supabase-visit-entries-provider";
 import { mockClientReportSchedulesProvider } from "./mock/mock-client-report-schedules-provider";
 import { supabaseClientReportSchedulesProvider } from "./supabase/supabase-client-report-schedules-provider";
+import { mockDocumentsProvider } from "./mock/mock-documents-provider";
+import { supabaseDocumentsProvider } from "./supabase/supabase-documents-provider";
 
 /**
  * Single switch for the whole app's backend, driven by `NEXT_PUBLIC_DATA_PROVIDER` (see
@@ -79,3 +81,7 @@ export const projectsProvider = usesSupabaseData ? supabaseProjectsProvider : mo
 export const visitEntriesProvider = usesSupabaseData ? supabaseVisitEntriesProvider : mockVisitEntriesProvider;
 // Phase 9F — recurring Client Report schedules.
 export const clientReportSchedulesProvider = usesSupabaseData ? supabaseClientReportSchedulesProvider : mockClientReportSchedulesProvider;
+// Phase 14B — Documents & Client File Management foundation. No UI yet (14C/14D); real only under
+// full "supabase" mode, matching every other brand-new-feature provider's own precedent (Projects,
+// Visit Entries, Client Report Schedules).
+export const documentsProvider = usesSupabaseData ? supabaseDocumentsProvider : mockDocumentsProvider;

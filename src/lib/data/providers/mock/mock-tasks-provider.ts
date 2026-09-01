@@ -477,6 +477,12 @@ export const mockTasksProvider: TasksProvider = {
     if (db.notes.some((n) => n.taskId === id)) {
       throw new Error("This task has notes attached and can't be deleted.");
     }
+    // Phase 14B (Part B9) — blocks on ANY Document row referencing this Task, INCLUDING
+    // soft-deleted/Trash ones (no automatic purge exists yet, so a Trash row is still physically
+    // present and restorable — mirrors the hosted delete_task's own Correction 5 exactly).
+    if (db.documents.some((d) => d.taskId === id)) {
+      throw new Error("This task has attached files and can't be deleted. Remove or permanently purge its attachments first.");
+    }
     db.tasks = db.tasks.filter((t) => t.id !== id);
     db.taskAssignees = db.taskAssignees.filter((ta) => ta.taskId !== id);
     db.checklistItems = db.checklistItems.filter((c) => c.taskId !== id);

@@ -23,7 +23,7 @@ import { seedAccomplishmentsReports } from "./seed-accomplishments-reports";
 import { seedSavedViews } from "./seed-saved-views";
 import { seedProjects } from "./seed-projects";
 import { seedProjectMembers } from "./seed-project-members";
-import type { ClientReport, ClientReportSchedule, DailyUpdate, TimeEntryCorrection, VisitEntry } from "../../types";
+import type { ClientReport, ClientReportSchedule, DailyUpdate, Document, TimeEntryCorrection, VisitEntry } from "../../types";
 
 /**
  * Single in-memory mock "database", shared by every mock provider so a
@@ -72,4 +72,7 @@ export const db = {
   // Phase 9F — no seed rows; created at runtime by a reporting reviewer/superadmin from the
   // Schedules tab.
   clientReportSchedules: [] as ClientReportSchedule[],
+  // Phase 14B — no seed rows; no UI exists yet to create them through. Mock security probes create
+  // their own throwaway rows directly via mockDocumentsProvider.
+  documents: [] as Document[],
 };

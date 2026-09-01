@@ -1935,9 +1935,173 @@ state is being checkpointed as the new safe baseline. Final acceptance covers, t
 - Zero pending Supabase migrations — `20260827090000`, `20260828090000`, `20260828100000`,
   `20260828110000` all local == remote, `db push --dry-run` reports the remote database up to date.
 
-Phase 13 as a whole: **COMPLETE / ACCEPTED / CHECKPOINTING.** Phase 14 has not been started or
-scoped. Phase 13 final checkpoint: see current Git HEAD (checkpointed via
-`checkpoint: complete phase 13 project history and intelligence`).
+Phase 13 as a whole: **COMPLETE / ACCEPTED / CHECKPOINTED.** Phase 13 final checkpoint: see current
+Git HEAD as of the `checkpoint: complete phase 13 project history and intelligence` commit
+(`aa73d324f80f62afdc4c0267e31cc26f2019004d`).
+
+## Phase 14 — Documents & Client File Management
+
+**Locked (Phase 14A)**: Phase 14 is officially **Documents & Client File Management**. IA:
+`Project → Documents` (a first-class Project tab) and `Full Task → Attachments` — one underlying
+`documents` model for both (a Task Attachment is a Document with `taskId` set, never a second
+table). Full audit/design in `docs/phase-14a-documents-architecture-audit.md`
+(**Status: COMPLETE / ACCEPTED / ARCHITECTURE LOCKED**, checkpointed via
+`checkpoint: lock phase 14 documents architecture`, commit `5ced5be8484d16bb978261b39dcb94356fd9f542`).
+Locked v1 defaults: one private Storage bucket, 25MB max/fixed extension-MIME allowlist, 300-second
+signed URLs only, soft delete/Trash with no automatic purge, `project_id` mandatory and immutable,
+`task_id` optional and immutable after creation with server-enforced Task/Project consistency, no
+"change context," Client Reports fully separate, no folders/versioning/OCR/AI/external-storage
+integrations/client portal/external sharing.
+
+**Implemented and ACCEPTED (Phase 14B — Storage + Metadata Security Foundation).** Full write-up in
+`docs/phase-14b-documents-security-foundation-spec.md`.
+**Status: FINAL SECURITY ACCEPTED / COMPLETE.** No UI exists yet (14C/14D) — this checkpoint is the
+security/storage foundation only.
+- Re-audited Project-level authorization before writing any SQL: the existing
+  `public.can_access_project` helper (`20260815090000_projects.sql`, never redefined since) already
+  matches current Project workspace visibility exactly — reused as-is, deliberately never
+  `can_access_company` (strictly broader, would leak visibility across sibling Projects in the same
+  Company).
+- One `documents` table — mandatory immutable `project_id`, optional immutable `task_id`,
+  `upload_state` (`pending`/`ready`), `deleted_at` (Trash). A trigger re-validates the Task/Project
+  relationship and rejects any attempt to change an immutable field, as defense-in-depth on top of
+  the reservation RPC's own server-side derivation.
+- Reserve → browser-upload → finalize lifecycle (`reserve_document_upload`/
+  `finalize_document_upload`/`cancel_document_upload`) — the browser never needs a service-role key;
+  a `pending` row is invisible to every normal read path until finalized.
+- `can_access_document`/`can_manage_document_row`/`can_edit_document` — Superadmin unconditional;
+  Supervisor via `can_access_task_directly`/`can_access_project`, never role-global; Employee only
+  their own upload, only while still legitimately scoped. A Task-linked Document can never be seen
+  through the Project-level list by someone without real access to that specific Task.
+  Recursion-traced clean DAG.
+- One private Storage bucket (`documents`), 25MB + MIME allowlist configured at the bucket level too;
+  `storage.objects` RLS delegates to the same `can_access_document` the metadata table uses (INSERT
+  only into a caller's own reserved path; no UPDATE policy; DELETE only a reservation-owner's own
+  still-pending object, or Superadmin).
+- Soft delete/restore only (`soft_delete_document`/`restore_document`) — never touches the Storage
+  object; no automatic purge exists (would need background-job infrastructure not yet built);
+  permanent purge deferred to a later Superadmin-only workflow.
+- `delete_task` (`20260828100000`, unedited) extended via a new forward-only migration
+  (`20260831100000_task_delete_documents_blocker.sql`) to also block on any Document referencing the
+  Task, **including Trash** (a soft-deleted attachment is still physically present/restorable) — every
+  other accepted `delete_task` property preserved byte-for-byte. Mirrored in
+  `mock-tasks-provider.ts` for parity.
+- New `documentsProvider` (mock + Supabase), gated on full `supabase` mode like every other
+  brand-new-feature provider. The old, dead, pre-Phase-8 `Document` type stub was replaced cleanly
+  with the real Phase 14 shape.
+- 23/23 rollback-safe mock security probes passed (Employee/Supervisor/Superadmin ×
+  Project-level/Task-linked × pending/ready/Trash states × cross-context-mismatch rejection ×
+  Task-delete blocking including Trash).
+- No live hosted Storage object was created (no UI/session exists yet to safely guarantee cleanup,
+  per the explicit "don't create it if you can't guarantee cleanup" rule) — verified instead via
+  read-only bucket listing (confirmed the `documents` bucket now exists, empty) and the migrations'
+  own successful hosted apply.
+- `npx tsc --noEmit` (0 errors), `npx eslint src` (0 errors, same pre-existing warnings), all four
+  provider builds clean. Both migrations applied to hosted Supabase — local == remote, zero pending.
+
+**Phase 14B hotfix — foundation contract + Storage auth.** Full write-up in
+`docs/phase-14b-documents-security-foundation-spec.md`'s own "Hotfix" section. Re-audited the actual
+hosted contract via read-only introspection before touching anything (neither already-hosted 14B
+migration was edited): the category/TypeScript contract was already correct (no mismatch existed);
+confirmed real defects were (1) `uploadDocument` could still fail a metadata write *after* a
+successful `finalize`, and (2) three RLS policies (`documents_objects_insert`,
+`documents_select_own_pending`, `documents_objects_delete_own_pending`) checked only "pending row
+owned by `auth.uid()`," never re-verifying the uploader still genuinely manages the underlying Task/
+Project. Fixed via a new forward-only migration
+(`supabase/migrations/20260901090000_documents_foundation_contract_hotfix.sql`): initial
+`display_name`/`description`/`category` now travel with `reserve_document_upload` itself (8-arg
+signature, the old 5-arg overload dropped after confirming zero dependents via `pg_depend`) so a
+successful finalize needs no follow-up metadata step; all three flagged policies now additionally
+compose `public.can_manage_document_row(...)` — the same helper used everywhere else. Category
+remains non-security organization metadata only, permanently null for Task Attachments (rejected
+explicitly, never silently discarded). 30/30 mock probes passed (the original 23 plus 15 new:
+category persistence/rejection/update, stale-access re-checks, hijack-prevention). Live hosted
+definitions read back **after** apply (not assumed) — confirmed the new signature and all three
+policies' `can_manage_document_row` clauses are genuinely live. `npx tsc --noEmit`/`npx eslint src`
+clean, all four provider builds clean.
+
+**Phase 14B hotfix — direct Task authority + reservation ownership.** Full write-up in
+`docs/phase-14b-documents-security-foundation-spec.md`'s own second "Hotfix" section. Locked
+distinction (mirrors the already-accepted Phase 10/13 Task-authority architecture): **Task-linked
+Document VIEW/DOWNLOAD stays on `can_access_task`** (broad READ/hierarchy visibility — a
+hierarchy-visible Task's attachments remain readable exactly like its other content already is);
+**Task-linked Document UPLOAD/edit/soft-delete/restore/pending-management now requires
+`can_access_task_directly`** (direct operational authority — historical one-hop Subtask hierarchy
+visibility is READ-only and must never become mutation authority). Neither `can_access_task` nor
+`can_access_task_directly` itself was touched — reconfirmed byte-identical via read-back before and
+after. Three confirmed defects fixed via a new forward-only migration
+(`supabase/migrations/20260901100000_documents_direct_task_authority_hotfix.sql`): (A)
+`reserve_document_upload`'s Task-linked branch used `can_access_task` (read) instead of
+`can_access_task_directly` for an upload, which is itself a mutation; (B)
+`can_manage_document_row`'s Employee-own-upload branch used `can_access_task` for its Task-linked
+condition, letting an uploader who later retained only hierarchy-only read visibility keep
+rename/delete/restore rights; (C) `finalize_document_upload`/`cancel_document_upload` and three
+pending-lifecycle RLS policies gated on the general `can_manage_document_row` (whose Supervisor
+branch could let a Supervisor finalize/cancel a subordinate's still-in-flight pending upload) — fixed
+with a new, narrower `can_manage_pending_document_row` helper (reservation owner while still
+directly authorized, or Superadmin — no Supervisor-of-uploader branch at all; a Supervisor's broader
+management authority begins only once `upload_state = 'ready'`). Mock parity: `canManageDocument`'s
+Employee branch corrected the same way; a genuine pre-existing gap in `mock-documents-provider.ts`'s
+`taskContext` (never computed one-hop hierarchy assignee ids at all) was also fixed so hierarchy-only
+readers correctly retain Document VIEW in mock mode too. 58/58 mock probes passed (the prior 30 plus
+8 new scenario groups covering hierarchy-read-only Employee/Supervisor, direct Employee/Supervisor
+unchanged, lost-direct-access-retains-read, pending-reservation ownership, view-regression, and
+Task-delete regression). Live hosted definitions and policies read back **after** apply, confirming
+the fix is genuinely live. `npx tsc --noEmit`/`npx eslint src` clean, all four provider builds clean.
+
+### Phase 14B — FINAL SECURITY ACCEPTED / COMPLETE
+
+**Phase 14B — Storage + Metadata Security Foundation is FINAL SECURITY ACCEPTED / COMPLETE.**
+Reviewed and accepted in full, covering all three implementation/hotfix passes above. Locked final
+state, checkpointed at this commit:
+
+- **Document model**: one `documents` table for both Project Documents and Task Attachments;
+  `project_id` mandatory and immutable; `task_id` optional and immutable after creation
+  (server-enforced Task/Project consistency, no "Change Context" action anywhere); category is
+  organization metadata only (never security context) — null for every Task-linked Document,
+  optional and allowlist-validated for a Project-level one.
+- **Storage**: exactly one private `documents` bucket; 25MB max; a locked extension/MIME allowlist;
+  immutable, server-generated object paths (`projects/{project_id}/{document_id}.{extension}`); no
+  public URLs; signed URLs minted only on demand, 300-second expiry; no service-role credential ever
+  reaches the browser.
+- **Upload lifecycle**: reserve → authenticated Storage upload → finalize. Initial metadata
+  (`display_name`/`description`/`category`) is written during reservation itself — no post-finalize
+  metadata step is ever required for a successful upload.
+- **Task-linked authorization — locked, intentional split**: READ (`can_access_task`, broad,
+  includes one-hop parent/child Subtask hierarchy visibility) vs. MUTATION/side-effect
+  (`can_access_task_directly`, zero hierarchy branches) — historical hierarchy visibility is
+  READ-only and can never become mutation authority. Neither Task helper itself was ever touched.
+- **Ready Document management**: Employee — own upload only, and only while still holding direct
+  Task/Project authority; Supervisor — legitimate direct/team Task scope or legitimate Project
+  scope, never organization-wide; Superadmin — unconditional.
+- **Pending reservations**: uploader (while still directly authorized) or Superadmin recovery only —
+  a Supervisor may never finalize/cancel a subordinate's in-flight reservation merely by supervising
+  them.
+- **Soft delete**: metadata Trash only, Storage object always retained, restore supported, no
+  automatic purge exists (deferred to a future narrow Superadmin-only workflow), and no code anywhere
+  claims DB+Storage deletion is a single transaction.
+- **Task delete**: any Document row attached to a Task blocks Task hard-delete, including Trash rows
+  — the existing `FOR UPDATE` lock, TimeEntry blocker, Note blocker, child-Task blocker, report
+  snapshot safety, and `can_edit_task` authorization boundary are all preserved unchanged.
+
+**Known deferred functional test (not a 14B security blocker):** Phase 14B's security architecture
+and every policy definition are accepted, but no real authenticated binary Storage round-trip has
+been manually proven through product UI yet, since no Documents UI exists (14C/14D). **The first
+Documents UI implementation (Phase 14C) must include a mandatory end-to-end hosted acceptance test**:
+authenticated user → reserve → upload a harmless allowed file → finalize → list → signed download →
+soft delete → confirm normal download is denied → restore → confirm download succeeds again — with
+complete cleanup of any test object created. This is a Phase 14C functional-acceptance requirement,
+not a Phase 14B re-opening.
+
+Final migration set (all four hosted, local == remote, zero pending):
+`20260831090000_documents_foundation.sql`, `20260831100000_task_delete_documents_blocker.sql`,
+`20260901090000_documents_foundation_contract_hotfix.sql`,
+`20260901100000_documents_direct_task_authority_hotfix.sql`.
+
+**Phase 14C is technically next but is explicitly ON HOLD.** Immediate next activity is **boss
+presentation feedback review and roadmap re-prioritization** — new product requirements may affect
+the Phase 14 roadmap before any further Documents UI work begins. Do not start Phase 14C until that
+review concludes.
 
 ## Next roadmap
 

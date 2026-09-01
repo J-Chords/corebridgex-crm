@@ -753,3 +753,64 @@ export function canAccessProject(
 export function canManageProjects(user: User): boolean {
   return isSuperadmin(user);
 }
+
+/**
+ * Phase 14B — Document visibility gate, mirroring the hosted `can_access_document` SQL function
+ * exactly (`can_access_task` for a Task-linked Document, never `can_access_task_directly`; the
+ * narrower `can_access_project` — never the broader `can_access_company` — for a Project-level one).
+ * `task`/`project` are the same pre-shaped context objects `canAccessTask`/`canAccessProject`
+ * themselves already require; the caller passes whichever one actually applies (a Document has
+ * exactly one of the two, per `taskId`). Callers must also confirm `uploadState === "ready"` and
+ * `deletedAt === null` themselves before calling this — this function is the Task/Project scope
+ * check only, matching the hosted helper's own composition (state is checked separately there too).
+ */
+export function canAccessDocumentRecord(
+  viewer: User,
+  doc: {
+    taskId: string | null;
+    task?: { assigneeIds: string[]; companyId: string };
+    project?: { companyId: string; ownerId: string; memberUserIds: string[] };
+  },
+  allUsers: User[]
+): boolean {
+  if (isSuperadmin(viewer)) return true;
+  if (doc.taskId) return doc.task != null && canAccessTask(viewer, doc.task, allUsers);
+  return doc.project != null && canAccessProject(viewer, doc.project, allUsers);
+}
+
+/**
+ * Phase 14B — Document manage gate (rename/soft-delete/restore on a READY Document), mirroring the
+ * hosted `can_manage_document_row` SQL function: Superadmin unconditional; Supervisor via
+ * `canAccessTaskDirectly`/`canAccessProject` (never role-global, matching this session's own
+ * Supervisor Task-mutation hardening); Employee only their own upload, and only while they still
+ * hold DIRECT Task authority (`canAccessTaskDirectly`, never the broader `canAccessTask`) — or
+ * `canAccessProject` for a Project-level Document.
+ *
+ * Direct-authority hotfix — the Employee branch previously reused `canAccessDocumentRecord` (which
+ * composes `canAccessTask`, the READ/hierarchy-visibility helper) for its Task-linked condition.
+ * That let an uploader who kept only hierarchy-only READ visibility after losing direct Task
+ * authority still retain rename/delete/restore rights — a real gap, since uploading/managing a
+ * Document is a mutation, not a read. Fixed to compose `canAccessTaskDirectly` directly, mirroring
+ * `canEditTask`'s own established mutation-gate shape exactly. `canAccessDocumentRecord`'s own
+ * `canAccessTask` composition is UNCHANGED and remains correct for VIEW — a hierarchy-visible Task's
+ * attachments stay readable exactly like its other content (Notes, Task detail) already is.
+ */
+export function canManageDocument(
+  viewer: User,
+  doc: {
+    uploadedById: string;
+    taskId: string | null;
+    task?: { assigneeIds: string[]; companyId: string };
+    project?: { companyId: string; ownerId: string; memberUserIds: string[] };
+  },
+  allUsers: User[]
+): boolean {
+  if (isSuperadmin(viewer)) return true;
+  if (isSupervisor(viewer)) {
+    if (doc.taskId) return doc.task != null && canAccessTaskDirectly(viewer, doc.task, allUsers);
+    return doc.project != null && canAccessProject(viewer, doc.project, allUsers);
+  }
+  if (doc.uploadedById !== viewer.id) return false;
+  if (doc.taskId) return doc.task != null && canAccessTaskDirectly(viewer, doc.task, allUsers);
+  return doc.project != null && canAccessProject(viewer, doc.project, allUsers);
+}
