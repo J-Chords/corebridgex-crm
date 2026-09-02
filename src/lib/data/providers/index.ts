@@ -35,6 +35,10 @@ import { mockClientReportSchedulesProvider } from "./mock/mock-client-report-sch
 import { supabaseClientReportSchedulesProvider } from "./supabase/supabase-client-report-schedules-provider";
 import { mockDocumentsProvider } from "./mock/mock-documents-provider";
 import { supabaseDocumentsProvider } from "./supabase/supabase-documents-provider";
+import { mockAdminUsersProvider } from "./mock/mock-admin-users-provider";
+import { supabaseAdminUsersProvider } from "./supabase/supabase-admin-users-provider";
+import { mockServiceMembershipProvider } from "./mock/mock-service-membership-provider";
+import { supabaseServiceMembershipProvider } from "./supabase/supabase-service-membership-provider";
 
 /**
  * Single switch for the whole app's backend, driven by `NEXT_PUBLIC_DATA_PROVIDER` (see
@@ -85,3 +89,9 @@ export const clientReportSchedulesProvider = usesSupabaseData ? supabaseClientRe
 // full "supabase" mode, matching every other brand-new-feature provider's own precedent (Projects,
 // Visit Entries, Client Report Schedules).
 export const documentsProvider = usesSupabaseData ? supabaseDocumentsProvider : mockDocumentsProvider;
+// Admin Foundation — new brand-new-feature providers, same precedent as Documents: real only under
+// full "supabase" mode.
+export const adminUsersProvider = usesSupabaseData ? supabaseAdminUsersProvider : mockAdminUsersProvider;
+export const serviceMembershipProvider = usesSupabaseData
+  ? supabaseServiceMembershipProvider
+  : mockServiceMembershipProvider;

@@ -6,6 +6,7 @@ import { useAuth } from "@/lib/auth/auth-context";
 import { useToastManager } from "@/components/ui/toast";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { FloatingLabelInput } from "@/components/ui/floating-label-input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Alert, AlertTitle } from "@/components/ui/alert";
@@ -66,7 +67,7 @@ export function ProfileSection({ user }: { user: User }) {
           <CardDescription>
             {canEdit
               ? "Your name and email, as they appear everywhere across the app."
-              : "Your name and email, as they appear everywhere across the app. Only a superadmin can make changes here."}
+              : "Your name and email, as they appear everywhere across the app. Only an admin can make changes here."}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -161,22 +162,22 @@ export function ProfileSection({ user }: { user: User }) {
         </CardHeader>
         <CardContent>
           <form onSubmit={handlePasswordSubmit} className="flex flex-col gap-4">
-            <FloatingLabelInput
+            <PasswordInput
               label="Current password"
-              type="password"
+              autoComplete="current-password"
               value={passwordForm.current}
               onChange={(e) => setPasswordForm((p) => ({ ...p, current: e.target.value }))}
             />
             <div className="grid gap-4 sm:grid-cols-2">
-              <FloatingLabelInput
+              <PasswordInput
                 label="New password"
-                type="password"
+                autoComplete="new-password"
                 value={passwordForm.next}
                 onChange={(e) => setPasswordForm((p) => ({ ...p, next: e.target.value }))}
               />
-              <FloatingLabelInput
+              <PasswordInput
                 label="Confirm new password"
-                type="password"
+                autoComplete="new-password"
                 value={passwordForm.confirm}
                 onChange={(e) => setPasswordForm((p) => ({ ...p, confirm: e.target.value }))}
               />

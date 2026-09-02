@@ -8,16 +8,23 @@ import { INTERNAL_COMPANY_ID } from "./constants";
  * this module stays the source of truth; RLS is a defense-in-depth backstop.
  */
 
+/**
+ * Admin Foundation Part 4 parity hardening — mirrors the hosted is_superadmin()/is_supervisor()/
+ * is_employee()'s own active check exactly (20260902090000_admin_foundation_active_status_
+ * hardening.sql). Deactivating a user must revoke their role-based privileges here too, not just
+ * hosted-side — mock and Supabase are two independent implementations of the same rule, kept in
+ * sync deliberately (same relationship as every other mock/RLS pair in this codebase).
+ */
 export function isSuperadmin(user: User): boolean {
-  return user.role === "superadmin";
+  return user.role === "superadmin" && user.active;
 }
 
 export function isSupervisor(user: User): boolean {
-  return user.role === "supervisor";
+  return user.role === "supervisor" && user.active;
 }
 
 export function isEmployee(user: User): boolean {
-  return user.role === "employee";
+  return user.role === "employee" && user.active;
 }
 
 /**
@@ -36,7 +43,7 @@ export function hasReportingReviewAccess(user: User): boolean {
 /** True if `manager` is `target`'s direct supervisor, or superadmin (sees everyone's team). */
 export function managesUser(manager: User, target: User): boolean {
   if (isSuperadmin(manager)) return true;
-  if (manager.id === target.id) return true;
+  if (manager.id === target.id) return manager.active;
   return isSupervisor(manager) && target.supervisorId === manager.id;
 }
 
@@ -78,6 +85,12 @@ export function canManageTeam(user: User): boolean {
 }
 
 export function canInviteUsers(user: User): boolean {
+  return isSuperadmin(user);
+}
+
+/** Admin Foundation — the Admin Users / Admin Services management surfaces are superadmin-only.
+ * UI-facing convenience gate; the real boundary is the underlying RPC/Server Action. */
+export function canManageAdminUsers(user: User): boolean {
   return isSuperadmin(user);
 }
 

@@ -5,6 +5,7 @@ import { useCompanies, useCompanyLookups } from "@/lib/data/hooks/use-companies"
 import { companiesProvider } from "@/lib/data/providers";
 import { useAuth } from "@/lib/auth/auth-context";
 import { hasReportingReviewAccess } from "@/lib/data/permissions";
+import { ROLE_LABELS } from "@/lib/data/role-labels";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
@@ -86,7 +87,7 @@ export function WorkspaceSection() {
             <div key={staff.id} className="flex items-center justify-between gap-3 rounded-md border px-3 py-2">
               <div className="flex flex-col">
                 <span className="text-sm font-medium">{staff.fullName}</span>
-                <span className="text-xs text-muted-foreground capitalize">{staff.role}</span>
+                <span className="text-xs text-muted-foreground">{ROLE_LABELS[staff.role]}</span>
               </div>
               {staff.role === "superadmin" ? (
                 <span className="text-xs text-muted-foreground">Always has reviewer access</span>

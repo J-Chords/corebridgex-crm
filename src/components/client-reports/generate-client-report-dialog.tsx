@@ -190,7 +190,7 @@ export function GenerateClientReportDialog({ open, onOpenChange }: GenerateClien
             </Select>
             {companies.length === 0 && (
               <p className="text-xs text-muted-foreground">
-                No accessible client yet — ask your supervisor if you need access to report against one.
+                No accessible client yet — ask your team lead if you need access to report against one.
               </p>
             )}
           </div>

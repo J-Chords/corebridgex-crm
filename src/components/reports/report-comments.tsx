@@ -51,7 +51,7 @@ export function ReportComments({ comments, canComment, onAddComment }: ReportCom
     <Card className="print:hidden">
       <CardHeader>
         <CardTitle className="text-base">Reviewer comments</CardTitle>
-        <p className="text-sm text-muted-foreground">Feedback from supervisors/superadmin reviewing this report.</p>
+        <p className="text-sm text-muted-foreground">Feedback from team leads/admin reviewing this report.</p>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
         {canComment && (

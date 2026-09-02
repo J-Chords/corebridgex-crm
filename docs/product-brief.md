@@ -12,7 +12,7 @@ It is **fully internal**:
 
 ## Roles (RBAC)
 
-Three roles, permission rules defined once in `src/lib/data/permissions.ts` and reused everywhere (screens, providers, and — later — Supabase RLS as a defense-in-depth backstop, not the source of truth):
+Three roles, permission rules defined once in `src/lib/data/permissions.ts` and reused everywhere (screens, providers, and — later — Supabase RLS as a defense-in-depth backstop, not the source of truth). **Admin Foundation (final accepted/complete)**: the technical DB role values below (`employee`/`supervisor`/`superadmin`) are unchanged, but every screen now shows them as **Employee / Team Lead / Admin** (`src/lib/data/role-labels.ts`) — never render `user.role` raw. Accounts are created by an Admin (name/email/initial password/role) via `/dashboard/admin/users`, with a forced password change on first login; there is still no self-signup.
 
 - **Employee** — sees only their own assigned tasks and their assigned companies; ticks tasks done; writes notes; tracks time; can self-add a task that goes live immediately (no approval) and notifies their supervisor + superadmin; generates their own reports.
 - **Supervisor** — everything an employee can do, plus creates/assigns tasks to their team, sees their team's tasks/companies/progress/profiles, and views/generates their team's reports. "Their team" = their direct reports (single supervisor per employee, via `supervisorId`).
@@ -24,6 +24,8 @@ Three roles, permission rules defined once in `src/lib/data/permissions.ts` and 
 - Superadmin sees all companies.
 
 Company **create/edit** is restricted to supervisor + superadmin — employees have read-only access to their assigned companies.
+
+**Global Service staffing (Admin Foundation)**: independent of the direct-report hierarchy above, a Team Lead (supervisor) or Employee may also be a member of a Service Line (`service_team_leads`/`service_employees`, Admin-only, managed at `/dashboard/admin/services` or per-user at `/dashboard/admin/users`) — global across every Project/Workstream that uses that Service, never per-Project. Locked terminology: **Services Led** = a Team Lead's global leadership responsibility for a Service; **Works In Services** = operational membership. The two are independent — a Team Lead may lead a Service without working in it, work in one without leading it, both, or neither; never conflate or auto-convert one into the other. **This is staffing/organizational data only for the current implementation** — it does not broaden Company/Project/Workstream/Task/Documents/Time/Reports access; the direct-report hierarchy above remains the real authorization path until a separately-approved Project/Service validation phase defines Service-based authority and migrates it additively. See `docs/admin-foundation-user-service-architecture.md`.
 
 **Task visibility gate** (locked in Phase 1b): employee sees tasks where they're an assignee (and the task's company is one they can access); supervisor sees tasks where *any* assignee is on their team; superadmin sees all. Only supervisor/superadmin can assign a task to someone else — employees can only self-assign. A special **Internal / Non-billable** pseudo-company exists for non-client work and is always selectable by every active staff member, without being added to anyone's `assignedCompanyIds`.
 

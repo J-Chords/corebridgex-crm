@@ -16,4 +16,11 @@ export interface AuthProvider {
   logout(): Promise<void>;
   /** Name/email only — password management needs a real credential store, which doesn't exist yet (see Settings' Profile section). */
   updateProfile(viewer: User, input: ProfileInput): Promise<User>;
+  /**
+   * Admin Foundation — sets the current user's own password. Real Supabase implementation calls
+   * `auth.updateUser({ password })` first; only after that succeeds does it clear
+   * `mustChangePassword` via `complete_required_password_change()` — never clear the flag first.
+   * Returns the updated User (mustChangePassword now false).
+   */
+  changePassword(viewer: User, newPassword: string): Promise<User>;
 }

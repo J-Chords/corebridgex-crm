@@ -46,6 +46,7 @@ function toUser(row: ProfileRow): User {
     // Not authoritative — this is a lightweight display stand-in for a handoff participant, never
     // checked against a permission. See profile-directory.ts's own note for the same convention.
     reportingReviewAccess: false,
+    mustChangePassword: false,
     createdAt: row.created_at,
   };
 }

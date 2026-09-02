@@ -1,11 +1,157 @@
 # Admin Foundation — User / Role / Service Responsibility Architecture
 
-**Status: ADMIN FOUNDATION ARCHITECTURE — ACCEPTED / LOCKED.** Accepted subject to the six
-corrections in "Stage 0 corrections" below, which supersede the equivalent sections of the original
-audit. Implementation (A — role terminology + onboarding, B — global Service staffing, C — Admin
-user lifecycle + management UI) follows from this locked architecture. Phase 14C remains ON HOLD
-(boss presentation feedback review is pending). Pre-correction checkpoint:
-`83eb3aae014ca5785caa7f36f05e554c861a771b`.
+**Status: ADMIN FOUNDATION — FINAL ACCEPTED / COMPLETE.** Manual UI acceptance has PASSED. A final
+polish pass (password reveal/hide, "Services Led"/"Works In Services" terminology, Admin Service
+staffing filters, Admin Users Services-column distinction) was applied and validated, then this
+checkpoint was committed and pushed — see the git log for the exact commit hash. This document (and
+`docs/current-project-state.md`) is the durable record; Phase 14C and the Project-level module both
+build forward from this checkpoint.
+
+**Acceptance-hardening pass (same day, before manual UI acceptance)**: an audit found the initial
+deactivation fix was necessary but not sufficient (see "Deactivation hardening" below for the full
+finding and fix); also fixed: `useAdminUsers`/`useServiceStaffing` no longer fire an Admin-only
+provider call before a Team Lead/Employee's direct-URL redirect completes (was producing an
+unhandled promise rejection); `MultiSelect` now uses `useId()` instead of a hardcoded DOM id
+(multiple instances on one page no longer collide); its own doc comment corrected to not claim
+"never renders all options" when an empty search does exactly that inside the popover.
+
+**Final polish pass (this checkpoint)**:
+- **Password reveal/hide**: one reusable `PasswordInput` (`src/components/ui/password-input.tsx`,
+  wrapping `FloatingLabelInput`'s new `endAdornment` slot) — an Eye/EyeOff toggle button
+  (`aria-label="Show password"`/`"Hide password"`, `type="button"`, never submits the form) applied
+  to every password field in the app: login, Admin Create User's initial password, Admin Reset
+  Password, `/change-password` (both fields), and Settings' own (still-inert) change-password form.
+  No package added.
+- **"Services Led" / "Works In Services"**: the Admin Create/Edit User dialog's two Service
+  MultiSelects were previously labeled "Leads Services"/"Services" — ambiguous. Relabeled to
+  "Services Led" (helper: "Services this Team Lead is responsible for across all Projects.") and
+  "Works In Services" (helper: "Services where this user participates as an operational team
+  member."). Employee shows only "Works In Services"; Admin shows neither — unchanged from before,
+  this was a labeling-only fix. The two underlying relationships (`service_team_leads`/
+  `service_employees`) were already independent and remain so — a Team Lead may lead a Service
+  without working in it, work in a Service without leading it, both, or neither.
+- **Admin Service staffing filters**: `/dashboard/admin/services` gained a Team Lead filter (all,
+  or one active Team Lead — selecting a person shows only Services they lead), an Employee/member
+  filter (same, against `service_employees`), and a Staffing filter (All / No Team Lead / No
+  Employees / Fully unstaffed), all combining with AND alongside the existing Service-name search.
+  Clear "No Services match your filters." empty state.
+- **Admin Users Services-column distinction**: the column previously unioned leadership and
+  membership into one flat comma list. Now shows up to two labeled lines ("Led: …" / "Works in: …"),
+  omitting whichever is empty, with the full list also available via the native `title` tooltip —
+  never presents the two relationships as though they were the same thing.
+
+### Implementation facts (this pass)
+
+- **Role terminology**: visible labels Admin/Team Lead/Employee (`src/lib/data/role-labels.ts`);
+  technical DB values `superadmin`/`supervisor`/`employee` unchanged everywhere. Every raw
+  role-display bypass found in the Turn-12 audit was routed through `ROLE_LABELS`.
+- **User creation**: Admin picks full name/email/initial password/role (+ optional Service
+  staffing); `auth.admin.createUser` runs server-side only (`src/app/dashboard/admin/actions.ts`),
+  with compensating cleanup (delete only the just-created Auth user) if any follow-up step fails.
+- **First-login password change**: `profiles.must_change_password` (default false; true for every
+  Admin-created account and re-armed on Admin password reset); `AuthProvider.changePassword`
+  updates the real password first, only then clears the flag; `/change-password` is a standalone
+  application-level gate wired into `DashboardLayout`, not into `src/proxy.ts`.
+- **Global Service staffing**: new `service_team_leads`/`service_employees` tables (composite PK,
+  no Project/Workstream id column, Admin-write-only RLS, DB-enforced role-eligibility triggers —
+  Team Lead restricted to active `supervisor`, Employee membership to active `employee`/`supervisor`,
+  never `superadmin`). Both optional at creation; multi-Service and multi-Team-Lead cardinality
+  supported; visible org-wide via `select using (true)`.
+- **Role-change cleanup**: enforced inside `admin_set_user_role` itself (DB-authoritative, not
+  UI-only) exactly per Stage 0 Corrections 3/4 — Team Lead→Employee deletes leadership only, never
+  auto-converts to membership; anything→Admin deletes both; Employee→Team Lead and Admin→anything
+  add nothing automatically (only explicit UI selections do).
+- **Admin protection**: the last active Admin can never be demoted or deactivated — enforced by a
+  `BEFORE UPDATE` trigger on `profiles` (`enforce_last_active_superadmin`), not just inside the
+  RPCs, so it also covers the existing self-edit RLS path.
+- **Deactivation hardening — two passes, both required**:
+  1. `20260902090000_admin_foundation_active_status_hardening.sql` — `is_superadmin()`/
+     `is_supervisor()`/`is_employee()`/`manages_user()` never checked `profiles.active`. Fixed
+     (mirrored in mock `permissions.ts`). **This alone was proven NOT sufficient** — an acceptance
+     audit found many policies/helpers/RPCs gate access via a raw `<column> = auth.uid()` ownership
+     check that never calls any of those four functions at all.
+  2. `20260902100000_admin_foundation_deactivation_completeness_hardening.sql` +
+     `20260902101000_..._service_staffing_visibility_hardening.sql` — a new canonical
+     `is_current_user_active()` helper, composed into every read/write authorization entry point
+     that had a raw self-check: `can_access_company`/`can_access_project`/`can_access_workstream`/
+     `can_access_task`/`can_edit_task`/`can_progress_task`/`can_log_time_on_task`/
+     `can_user_access_company`/`can_user_access_task`/`has_reporting_review_access`/
+     `can_view_accomplishments_report`/`can_view_client_report`, plus 14 leaf RPCs with their own
+     raw owner check (`acknowledge_task_handoff`, `pause_timer`/`stop_timer`, visit/daily-update/
+     accomplishments-report/client-report mutation RPCs), plus the RLS policies for
+     `time_entries`/`time_entry_corrections`/`visit_entries`/`notifications`/`saved_views`/
+     `service_team_leads`/`service_employees` (the last two initially left `using (true)`, then
+     corrected — Service staffing is personnel data, not a bare reference catalog). A grant-only
+     bug found during live testing (`service_role` had INSERT/UPDATE/DELETE but never SELECT on the
+     two staffing tables) was fixed in `20260902102000_..._grant_fix.sql`.
+
+  **Precise guarantee, proven live** (real disposable Auth session, deactivated mid-session, no
+  re-login): the SAME already-authenticated session immediately loses `is_current_user_active()`
+  (true→false), loses `can_access_company` for even the always-visible Internal company, loses
+  SELECT on its own previously-inserted `saved_views` row (confirmed still physically present via
+  a service-role read — an RLS block, not data loss), and cannot INSERT a new one. Reactivating the
+  same profile (same session, no new login) restores all three immediately. By composition, this
+  same guarantee now covers Project/Task/Workstream/Notes/Documents/Time/Reports/Team
+  Updates/Visits/Service-staffing-visibility — every one of those now bottoms out in either
+  `is_current_user_active()` or an already-hardened `manages_user()`/`is_superadmin()`/
+  `is_supervisor()`/`is_employee()`.
+
+  **Explicit, deliberate exception**: `profiles_select`'s own `id = auth.uid()` branch is
+  untouched — a deactivated user's client must still be able to read their own profile row (to
+  learn `active=false` and cleanly log out / be gated). `complete_required_password_change()` is
+  also untouched (self-only, mutates no operational data). `service_lines`/`brands`/`activities`/
+  `departments`/`templates`/`template_tasks`/`template_checklist_items` remain `using (true)` —
+  bare name/definition catalogs with no personnel-identifying data, the concrete architectural
+  reason they're exempt.
+
+  **Known, accepted limitation of the last-active-Admin test**: the `enforce_last_active_superadmin`
+  trigger counts *every* active superadmin in the table, including the real production Admin —
+  which means the negative case ("the actual last admin is refused") is structurally impossible to
+  reproduce live using only disposable identities, short of deactivating the real Admin (explicitly
+  never done). That negative case is proven instead at the source-code level (live trigger
+  read-back) and via the mock-mirrored probe suite's isolated in-memory scenario; the positive case
+  (a non-last admin can legitimately be changed) was proven live.
+- **Authorization non-broadening**: Service staffing is staffing/organizational data only for this
+  pass — it does not appear in `can_access_company`/`can_access_project`/`can_access_workstream`/
+  `can_access_task`/`can_access_task_directly`/`can_edit_task`/`can_progress_task`/Documents/Time/
+  Reports, all of which are unchanged. This is an explicit SAFE STAGING RULE, not a permanent
+  decision (see Section 15).
+- **Email**: read-only after creation this slice ("Email changes are not available yet" shown in
+  the Edit User dialog); no `auth.users`/`profiles` sync attempted.
+- **Providers**: new `AdminUsersProvider`/`ServiceMembershipProvider`, mock + Supabase, gated on
+  `usesSupabaseData` (same precedent as Documents/Projects/Visit Entries).
+- **UI**: `/dashboard/admin/users` and `/dashboard/admin/services`, both Admin-only (redirect on
+  direct URL access by Team Lead/Employee); a new reusable `MultiSelect` component
+  (`src/components/ui/multi-select.tsx`), intended for future Task-assignee reuse; no hard Delete
+  User action anywhere.
+- **Migrations** (all forward-only, applied hosted, live-read-back confirmed, zero pending):
+  `20260902090000_admin_foundation_active_status_hardening.sql`,
+  `20260902091000_admin_foundation_password_change.sql`,
+  `20260902092000_admin_foundation_service_staffing.sql`,
+  `20260902094000_admin_foundation_set_full_name.sql`,
+  `20260902100000_admin_foundation_deactivation_completeness_hardening.sql`,
+  `20260902101000_admin_foundation_service_staffing_visibility_hardening.sql`,
+  `20260902102000_admin_foundation_service_staffing_grant_fix.sql`.
+- **Probes**: 37 mock security/provider probes + 48 live hosted acceptance assertions (real
+  disposable Auth users, real sessions, real Auth Admin API calls), all passing. Both throwaway
+  scripts deleted after running; zero leftover disposable Auth users/profiles/staffing rows
+  confirmed via a live `auth.users` count query after cleanup.
+- **Live Auth Admin test**: `SUPABASE_SERVICE_ROLE_KEY` is present in `.env.local` — **executed**.
+  Covered live: Admin creates a Team Lead with zero Services (profile/role/`must_change_password`
+  all correct); one Team Lead assigned to two Services; one Service assigned two Team Leads; first
+  password-change flow (real `auth.updateUser` then `complete_required_password_change`, new
+  password verified to actually work); the core existing-session deactivation proof (see above);
+  reactivation restores access on the same session; Admin password reset re-arms the forced-change
+  flag and the new temporary password works; Team Lead→Employee→Admin role-cleanup transitions
+  (leadership rows removed with no auto-conversion, then explicit membership added, then removed
+  again on the Admin transition); a non-last Admin can legitimately be demoted. A real grant bug
+  (`service_role` missing SELECT on the two staffing tables) was found and fixed during this run.
+  Not reproduced live (see the deactivation section above): the actual "last remaining Admin is
+  refused" negative case, since the real production Admin always counts toward the trigger's live
+  total.
+- **Still deferred**: Workstream `lead_user_id`/"Created By" correction, the Project-Service
+  mutation entry point, and Service-based Team Lead authority all remain reserved for the upcoming
+  Service-level correction, per Stage 0 Corrections 1/2/5 — untouched in this pass.
 
 ## Stage 0 corrections (accepted amendments to the original audit)
 

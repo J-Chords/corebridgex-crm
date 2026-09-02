@@ -21,5 +21,11 @@ export interface User {
    * email/name.
    */
   reportingReviewAccess: boolean;
+  /**
+   * Admin Foundation — true for an Admin-created account until the user completes their own
+   * forced first password change (`complete_required_password_change()`), and re-armed by an
+   * Admin-driven password reset. Always false for pre-existing users. Never a fourth role.
+   */
+  mustChangePassword: boolean;
   createdAt: string;
 }

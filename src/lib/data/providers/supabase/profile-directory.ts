@@ -42,6 +42,7 @@ export async function resolveProfileDirectory(ids: string[]): Promise<User[]> {
     // (see the doc comment above), never to check a permission against. Real value is read fresh
     // off the current viewer's own session (supabase-auth-provider.ts) whenever it actually matters.
     reportingReviewAccess: false,
+    mustChangePassword: false,
     createdAt: "",
   }));
 }

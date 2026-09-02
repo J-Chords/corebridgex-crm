@@ -75,4 +75,9 @@ export const db = {
   // Phase 14B — no seed rows; no UI exists yet to create them through. Mock security probes create
   // their own throwaway rows directly via mockDocumentsProvider.
   documents: [] as Document[],
+  // Admin Foundation — global Service staffing. No seed rows: zero-Service Team Lead/Employee
+  // membership is a valid starting state for every existing seeded user, per Stage 1's own explicit
+  // "zero-Service creation is valid" rule.
+  serviceTeamLeads: [] as { serviceLineId: string; userId: string }[],
+  serviceEmployees: [] as { serviceLineId: string; userId: string }[],
 };

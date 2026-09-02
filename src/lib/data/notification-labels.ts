@@ -14,8 +14,8 @@ export const NOTIFICATION_TYPE_DESCRIPTIONS: Record<NotificationType, string> = 
   "task-assigned": "You were assigned to a task.",
   "task-status-changed": "A task you're involved with changed status.",
   "task-handoff": "Someone handed a task off to you.",
-  "report-comment": "A supervisor or superadmin commented on your accomplishments report.",
-  "client-report-comment": "A supervisor or superadmin commented on a client report you generated.",
+  "report-comment": "A team lead or admin commented on your accomplishments report.",
+  "client-report-comment": "A team lead or admin commented on a client report you generated.",
 };
 
 export const ALL_NOTIFICATION_TYPES: NotificationType[] = Object.keys(

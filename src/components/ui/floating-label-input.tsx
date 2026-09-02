@@ -8,6 +8,9 @@ export interface FloatingLabelInputProps
   label: string;
   error?: string;
   hint?: string;
+  /** Optional trailing control (e.g. a password show/hide toggle) absolutely positioned inside
+   * the input's own relative wrapper — see PasswordInput for the first consumer. */
+  endAdornment?: React.ReactNode;
 }
 
 /**
@@ -24,6 +27,7 @@ export function FloatingLabelInput({
   error,
   hint,
   className,
+  endAdornment,
   ...props
 }: FloatingLabelInputProps) {
   const generatedId = React.useId();
@@ -41,6 +45,7 @@ export function FloatingLabelInput({
           aria-describedby={error ? errorId : hint ? hintId : undefined}
           className={cn(
             "peer w-full rounded-md border-[1.5px] border-input bg-card px-4 pt-[22px] pb-2 text-base text-foreground outline-none transition-colors placeholder:text-transparent focus:border-primary focus:ring-[3px] focus:ring-primary/10",
+            endAdornment && "pr-11",
             error && "border-destructive focus:border-destructive focus:ring-destructive/10",
             className
           )}
@@ -61,6 +66,9 @@ export function FloatingLabelInput({
           aria-hidden="true"
           className="pointer-events-none absolute inset-x-0 bottom-0 h-0.5 origin-center scale-x-0 rounded-b-md bg-primary transition-transform duration-200 peer-focus:scale-x-100"
         />
+        {endAdornment && (
+          <div className="absolute right-2 top-1/2 -translate-y-1/2">{endAdornment}</div>
+        )}
       </div>
       {error ? (
         <p id={errorId} className="text-xs text-destructive">

@@ -16,8 +16,10 @@ import {
   LogOut,
   Search,
   Settings,
+  ShieldCheck,
   Sun,
   Users,
+  UsersRound,
   type LucideIcon,
 } from "lucide-react";
 import { useSidebar } from "@/components/ui/sidebar";
@@ -99,10 +101,15 @@ export function AppSidebar() {
     ...(user && canViewTeamTimePage(user) ? [{ href: "/dashboard/team-time", label: "Team Time", icon: Clock }] : []),
     ...(user && canViewTeamUpdatesPage(user) ? [{ href: "/dashboard/team-updates", label: "Team Updates", icon: Users }] : []),
   ];
+  const adminItems: NavItem[] = [
+    ...(user && isSuperadmin(user) ? [{ href: "/dashboard/admin/users", label: "Users", icon: UsersRound }] : []),
+    ...(user && isSuperadmin(user) ? [{ href: "/dashboard/admin/services", label: "Services", icon: ShieldCheck }] : []),
+  ];
   const groups: NavGroup[] = [
     { label: "Workspace", items: workspaceItems },
     { label: "Client work", items: clientWorkItems },
     ...(teamItems.length > 0 ? [{ label: "Team", items: teamItems }] : []),
+    ...(adminItems.length > 0 ? [{ label: "Admin", items: adminItems }] : []),
   ];
 
   function isActive(href: string) {

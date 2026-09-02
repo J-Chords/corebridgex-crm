@@ -23,6 +23,7 @@ interface ProfileRow {
   active: boolean;
   supervisor_id: string | null;
   reporting_review_access: boolean;
+  must_change_password: boolean;
   created_at: string;
 }
 
@@ -46,7 +47,9 @@ async function loadCurrentAppUser(): Promise<User | null> {
 
   const { data: profile, error: profileError } = await supabase
     .from("profiles")
-    .select("id, full_name, email, role, active, supervisor_id, reporting_review_access, created_at")
+    .select(
+      "id, full_name, email, role, active, supervisor_id, reporting_review_access, must_change_password, created_at"
+    )
     .eq("id", authUser.id)
     .maybeSingle<ProfileRow>();
 
@@ -80,6 +83,7 @@ async function loadCurrentAppUser(): Promise<User | null> {
     supervisorId: profile.supervisor_id,
     assignedCompanyIds: (companyRows ?? []).map((row) => row.company_id as string),
     reportingReviewAccess: profile.reporting_review_access,
+    mustChangePassword: profile.must_change_password,
     createdAt: profile.created_at,
   };
 }
@@ -157,5 +161,23 @@ export const supabaseAuthProvider: AuthProvider = {
     }
 
     return { ...viewer, fullName: updated.full_name };
+  },
+
+  async changePassword(viewer, newPassword) {
+    if (!newPassword || newPassword.length < 8) {
+      throw new Error("Password must be at least 8 characters.");
+    }
+    const supabase = createClient();
+    const { error: updateError } = await supabase.auth.updateUser({ password: newPassword });
+    if (updateError) {
+      throw new Error(updateError.message);
+    }
+    // Only clear the forced-change flag AFTER the password itself was actually changed —
+    // never before, or a failed updateUser call would silently let the user back in unchanged.
+    const { error: rpcError } = await supabase.rpc("complete_required_password_change");
+    if (rpcError) {
+      throw new Error(rpcError.message);
+    }
+    return { ...viewer, mustChangePassword: false };
   },
 };

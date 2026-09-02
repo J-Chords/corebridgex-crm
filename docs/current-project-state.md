@@ -2105,22 +2105,63 @@ review concludes.
 
 ## Admin Foundation — User / Role / Service Responsibility
 
-**ADMIN FOUNDATION ARCHITECTURE — ACCEPTED / LOCKED.** No implementation yet as of this checkpoint —
-implementation (A: role terminology + account onboarding, B: global Service staffing, C: Admin user
-lifecycle + management UI) follows immediately from this same checkpoint. Full design in
-`docs/admin-foundation-user-service-architecture.md`: Admin-creates-users with a forced first-login
-password change; visible role labels Admin/Team Lead/Employee (DB values
-`superadmin`/`supervisor`/`employee` unchanged); a new global, many-to-many Team Lead ↔ Service and
-Employee ↔ Service membership model (reusing the existing `service_lines` catalog, never the
-per-Project `workstreams.lead_user_id`/`workstream_members`, which stays untouched pending a future
-Service-level correction). Service membership is staffing/organizational data **for this
-implementation only** — it does not yet broaden any existing authorization helper. This is an
-explicit safe-staging rule, not a permanent decision: a future, separately-approved Project/Service
-validation phase will define what Service-based Team Lead authority means and migrate authorization
-additively. The current direct-report Supervisor hierarchy (`supervisor_id`/`manages_user`) remains
-temporarily intact until that transition. The Project-Service entry point (configuring Team
-Leads/Employees while adding a Service to a Project) is architecturally supported but not built in
-this pass — reserved for the upcoming Service-level correction.
+**ADMIN FOUNDATION — FINAL ACCEPTED / COMPLETE.** Manual UI acceptance passed; a final polish pass
+(password show/hide, "Services Led"/"Works In Services" terminology, Admin Service staffing
+filters, Admin Users Services-column distinction) was applied, validated, committed, and pushed —
+see the git log for the checkpoint commit. This is now the baseline the Project-level module builds
+forward from. Full design and the complete implementation-facts list are in
+`docs/admin-foundation-user-service-architecture.md`. Summary:
+Admin-creates-users with a forced first-login password change (`profiles.must_change_password`,
+`/change-password` gate in `DashboardLayout`, never in `src/proxy.ts`); visible role labels
+Admin/Team Lead/Employee (DB values `superadmin`/`supervisor`/`employee` unchanged); a new global,
+many-to-many Team Lead ↔ Service and Employee ↔ Service membership model (`service_team_leads`/
+`service_employees`, reusing the existing `service_lines` catalog, never touching the per-Project
+`workstreams.lead_user_id`/`workstream_members`) with DB-enforced role eligibility and Admin-only
+RLS; role-change Service-membership cleanup enforced inside `admin_set_user_role` itself; the last
+active Admin can never be demoted/deactivated (`profiles` `BEFORE UPDATE` trigger). A genuine,
+previously-unidentified deactivation gap was found and fixed in the same pass: `is_superadmin()`/
+`is_supervisor()`/`is_employee()`/`manages_user()` never checked `profiles.active`, so a deactivated
+user's still-valid session kept passing every cross-user RLS check — hardened hosted-side and
+mirrored in mock `permissions.ts`.
+
+**Acceptance-hardening pass (same day)**: an audit proved the fix above was necessary but NOT
+sufficient — many RLS policies/helpers/RPCs gated access via a raw `<column> = auth.uid()` ownership
+check that never called any of the four hardened functions at all (e.g. `can_edit_task`'s
+self-added-creator branch, `pause_timer`/`stop_timer`'s own-timer check, `time_entries_select`'s
+`user_id = auth.uid()` branch, and 11 more). Closed via a new canonical `is_current_user_active()`
+helper composed into every one of those entry points (3 more migrations: completeness hardening,
+Service-staffing-visibility hardening — those two tables were wrongly `using (true)` — and a grant
+fix for a real `service_role`-missing-SELECT bug found during live testing). **Proven live**, not
+just by code review: a real disposable Auth session was deactivated mid-session (no re-login) and
+immediately lost `is_current_user_active()`, Company access, and its own previously-inserted
+`saved_views` row (confirmed still physically present — an RLS block, not data loss); reactivating
+restored all three on the same session. 48 live hosted assertions passed this way, covering Team
+Lead creation with zero Services, multi-Service/multi-Team-Lead cardinality, the full first-login
+and Admin-reset password flows, and Team Lead→Employee→Admin cleanup — using real disposable Auth
+users, fully deleted afterward (confirmed zero leftover via a live count). Also fixed:
+`useAdminUsers`/`useServiceStaffing` no longer fire before a non-Admin's redirect completes
+(was an unhandled promise rejection on direct URL access); `MultiSelect` uses `useId()` instead of a
+hardcoded id. Deliberately NOT touched: `profiles_select`'s own-row read (needed so a deactivated
+client can learn `active=false` and log out) and the handful of bare name/definition catalogs
+(`service_lines`, `brands`, `activities`, `departments`, templates) with no personnel data. Not
+reproduced live (structurally impossible without deactivating the real production Admin): the
+actual "last remaining Admin refused" negative case — proven instead via live trigger-source
+read-back and the mock-mirrored probe suite's isolated scenario. Service membership is staffing/
+organizational data **for this
+implementation only** — it does not yet broaden any existing authorization helper (Company/
+Project/Workstream/Task/Documents/Time/Reports all unchanged). This is an explicit safe-staging
+rule, not a permanent decision: a future, separately-approved Project/Service validation phase will
+define what Service-based Team Lead authority means and migrate authorization additively. The
+current direct-report Supervisor hierarchy (`supervisor_id`/`manages_user`) remains temporarily
+intact until that transition. The Project-Service entry point (configuring Team Leads/Employees
+while adding a Service to a Project) and the Workstream `lead_user_id`/"Created By" correction both
+remain architecturally supported but not built in this pass — reserved for the upcoming
+Service-level correction. Email stays read-only after creation this slice. 37 mock probes + 48 live
+hosted acceptance assertions pass; all four provider builds pass; every migration (7 total for
+Admin Foundation) applied hosted with live read-back confirmation, zero pending. Live Auth Admin
+test **executed** (`SUPABASE_SERVICE_ROLE_KEY` present) — see the acceptance-hardening paragraph
+above for what was covered; zero leftover disposable Auth users/profiles/staffing rows confirmed
+after cleanup.
 
 ## Next roadmap
 

@@ -7,6 +7,7 @@ import { useAuth } from "@/lib/auth/auth-context";
 import { providerMode } from "@/lib/data/provider-mode";
 import { Button } from "@/components/ui/button";
 import { FloatingLabelInput } from "@/components/ui/floating-label-input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Separator } from "@/components/ui/separator";
 import { Alert, AlertTitle } from "@/components/ui/alert";
 import {
@@ -20,8 +21,8 @@ import {
 
 const QUICK_LOGIN_ACCOUNTS = [
   { label: "Employee", name: "Alicia Chen", email: "alicia.chen@corebridgex.com" },
-  { label: "Supervisor", name: "Priya Nair", email: "priya.nair@corebridgex.com" },
-  { label: "Superadmin", name: "Jordan Ellis", email: "jordan.ellis@corebridgex.com" },
+  { label: "Team Lead", name: "Priya Nair", email: "priya.nair@corebridgex.com" },
+  { label: "Admin", name: "Jordan Ellis", email: "jordan.ellis@corebridgex.com" },
 ];
 
 export function LoginForm() {
@@ -70,10 +71,9 @@ export function LoginForm() {
             onChange={(e) => setEmail(e.target.value)}
             required
           />
-          <FloatingLabelInput
+          <PasswordInput
             id="password"
             label="Password"
-            type="password"
             autoComplete="current-password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}

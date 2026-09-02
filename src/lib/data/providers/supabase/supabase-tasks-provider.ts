@@ -94,6 +94,7 @@ function toUser(row: ProfileRow): User {
     assignedCompanyIds: [],
     // Not authoritative — see profile-directory.ts's own note for the same convention.
     reportingReviewAccess: false,
+    mustChangePassword: false,
     createdAt: row.created_at,
   };
 }

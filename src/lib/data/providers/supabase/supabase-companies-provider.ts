@@ -155,6 +155,7 @@ function toUserFromProfile(row: ProfileRow): User {
     // read (assignedStaff only ever needs to render name/role, per mock-companies-provider.ts).
     assignedCompanyIds: [],
     reportingReviewAccess: row.reporting_review_access,
+    mustChangePassword: false,
     createdAt: row.created_at,
   };
 }

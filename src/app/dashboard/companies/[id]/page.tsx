@@ -9,6 +9,7 @@ import { useCompany } from "@/lib/data/hooks/use-companies";
 import { useWorkstreams } from "@/lib/data/hooks/use-workstreams";
 import { useTasks } from "@/lib/data/hooks/use-tasks";
 import { canManageCompanies, canManageWorkstreams, isSuperadmin } from "@/lib/data/permissions";
+import { ROLE_LABELS } from "@/lib/data/role-labels";
 import type { ClientContact } from "@/lib/data/types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -188,7 +189,7 @@ export default function CompanyDetailPage({ params }: { params: Promise<{ id: st
                   </Avatar>
                   <div className="flex flex-col">
                     <span className="text-sm font-medium">{staff.fullName}</span>
-                    <span className="text-xs text-muted-foreground capitalize">{staff.role}</span>
+                    <span className="text-xs text-muted-foreground">{ROLE_LABELS[staff.role]}</span>
                   </div>
                 </div>
               ))

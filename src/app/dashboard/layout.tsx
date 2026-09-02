@@ -21,10 +21,14 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!isLoading && !user) {
       router.replace("/login");
+    } else if (!isLoading && user?.mustChangePassword) {
+      // Admin Foundation Part 10 — forced first-login password-change gate. Application-level
+      // only, never in src/proxy.ts (which stays a pure session-cookie refresh).
+      router.replace("/change-password");
     }
   }, [isLoading, user, router]);
 
-  if (isLoading || !user) {
+  if (isLoading || !user || user.mustChangePassword) {
     return (
       <div className="flex flex-1 items-center justify-center">
         <p className="text-sm text-muted-foreground">Loading…</p>

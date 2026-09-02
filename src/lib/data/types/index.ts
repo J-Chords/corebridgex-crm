@@ -22,3 +22,4 @@ export * from "./daily-update";
 export * from "./client-report";
 export * from "./visit-entry";
 export * from "./client-report-schedule";
+export * from "./service-membership";

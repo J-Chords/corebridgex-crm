@@ -62,4 +62,14 @@ export const mockAuthProvider: AuthProvider = {
     db.users = db.users.map((u) => (u.id === viewer.id ? updated : u));
     return updated;
   },
+
+  async changePassword(viewer, newPassword) {
+    if (!newPassword || newPassword.length < 8) {
+      throw new Error("Password must be at least 8 characters.");
+    }
+    // Mock mode has no real credential store — this only clears the forced-change flag.
+    const updated = { ...viewer, mustChangePassword: false };
+    db.users = db.users.map((u) => (u.id === viewer.id ? updated : u));
+    return updated;
+  },
 };
