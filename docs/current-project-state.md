@@ -2103,6 +2103,25 @@ presentation feedback review and roadmap re-prioritization** — new product req
 the Phase 14 roadmap before any further Documents UI work begins. Do not start Phase 14C until that
 review concludes.
 
+## Admin Foundation — User / Role / Service Responsibility
+
+**ADMIN FOUNDATION ARCHITECTURE — ACCEPTED / LOCKED.** No implementation yet as of this checkpoint —
+implementation (A: role terminology + account onboarding, B: global Service staffing, C: Admin user
+lifecycle + management UI) follows immediately from this same checkpoint. Full design in
+`docs/admin-foundation-user-service-architecture.md`: Admin-creates-users with a forced first-login
+password change; visible role labels Admin/Team Lead/Employee (DB values
+`superadmin`/`supervisor`/`employee` unchanged); a new global, many-to-many Team Lead ↔ Service and
+Employee ↔ Service membership model (reusing the existing `service_lines` catalog, never the
+per-Project `workstreams.lead_user_id`/`workstream_members`, which stays untouched pending a future
+Service-level correction). Service membership is staffing/organizational data **for this
+implementation only** — it does not yet broaden any existing authorization helper. This is an
+explicit safe-staging rule, not a permanent decision: a future, separately-approved Project/Service
+validation phase will define what Service-based Team Lead authority means and migrate authorization
+additively. The current direct-report Supervisor hierarchy (`supervisor_id`/`manages_user`) remains
+temporarily intact until that transition. The Project-Service entry point (configuring Team
+Leads/Employees while adding a Service to a Project) is architecturally supported but not built in
+this pass — reserved for the upcoming Service-level correction.
+
 ## Next roadmap
 
 **Phase 11 in its entirety (11A–11D) is COMPLETE and MANUALLY ACCEPTED** — see the phase's own sections above, including 11D's final decisions (Client Visit restriction is intentionally UI-only, no Visit RLS migration; legacy Internal Reports are Superadmin historical-archive-only with new generation removed from the UI; Review Queue and Client Report Schedules UI removed, both backends fully preserved; exactly three roles) and the JWT "issued at future" investigation (root-caused to transient Supabase hosted-infrastructure clock skew, confirmed resolved by the user reloading the authenticated app). Checkpointed and pushed to GitHub — see "Latest verified checkpoint" for the exact hash.
