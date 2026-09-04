@@ -5,7 +5,9 @@ import type { User } from "@/lib/data/types";
 import type { TaskWithRelations } from "@/lib/data/providers/tasks-provider";
 import { useTasks } from "@/lib/data/hooks/use-tasks";
 import { useCompanies, useCompanyLookups } from "@/lib/data/hooks/use-companies";
+import { useProjects } from "@/lib/data/hooks/use-projects";
 import { useWorkstreams } from "@/lib/data/hooks/use-workstreams";
+import { projectHrefForCompany } from "@/lib/data/project-display";
 import { useRecentHandoffs } from "@/lib/data/hooks/use-task-handoffs";
 import { GreetingText } from "@/components/dashboard/greeting-heading";
 import { SearchTriggerBar } from "@/components/dashboard/search-trigger-bar";
@@ -28,6 +30,7 @@ import { cn } from "@/lib/utils";
 export function SuperadminDashboard({ user }: { user: User }) {
   const { tasks, refresh } = useTasks();
   const { companies } = useCompanies();
+  const { projects } = useProjects();
   const { workstreams } = useWorkstreams();
   const { brands, assignableStaff } = useCompanyLookups();
   const { handoffs } = useRecentHandoffs();
@@ -69,14 +72,14 @@ export function SuperadminDashboard({ user }: { user: User }) {
                 items={companies.map((c) => ({
                   id: c.id,
                   title: c.name,
-                  subtitle: c.brand.name,
-                  href: `/dashboard/companies/${c.id}`,
+                  subtitle: c.brand?.name ?? "No brand yet",
+                  href: projectHrefForCompany(c.id, projects),
                 }))}
                 emptyMessage="No clients yet."
               />
             ),
           }}
-          viewAllHref="/dashboard/companies"
+          viewAllHref="/dashboard/projects"
         />
         <StatCard
           label="Total staff"
@@ -138,14 +141,16 @@ export function SuperadminDashboard({ user }: { user: User }) {
                 items={atRiskCompanies.map((c) => ({
                   id: c.id,
                   title: c.name,
-                  subtitle: c.brand.name,
-                  href: `/dashboard/companies/${c.id}`,
+                  subtitle: c.brand?.name ?? "No brand yet",
+                  href: projectHrefForCompany(c.id, projects),
                 }))}
                 emptyMessage="No at-risk clients right now."
               />
             ),
           }}
-          viewAllHref="/dashboard/companies?health=at-risk"
+          // Filter gap (Project Closure — Navigation Correction): Projects has no client-health
+          // filter today, so "View all" lands on the plain list rather than a pre-filtered one.
+          viewAllHref="/dashboard/projects"
         />
       </div>
 
@@ -155,7 +160,7 @@ export function SuperadminDashboard({ user }: { user: User }) {
         <div className={cn("lg:col-span-2", STAGGER_ITEM_CLASS)} style={staggerDelay(0)}>
           <TeamWorkloadCard members={staff} tasks={tasks} />
         </div>
-        <ClientHealthOverviewCard companies={companies} className={STAGGER_ITEM_CLASS} style={staggerDelay(1)} />
+        <ClientHealthOverviewCard companies={companies} projects={projects} className={STAGGER_ITEM_CLASS} style={staggerDelay(1)} />
       </div>
 
       <SectionBreak num="02" label="Across Brands & Activity" />

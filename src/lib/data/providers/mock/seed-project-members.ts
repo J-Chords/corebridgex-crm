@@ -38,5 +38,5 @@ export const seedProjectMembers: ProjectMember[] = seedProjects.flatMap((project
     if (task?.companyId === project.companyId) userIds.add(assignee.userId);
   }
 
-  return Array.from(userIds).map((userId) => ({ projectId: project.id, userId }));
+  return Array.from(userIds).map((userId) => ({ projectId: project.id, userId, projectRole: null }));
 });

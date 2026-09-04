@@ -2,36 +2,25 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { AlertCircle, Check, History, Plus, X } from "lucide-react";
+import { AlertCircle, Check, History, X } from "lucide-react";
 import { useAuth } from "@/lib/auth/auth-context";
 import { todayDateOnly } from "@/lib/planner-dates";
 import { operationalProjectPickerLabels } from "@/lib/data/project-display";
-import { useCompanies, useCompanyLookups } from "@/lib/data/hooks/use-companies";
+import { useCompanyLookups } from "@/lib/data/hooks/use-companies";
 import { useProjects } from "@/lib/data/hooks/use-projects";
 import { useSubtasks } from "@/lib/data/hooks/use-tasks";
 import { useWorkstreams } from "@/lib/data/hooks/use-workstreams";
 import { useWorkstreamActivities } from "@/lib/data/hooks/use-workstream-activities";
-import { useActivityCatalog } from "@/lib/data/hooks/use-activity-catalog";
 import { tasksProvider } from "@/lib/data/providers";
 import type { TaskReuseCandidate, TaskWithRelations } from "@/lib/data/providers/tasks-provider";
 import type { DepartmentWithActivities } from "@/lib/data/providers/activity-catalog-provider";
-import type { WorkstreamWithRelations } from "@/lib/data/providers/workstreams-provider";
-import {
-  canAccessWorkstream,
-  canCreateWorkstreamInProject,
-  canExtendServiceActivities,
-  canManageWorkstreams,
-  isEmployee,
-} from "@/lib/data/permissions";
-import type { Activity, TaskPriority, TaskStatus } from "@/lib/data/types";
+import { isEmployee } from "@/lib/data/permissions";
+import type { TaskPriority, TaskStatus } from "@/lib/data/types";
 import { TaskStatusPicker } from "@/components/tasks/task-status-picker";
 import { TaskPriorityPicker } from "@/components/tasks/task-priority-picker";
-import { TaskAssigneeChips } from "@/components/tasks/task-assignee-chips";
+import { MultiSelect } from "@/components/ui/multi-select";
 import { ChecklistBuilder, type ChecklistBuilderRow } from "@/components/tasks/checklist-builder";
 import { ReusePastTaskDialog } from "@/components/tasks/reuse-past-task-dialog";
-import { WorkstreamFormDialog } from "@/components/workstreams/workstream-form-dialog";
-import { AddServiceActivitiesDialog } from "@/components/workstreams/add-service-activities-dialog";
-import { CreateActivityDialog } from "@/components/workstreams/create-activity-dialog";
 import {
   FormDrawer,
   FormDrawerHeader,
@@ -140,14 +129,13 @@ export function TaskFormDialog({
   onSaved,
 }: TaskFormDialogProps) {
   const { user } = useAuth();
-  const { companies } = useCompanies();
   const { projects } = useProjects();
   // Phase 13B pre-apply correction (Correction 2) — ordinary Task Create/Edit picks a Project by its
   // Company name, never the redundant "Company + year range" form. See `project-display.ts` for the
   // (currently inert — every Company has exactly one Project today) same-Company collision fallback.
   const projectLabels = operationalProjectPickerLabels(projects);
   const [form, setForm] = useState(() => emptyForm(user?.id ?? "", defaultWorkstreamId, defaultActivityId, defaultStatus));
-  const { workstreams, refresh: refreshWorkstreams } = useWorkstreams({
+  const { workstreams } = useWorkstreams({
     projectId: form.projectId === ALL_PROJECTS ? undefined : form.projectId,
   });
   const { assignableStaff } = useCompanyLookups();
@@ -157,31 +145,11 @@ export function TaskFormDialog({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [dismissedSuggestionId, setDismissedSuggestionId] = useState<string | null>(null);
   const [reuseOpen, setReuseOpen] = useState(false);
-  const [newWorkstreamOpen, setNewWorkstreamOpen] = useState(false);
-  const [addingNewActivity, setAddingNewActivity] = useState(false);
-  const [addActivitiesOpen, setAddActivitiesOpen] = useState(false);
-  const [createActivityOpen, setCreateActivityOpen] = useState(false);
 
   const selectedWorkstream = workstreams.find((w) => w.id === form.workstreamId);
   // Scoped to what THIS workstream actually enabled — falls back to the full service catalog for a
   // legacy workstream with no persisted Activity selections yet (see the hook's own doc comment).
-  const { departments, refresh: refreshEnabledActivities } = useWorkstreamActivities(selectedWorkstream);
-  // "+ New service" needs a concrete Project to create into — mirrors WorkstreamFormDialog's own
-  // requirement (it only ever opens with a specific company/project already in hand).
-  const selectedProject = form.projectId === ALL_PROJECTS ? null : projects.find((p) => p.id === form.projectId);
-  const companyForNewWorkstream = selectedProject ? (companies.find((c) => c.id === selectedProject.companyId) ?? null) : null;
-  // Same gate the Project workspace's own "+ Add Service" already uses — an Employee may create a
-  // Service inside a Project they can already access (server-enforced self-lead-only via the
-  // `create_workstream` RPC). The Task form previously hid this behind a blanket `!employeeView`
-  // check, which was stricter than the real backend authorization — fixed here to match.
-  const canAddServiceHere =
-    user != null && selectedProject != null
-      ? canCreateWorkstreamInProject(
-          user,
-          { companyId: selectedProject.companyId, ownerId: selectedProject.ownerId, memberUserIds: selectedProject.members.map((m) => m.id) },
-          selectedProject.members
-        )
-      : false;
+  const { departments } = useWorkstreamActivities(selectedWorkstream);
 
   // A task prefilled from a workstream (a workstream detail page's own "Add task") knows its project
   // already but can't set `projectId` synchronously — the workstream list is still loading when the
@@ -218,26 +186,6 @@ export function TaskFormDialog({
     }));
   }
 
-  /** The inline "+ New service" flow already ran inside a specific Project's context, so the created workstream is selected directly — no need to wait for `workstreams` to refetch before picking it. */
-  function handleWorkstreamCreated(created: WorkstreamWithRelations) {
-    refreshWorkstreams();
-    setForm((p) => ({ ...p, workstreamId: created.id, activityId: NO_ACTIVITY, projectId: created.projectId ?? p.projectId }));
-    setNewWorkstreamOpen(false);
-  }
-
-  /** A brand-new Activity is immediately selected for the current Task, matching the requested
-   * "select it for the Task if practical" outcome. Refreshing `refreshWorkstreams()` alone isn't
-   * enough here — unlike enabling an *already-cataloged* Activity (where only the Workstream's own
-   * enabled-id list changes), creating a genuinely new Activity (and possibly a new Department)
-   * changes the catalog data itself, which `useWorkstreamActivities`/`useActivityCatalog` each cache
-   * in their own separate hook state; both need their own explicit `refresh()` too. */
-  function handleActivityCreated(created: Activity) {
-    refreshWorkstreams();
-    refreshEnabledActivities();
-    refreshFullCatalog();
-    setForm((p) => ({ ...p, activityId: created.id }));
-    setCreateActivityOpen(false);
-  }
   const suggestion = form.workstreamId ? suggestActivity(form.title, departments) : null;
   const showSuggestion =
     suggestion !== null && form.activityId === NO_ACTIVITY && suggestion.activityId !== dismissedSuggestionId;
@@ -300,53 +248,6 @@ export function TaskFormDialog({
   const hasSubtasks = existingChildTasksForLock.length > 0;
   const contextLocked = isEditingSubtask || hasSubtasks;
 
-  // Phase 8C — "+ Add another Activity to this Service": the full catalog for this Service's own
-  // service line, minus what's already configured, is what a Service lead may enable in-context
-  // during Task creation. `create_task`/mock createTask enable it and create the Task atomically —
-  // this UI never enables anything on its own; it only decides what to *offer* and *ask for*.
-  const { departments: fullServiceCatalog, refresh: refreshFullCatalog } = useActivityCatalog(
-    selectedWorkstream?.brand.id,
-    selectedWorkstream?.serviceLineId ?? undefined
-  );
-  const enabledActivityIds = new Set(departments.flatMap((d) => d.activities.map((a) => a.id)));
-  const unconfiguredActivities = fullServiceCatalog.flatMap((d) =>
-    d.activities.filter((a) => !enabledActivityIds.has(a.id)).map((a) => ({ ...a, departmentName: d.name }))
-  );
-  // Phase 13B final polish (Part H) — the real, richer "add several existing catalog Activities to
-  // this Service at once" capability. Gated on `canManageWorkstreams` (Supervisor/Superadmin) only —
-  // it calls `updateWorkstream` directly, which the `workstreams_update` RLS policy (and the mock
-  // provider's own `requireManage`) restrict to Supervisor/Superadmin unconditionally, even for the
-  // Employee who leads this exact Workstream. Unlike the single-activity flow below, this isn't tied
-  // to Task-create/-edit at all — it persists immediately, so it's offered in both modes.
-  const canAddServiceActivities = user != null && canManageWorkstreams(user) && selectedWorkstream != null;
-  const canExtendActivities =
-    user != null && mode === "create" && !activityLocked && selectedWorkstream != null
-      ? canExtendServiceActivities(user, selectedWorkstream, assignableStaff)
-      : false;
-  // Pre-apply correction — "+ Create Activity" (create_activity_for_workstream) now shares the exact
-  // same authorization boundary as normal Task creation itself (`can_access_workstream`/
-  // `canAccessWorkstream`), never the narrower lead-only `canExtendServiceActivities` above (which
-  // still, correctly, gates only the *other*, backend-unchanged "add another activity to this
-  // service" flow that persists via create_task's own untouched lead-only branch). Not tied to
-  // create/edit mode or `activityLocked` — enriching the Service's own catalog is independent of the
-  // current Task's own state, matching `canAddServiceActivities` just above.
-  const canCreateNewActivity =
-    user != null && selectedWorkstream != null
-      ? canAccessWorkstream(
-          user,
-          {
-            leadUserId: selectedWorkstream.leadUserId,
-            teamUserIds: selectedWorkstream.team.map((m) => m.id),
-            companyId: selectedWorkstream.companyId,
-          },
-          assignableStaff
-        )
-      : false;
-  const pendingNewActivity =
-    form.activityId !== NO_ACTIVITY && !enabledActivityIds.has(form.activityId)
-      ? (unconfiguredActivities.find((a) => a.id === form.activityId) ?? null)
-      : null;
-
   const canSubmit =
     !isSubmitting &&
     form.title.trim().length > 0 &&
@@ -372,13 +273,6 @@ export function TaskFormDialog({
 
   if (!user) return null;
   const employeeView = isEmployee(user);
-
-  function toggleAssignee(id: string, checked: boolean) {
-    setForm((prev) => ({
-      ...prev,
-      assigneeIds: checked ? [...prev.assigneeIds, id] : prev.assigneeIds.filter((aid) => aid !== id),
-    }));
-  }
 
   function addChecklistRow(description: string) {
     setForm((prev) => ({
@@ -541,20 +435,7 @@ export function TaskFormDialog({
                 </div>
 
                 <div className="flex flex-col gap-1.5">
-                  <div className="flex items-center justify-between">
-                    <Label htmlFor="task-workstream">Service</Label>
-                    {canAddServiceHere && companyForNewWorkstream && selectedProject && (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="h-auto py-0.5 text-xs"
-                        onClick={() => setNewWorkstreamOpen(true)}
-                      >
-                        <Plus className="size-3" /> New service
-                      </Button>
-                    )}
-                  </div>
+                  <Label htmlFor="task-workstream">Service</Label>
                   <Select
                     items={Object.fromEntries(workstreams.map((w) => [w.id, w.name]))}
                     value={form.workstreamId}
@@ -575,9 +456,12 @@ export function TaskFormDialog({
                     <p className="text-xs text-muted-foreground">
                       Client: <span className="font-medium text-foreground">{selectedWorkstream.company.name}</span>
                     </p>
-                  ) : (!employeeView || projects.length > 0) && form.projectId === ALL_PROJECTS ? (
-                    <p className="text-xs text-muted-foreground">Pick a project above to add a new service for it.</p>
-                  ) : null}
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      Only Services already attached to the selected Project appear here. Configure this Project&apos;s
+                      Services from Project &gt; Services first.
+                    </p>
+                  )}
                 </div>
 
                 <div className="flex flex-col gap-1.5">
@@ -586,24 +470,6 @@ export function TaskFormDialog({
                     <p className="rounded-md border bg-muted/40 px-3 py-2 text-sm">
                       {selectedActivityLabel ?? "Activity"}
                     </p>
-                  ) : pendingNewActivity ? (
-                    <div className="flex items-center justify-between gap-2 rounded-lg border border-primary/30 bg-primary/5 p-2.5 text-sm">
-                      <span>
-                        <span className="font-medium">
-                          {pendingNewActivity.departmentName}: {pendingNewActivity.name}
-                        </span>{" "}
-                        — will be added to this service
-                      </span>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon-sm"
-                        aria-label="Undo — don't add this activity"
-                        onClick={() => setForm((p) => ({ ...p, activityId: NO_ACTIVITY }))}
-                      >
-                        <X />
-                      </Button>
-                    </div>
                   ) : (
                     <>
                       <Select
@@ -635,9 +501,7 @@ export function TaskFormDialog({
                       </Select>
                       {form.workstreamId && departments.length === 0 && (
                         <p className="text-xs text-muted-foreground">
-                          {selectedWorkstream?.serviceLineId
-                            ? "No activities set up for this service yet."
-                            : "No activities set up for this brand yet."}
+                          Configure this Service and its Activities from Project &gt; Services first.
                         </p>
                       )}
                       {activityRequired && form.activityId === NO_ACTIVITY && (
@@ -648,11 +512,11 @@ export function TaskFormDialog({
                     </>
                   )}
 
-                  {/* Phase 13B final polish (Part G) — the Service's own full set of already-
-                      enabled Activities, always visible regardless of what's happening in the
-                      Task-Activity select above (including while a new one is staged below) — so
-                      it never looks like adding one Activity replaced or hid the others. */}
-                  {selectedWorkstream && (departments.length > 0 || pendingNewActivity) && (
+                  {/* The Service's own full set of already-enabled Activities, always visible
+                      regardless of which one is currently selected above. Read-only context — this
+                      form only ever consumes the existing Project > Service > Activity hierarchy,
+                      never extends it. */}
+                  {selectedWorkstream && departments.length > 0 && (
                     <div className="flex flex-col gap-1 rounded-lg border bg-muted/20 p-2.5 text-xs">
                       <span className="font-mono text-[10px] tracking-wide text-muted-foreground uppercase">
                         Activities in this Service
@@ -668,69 +532,6 @@ export function TaskFormDialog({
                           </div>
                         ))
                       )}
-                      {pendingNewActivity && (
-                        <div className="flex items-center justify-between gap-2 text-primary">
-                          <span className="flex items-center gap-1.5">
-                            <Check className="size-3 shrink-0" aria-hidden="true" />
-                            {pendingNewActivity.departmentName}: {pendingNewActivity.name}
-                          </span>
-                          <span className="shrink-0">Will be added</span>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {!pendingNewActivity && (canExtendActivities || canAddServiceActivities || canCreateNewActivity) && (
-                    <div className="flex flex-wrap items-center gap-2">
-                      {canAddServiceActivities && unconfiguredActivities.length > 0 && (
-                        <Button type="button" variant="ghost" size="sm" className="w-fit" onClick={() => setAddActivitiesOpen(true)}>
-                          <Plus className="size-3" /> Add existing activities to Service
-                        </Button>
-                      )}
-                      {!canAddServiceActivities && canExtendActivities && unconfiguredActivities.length > 0 && !addingNewActivity && (
-                        <Button type="button" variant="ghost" size="sm" className="w-fit" onClick={() => setAddingNewActivity(true)}>
-                          <Plus className="size-3" /> Add an activity to this Service
-                        </Button>
-                      )}
-                      {/* Pre-apply correction — available to anyone who could legitimately create a
-                          normal Task in this Workstream (`canCreateNewActivity`, mirroring the real
-                          `create_activity_for_workstream`/`can_access_workstream` boundary): Employee
-                          as lead OR as a plain team member; Supervisor for their own team's
-                          Workstreams; Superadmin unconditionally. Deliberately NOT the narrower
-                          `canExtendActivities` above — that one still gates only the separate,
-                          backend-unchanged "add another activity" flow. */}
-                      {canCreateNewActivity && (
-                        <Button type="button" variant="ghost" size="sm" className="w-fit" onClick={() => setCreateActivityOpen(true)}>
-                          <Plus className="size-3" /> Create Activity
-                        </Button>
-                      )}
-                    </div>
-                  )}
-
-                  {!canAddServiceActivities && addingNewActivity && (
-                    <div className="flex flex-col gap-1.5">
-                      <Select
-                        items={Object.fromEntries(unconfiguredActivities.map((a) => [a.id, `${a.departmentName}: ${a.name}`]))}
-                        value=""
-                        onValueChange={(v) => {
-                          if (v) setForm((p) => ({ ...p, activityId: v }));
-                          setAddingNewActivity(false);
-                        }}
-                      >
-                        <SelectTrigger aria-label="Choose an activity to add to this service" className="w-full">
-                          <SelectValue placeholder="Choose an activity to add…" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {unconfiguredActivities.map((a) => (
-                            <SelectItem key={a.id} value={a.id}>
-                              {a.departmentName}: {a.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <Button type="button" variant="ghost" size="sm" className="w-fit" onClick={() => setAddingNewActivity(false)}>
-                        Cancel
-                      </Button>
                     </div>
                   )}
 
@@ -817,11 +618,14 @@ export function TaskFormDialog({
                 information an Employee didn't already know, so this is dropped for them entirely.
                 Supervisor/Superadmin keep full Assignees, unchanged. */}
             {!employeeView && (
-              <FormDrawerField label="Assignee">
-                <TaskAssigneeChips
-                  staff={assignableStaff}
-                  selectedIds={form.assigneeIds}
-                  onToggle={toggleAssignee}
+              <FormDrawerField label="Assignees">
+                <MultiSelect
+                  options={assignableStaff.map((s) => ({ id: s.id, label: s.fullName, sublabel: s.email }))}
+                  value={form.assigneeIds}
+                  onChange={(ids) => setForm((p) => ({ ...p, assigneeIds: ids }))}
+                  placeholder="No assignees"
+                  searchPlaceholder="Search people…"
+                  aria-label="Task assignees"
                 />
               </FormDrawerField>
             )}
@@ -861,39 +665,6 @@ export function TaskFormDialog({
           activityLabel={selectedActivityLabel}
           excludeTaskId={task?.id}
           onSelect={handleUseReuseCandidate}
-        />
-      )}
-      {companyForNewWorkstream && selectedProject && (
-        <WorkstreamFormDialog
-          open={newWorkstreamOpen}
-          onOpenChange={setNewWorkstreamOpen}
-          mode="create"
-          company={companyForNewWorkstream}
-          // Bug fix — this dialog was being opened with `projectId` omitted even though a specific
-          // Project was already required (and resolved) just to show the "+ New service" button.
-          // Omitting it let the new-service RPC fall back to its own company-wide auto-resolution
-          // (`enforce_workstream_project_link`), which raises rather than guessing whenever that
-          // company has zero or more than one Project — surfacing a confusing late error instead of
-          // simply using the Project context the Task form already had in hand.
-          projectId={selectedProject.id}
-          onSaved={() => {}}
-          onCreated={handleWorkstreamCreated}
-        />
-      )}
-      {selectedWorkstream && (
-        <AddServiceActivitiesDialog
-          open={addActivitiesOpen}
-          onOpenChange={setAddActivitiesOpen}
-          workstream={selectedWorkstream}
-          onSaved={refreshWorkstreams}
-        />
-      )}
-      {selectedWorkstream && (
-        <CreateActivityDialog
-          open={createActivityOpen}
-          onOpenChange={setCreateActivityOpen}
-          workstream={selectedWorkstream}
-          onCreated={handleActivityCreated}
         />
       )}
     </FormDrawer>

@@ -39,6 +39,23 @@ export const supabaseServiceMembershipProvider: ServiceMembershipProvider = {
     }));
   },
 
+  async getStaffingForServiceLines(viewer, serviceLineIds) {
+    if (!viewer.active || serviceLineIds.length === 0) return [];
+    const ids = Array.from(new Set(serviceLineIds));
+    const supabase = createClient();
+    const [{ data: leads, error: leadsError }, { data: members, error: membersError }] = await Promise.all([
+      supabase.from("service_team_leads").select("service_line_id, user_id").in("service_line_id", ids),
+      supabase.from("service_employees").select("service_line_id, user_id").in("service_line_id", ids),
+    ]);
+    if (leadsError) throw new Error(leadsError.message);
+    if (membersError) throw new Error(membersError.message);
+    return ids.map((id) => ({
+      serviceLineId: id,
+      teamLeadUserIds: (leads ?? []).filter((r) => r.service_line_id === id).map((r) => r.user_id as string),
+      employeeUserIds: (members ?? []).filter((r) => r.service_line_id === id).map((r) => r.user_id as string),
+    }));
+  },
+
   async setTeamLeads(viewer, serviceLineId, userIds) {
     if (!canManageAdminUsers(viewer)) {
       throw new Error("Only an admin can manage Service staffing.");

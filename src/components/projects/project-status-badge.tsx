@@ -1,11 +1,15 @@
 import { Badge } from "@/components/ui/badge";
 import type { ProjectStatus } from "@/lib/data/types";
 
-export const PROJECT_STATUS_META: Record<ProjectStatus, { label: string; variant: "success" | "info" | "warning" | "destructive" }> = {
+// Visible label uses the product-locked "Canceled" (single L) spelling; the underlying DB value
+// stays "cancelled" (unchanged, avoiding schema churn) — see docs/project-level-product-architecture.md.
+export const PROJECT_STATUS_META: Record<ProjectStatus, { label: string; variant: "success" | "info" | "warning" | "destructive" | "neutral" }> = {
   active: { label: "Active", variant: "success" },
-  "on-hold": { label: "On hold", variant: "warning" },
+  "on-hold": { label: "On Hold", variant: "warning" },
   completed: { label: "Completed", variant: "info" },
-  cancelled: { label: "Cancelled", variant: "destructive" },
+  cancelled: { label: "Canceled", variant: "destructive" },
+  archived: { label: "Archived", variant: "neutral" },
+  trash: { label: "Trash", variant: "neutral" },
 };
 
 /** Same "single source of truth for status color" pattern as Task's `STATUS_COLOR_VAR` — reused by
@@ -16,6 +20,8 @@ export const PROJECT_STATUS_COLOR_VAR: Record<ProjectStatus, string> = {
   "on-hold": "var(--warning)",
   completed: "var(--info)",
   cancelled: "var(--destructive)",
+  archived: "var(--muted-foreground)",
+  trash: "var(--muted-foreground)",
 };
 
 export function ProjectStatusBadge({ status }: { status: ProjectStatus }) {

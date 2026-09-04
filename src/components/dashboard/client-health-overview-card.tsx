@@ -4,6 +4,7 @@ import { useState, type CSSProperties } from "react";
 import Link from "next/link";
 import type { CompanyWithRelations } from "@/lib/data/providers/companies-provider";
 import type { ClientHealthStatus } from "@/lib/data/client-health";
+import { projectHrefForCompany } from "@/lib/data/project-display";
 import { Card, CardContent, CardHeader, CardTitle, CardAction } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ClientHealthDonut } from "@/components/dashboard/client-health-donut";
@@ -22,11 +23,19 @@ const MAX_ROWS = 6;
 
 interface ClientHealthOverviewCardProps {
   companies: CompanyWithRelations[];
+  /** Resolves each Company to its own Project workspace — Projects, not Companies, is the normal
+   * visible client destination (Project Closure — Navigation Correction). */
+  projects: { id: string; companyId: string }[];
   className?: string;
   style?: CSSProperties;
 }
 
-function renderGroup(label: string, companies: CompanyWithRelations[], status: ClientHealthStatus) {
+function renderGroup(
+  label: string,
+  companies: CompanyWithRelations[],
+  status: ClientHealthStatus,
+  projects: { id: string; companyId: string }[]
+) {
   if (companies.length === 0) return null;
   return (
     <div key={status} className="flex flex-col gap-1">
@@ -35,7 +44,7 @@ function renderGroup(label: string, companies: CompanyWithRelations[], status: C
         {companies.map((company, i) => (
           <Link
             key={company.id}
-            href={`/dashboard/companies/${company.id}`}
+            href={projectHrefForCompany(company.id, projects)}
             className={cn(
               "group/row -mx-2 flex items-center justify-between gap-2 rounded-md px-2 py-1.5 transition-colors hover:bg-muted/60 hover:no-underline",
               STAGGER_ITEM_CLASS
@@ -54,7 +63,7 @@ function renderGroup(label: string, companies: CompanyWithRelations[], status: C
 }
 
 /** Rollup of an already-scoped company list's health statuses — counts plus the at-risk names, reusing computeClientHealth's output as-is (no new scoring). */
-export function ClientHealthOverviewCard({ companies, className, style }: ClientHealthOverviewCardProps) {
+export function ClientHealthOverviewCard({ companies, projects, className, style }: ClientHealthOverviewCardProps) {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const counts: Record<ClientHealthStatus, number> = { "on-track": 0, "needs-attention": 0, "at-risk": 0 };
   for (const company of companies) counts[company.health.status]++;
@@ -80,8 +89,8 @@ export function ClientHealthOverviewCard({ companies, className, style }: Client
         ) : (
           <>
             <ClientHealthDonut counts={counts} />
-            {renderGroup("At risk", atRiskPreview, "at-risk")}
-            {renderGroup("Needs attention", needsAttentionPreview, "needs-attention")}
+            {renderGroup("At risk", atRiskPreview, "at-risk", projects)}
+            {renderGroup("Needs attention", needsAttentionPreview, "needs-attention", projects)}
             {overflow > 0 && (
               <button
                 type="button"
@@ -105,8 +114,8 @@ export function ClientHealthOverviewCard({ companies, className, style }: Client
               <p className="text-sm text-muted-foreground">Every client is on track — nothing needs attention.</p>
             ) : (
               <>
-                {renderGroup("At risk", atRisk, "at-risk")}
-                {renderGroup("Needs attention", needsAttention, "needs-attention")}
+                {renderGroup("At risk", atRisk, "at-risk", projects)}
+                {renderGroup("Needs attention", needsAttention, "needs-attention", projects)}
               </>
             )}
           </>

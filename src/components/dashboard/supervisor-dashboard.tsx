@@ -7,7 +7,9 @@ import type { User } from "@/lib/data/types";
 import type { TaskWithRelations } from "@/lib/data/providers/tasks-provider";
 import { useTasks, useMyTasks } from "@/lib/data/hooks/use-tasks";
 import { useCompanies, useCompanyLookups } from "@/lib/data/hooks/use-companies";
+import { useProjects } from "@/lib/data/hooks/use-projects";
 import { useWorkstreams } from "@/lib/data/hooks/use-workstreams";
+import { projectHrefForCompany } from "@/lib/data/project-display";
 import { useMyTimeEntries } from "@/lib/data/hooks/use-time-entries";
 import { useElapsedSeconds } from "@/lib/data/hooks/use-elapsed-seconds";
 import { useRecentHandoffs } from "@/lib/data/hooks/use-task-handoffs";
@@ -63,6 +65,7 @@ export function SupervisorDashboard({ user }: { user: User }) {
   const { tasks: myTasks, isLoading: myTasksLoading, refresh: refreshMyTasks } = useMyTasks();
   const { entries: myEntries, refresh: refreshMyEntries } = useMyTimeEntries();
   const { companies } = useCompanies();
+  const { projects } = useProjects();
   const { workstreams } = useWorkstreams();
   const { assignableStaff } = useCompanyLookups();
   const { handoffs } = useRecentHandoffs();
@@ -220,13 +223,15 @@ export function SupervisorDashboard({ user }: { user: User }) {
                   id: c.id,
                   title: c.name,
                   subtitle: HEALTH_LABEL[c.health.status],
-                  href: `/dashboard/companies/${c.id}`,
+                  href: projectHrefForCompany(c.id, projects),
                 }))}
                 emptyMessage="No clients need attention right now."
               />
             ),
           }}
-          viewAllHref="/dashboard/companies?health=attention"
+          // Filter gap (Project Closure — Navigation Correction): Projects has no client-health
+          // filter today, so "View all" lands on the plain list rather than a pre-filtered one.
+          viewAllHref="/dashboard/projects"
         />
       </div>
 
@@ -392,7 +397,7 @@ export function SupervisorDashboard({ user }: { user: User }) {
           <TeamWorkloadCard members={teamMembers} tasks={tasks} />
         </div>
         <div className={cn("flex flex-col gap-4", STAGGER_ITEM_CLASS)} style={staggerDelay(1)}>
-          <ClientHealthOverviewCard companies={companies} />
+          <ClientHealthOverviewCard companies={companies} projects={projects} />
           <Card>
             <CardHeader>
               <CardTitle className="text-base">Team Tasks by Status</CardTitle>

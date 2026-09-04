@@ -13,7 +13,10 @@ export const PALETTE_CATEGORY_ORDER: PaletteCategory[] = [
 ];
 
 export const PALETTE_CATEGORY_LABELS: Record<PaletteCategory, string> = {
-  companies: "Companies",
+  // Project Closure — Navigation Correction: Projects is the normal visible client/company
+  // destination; the underlying search still reuses existing Company data/infra (category key
+  // stays "companies" internally), only the visible label and result destinations changed.
+  companies: "Projects",
   tasks: "Tasks",
   workstreams: "Workstreams",
   reports: "Reports",

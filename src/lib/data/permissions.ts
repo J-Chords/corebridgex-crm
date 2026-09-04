@@ -768,6 +768,33 @@ export function canManageProjects(user: User): boolean {
 }
 
 /**
+ * Project Level Stage C — who may progress/resolve a Project Issue: its reporter, its assignee, or
+ * Superadmin. Deliberately narrower than "who can view/create issues" (`canAccessProject` already
+ * covers that) — mirrors `set_project_issue_status`'s own predicate exactly.
+ */
+export function canProgressProjectIssue(
+  viewer: User,
+  issue: { createdById: string; assignedToId: string | null }
+): boolean {
+  if (isSuperadmin(viewer)) return true;
+  return issue.createdById === viewer.id || issue.assignedToId === viewer.id;
+}
+
+/** Edit an Issue's own details (title/description/assignee/links) — reporter or Superadmin only,
+ * mirroring `update_project_issue_details`'s own predicate. */
+export function canEditProjectIssueDetails(viewer: User, issue: { createdById: string }): boolean {
+  return isSuperadmin(viewer) || issue.createdById === viewer.id;
+}
+
+/** Edit/delete own Project Comment — author, or Superadmin for delete-as-moderation only. */
+export function canEditProjectComment(viewer: User, comment: { authorId: string }): boolean {
+  return comment.authorId === viewer.id;
+}
+export function canDeleteProjectComment(viewer: User, comment: { authorId: string }): boolean {
+  return comment.authorId === viewer.id || isSuperadmin(viewer);
+}
+
+/**
  * Phase 14B — Document visibility gate, mirroring the hosted `can_access_document` SQL function
  * exactly (`can_access_task` for a Task-linked Document, never `can_access_task_directly`; the
  * narrower `can_access_project` — never the broader `can_access_company` — for a Project-level one).

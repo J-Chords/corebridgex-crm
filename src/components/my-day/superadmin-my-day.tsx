@@ -5,6 +5,7 @@ import { Plus } from "lucide-react";
 import type { User, TaskStatus } from "@/lib/data/types";
 import { useMyTasks, useTasks } from "@/lib/data/hooks/use-tasks";
 import { useCompanies, useCompanyLookups } from "@/lib/data/hooks/use-companies";
+import { useProjects } from "@/lib/data/hooks/use-projects";
 import {
   useTaskFilters,
   filterTasks,
@@ -62,6 +63,7 @@ export function SuperadminMyDay({ user }: SuperadminMyDayProps) {
   // already uses (useTasks()/useCompanies() already return everything for a superadmin).
   const { tasks: orgTasks } = useTasks();
   const { companies } = useCompanies();
+  const { projects } = useProjects();
   const { assignableStaff } = useCompanyLookups();
   const staff = assignableStaff.filter((u) => u.id !== user.id);
 
@@ -104,6 +106,7 @@ export function SuperadminMyDay({ user }: SuperadminMyDayProps) {
         teamMembers={staff}
         teamTasks={orgTasks}
         atRiskCompanies={companies}
+        projects={projects}
         className={STAGGER_ITEM_CLASS}
         style={staggerDelay(0)}
       />

@@ -90,8 +90,8 @@ export const supabaseDocumentsProvider: DocumentsProvider = {
       .select("*")
       .eq("project_id", projectId)
       .eq("upload_state", "ready")
-      .is("deleted_at", null)
       .order("created_at", { ascending: false });
+    query = filters?.trashed ? query.not("deleted_at", "is", null) : query.is("deleted_at", null);
     if (filters?.category) query = query.eq("category", filters.category);
     if (filters?.search) {
       const term = `%${escapeForOrFilter(filters.search)}%`;

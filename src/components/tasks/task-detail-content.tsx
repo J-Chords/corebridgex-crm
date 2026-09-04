@@ -14,6 +14,8 @@ import { useTaskHandoffs } from "@/lib/data/hooks/use-task-handoffs";
 import { NotesSection } from "@/components/notes/notes-section";
 import { useTaskNotes } from "@/lib/data/hooks/use-notes";
 import { notesProvider } from "@/lib/data/providers";
+import { ProjectCommentsSection } from "@/components/projects/project-comments-section";
+import type { ProjectCommentTarget } from "@/lib/data/providers/projects-provider";
 import { Separator } from "@/components/ui/separator";
 
 interface TaskDetailContentProps {
@@ -59,6 +61,13 @@ export function TaskDetailContent({ task, onChanged, timer }: TaskDetailContentP
 
   if (!user) return null;
 
+  // Part 7/8/9 — a Task Comment is only possible when the Task's own Workstream belongs to a
+  // Project (`project_comments.project_id` is always required); a legacy/internal Task with no
+  // Project simply has no Comments tab, same as it has no Project Issues/Documents context.
+  const commentsTarget: ProjectCommentTarget | null = task.workstream.projectId
+    ? { projectId: task.workstream.projectId, taskId: task.id }
+    : null;
+
   return (
     <div className="flex flex-col gap-5">
       <div className="flex flex-col gap-2">
@@ -93,6 +102,16 @@ export function TaskDetailContent({ task, onChanged, timer }: TaskDetailContentP
           refreshNotes();
         }}
       />
+
+      {commentsTarget && (
+        <>
+          <Separator />
+          <div className="flex flex-col gap-2">
+            <SectionHeading>Comments</SectionHeading>
+            <ProjectCommentsSection target={commentsTarget} compact />
+          </div>
+        </>
+      )}
 
       <Separator />
 

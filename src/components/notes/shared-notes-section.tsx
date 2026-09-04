@@ -25,7 +25,14 @@ function formatDateShort(iso: string) {
 
 interface SharedNotesSectionProps {
   notes: NoteWithAuthor[];
-  onAddNote: (input: { body: string; type: NoteType }) => Promise<void>;
+  onAddNote?: (input: { body: string; type: NoteType }) => Promise<void>;
+  /** Manual Acceptance Step 4 — Comments is now the one normal place to add Project discussion/
+   * context; this legacy Note history stays visible (never destructively hidden or deleted) but
+   * strictly read-only, so no new legacy Note can be authored from the normal V1 Project UI. */
+  readOnly?: boolean;
+  /** Defaults to "Shared Notes"; the read-only composition on the Comments tab passes "Legacy
+   * Notes" instead so it reads clearly as historical, not a second active authoring surface. */
+  title?: string;
 }
 
 /**
@@ -37,7 +44,7 @@ interface SharedNotesSectionProps {
  * When there are no notes yet, renders only a single-line "+ Add shared note" action instead of a
  * large empty card, so an Employee never loses vertical space to a feature they haven't used.
  */
-export function SharedNotesSection({ notes, onAddNote }: SharedNotesSectionProps) {
+export function SharedNotesSection({ notes, onAddNote, readOnly, title = "Shared Notes" }: SharedNotesSectionProps) {
   const [composerOpen, setComposerOpen] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [body, setBody] = useState("");
@@ -47,7 +54,7 @@ export function SharedNotesSection({ notes, onAddNote }: SharedNotesSectionProps
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!body.trim()) return;
+    if (!body.trim() || !onAddNote) return;
     setIsSubmitting(true);
     setError(null);
     try {
@@ -68,7 +75,8 @@ export function SharedNotesSection({ notes, onAddNote }: SharedNotesSectionProps
     setError(null);
   }
 
-  if (notes.length === 0 && !composerOpen) {
+  if (notes.length === 0) {
+    if (readOnly) return null;
     return (
       <button
         type="button"
@@ -87,17 +95,19 @@ export function SharedNotesSection({ notes, onAddNote }: SharedNotesSectionProps
     <div className="flex flex-col gap-2 rounded-lg border p-3">
       <div className="flex items-start justify-between gap-2">
         <div>
-          <span className="text-sm font-medium">Shared Notes</span>
-          <p className="text-xs text-muted-foreground">Shared notes available across related Projects.</p>
+          <span className="text-sm font-medium">{title}</span>
+          <p className="text-xs text-muted-foreground">
+            {readOnly ? "Historical context, kept for reference — new Project discussion happens in Comments above." : "Shared notes available across related Projects."}
+          </p>
         </div>
-        {!composerOpen && (
+        {!readOnly && !composerOpen && (
           <Button size="sm" variant="outline" onClick={() => setComposerOpen(true)}>
             <Plus /> Add note
           </Button>
         )}
       </div>
 
-      {composerOpen && (
+      {!readOnly && composerOpen && (
         <form onSubmit={handleSubmit} className="flex flex-col gap-2">
           <Textarea
             value={body}

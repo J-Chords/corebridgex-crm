@@ -1,13 +1,18 @@
 import type { CompaniesProvider, CompanyWithRelations } from "../companies-provider";
-import type { ClientContact, Company, User } from "../../types";
+import type { Brand, ClientContact, Company, User } from "../../types";
 import { canAccessCompany, canManageCompanies, isSuperadmin, assignableStaffFor, visibleCompanyIds } from "../../permissions";
 import { computeClientHealth } from "../../client-health";
 import { db } from "./mock-db";
 
 function toCompanyWithRelations(company: Company): CompanyWithRelations {
-  const brand = db.brands.find((b) => b.id === company.brandId);
-  if (!brand) {
-    throw new Error(`Company ${company.id} references unknown brand ${company.brandId}`);
+  // Null brandId is a genuine, valid "no Brand chosen yet" state (Project/client consolidation) —
+  // only a NON-null brandId that matches no real brand row is a real data-integrity error.
+  let brand: Brand | null = null;
+  if (company.brandId) {
+    brand = db.brands.find((b) => b.id === company.brandId) ?? null;
+    if (!brand) {
+      throw new Error(`Company ${company.id} references unknown brand ${company.brandId}`);
+    }
   }
   const serviceLineIds = db.companyServiceLines
     .filter((csl) => csl.companyId === company.id)

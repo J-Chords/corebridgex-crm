@@ -135,7 +135,9 @@ async function buildBrandSections(
   const byBrand = new Map<string, TaskEvidence[]>();
   for (const e of entries) {
     const company = db.companies.find((c) => c.id === e.task.companyId);
-    if (!company) continue;
+    // A brand-less client's work is silently excluded from every brand section, same as the
+    // Supabase implementation — never a crash, never a fabricated brand grouping.
+    if (!company || !company.brandId) continue;
     const list = byBrand.get(company.brandId) ?? [];
     list.push(e);
     byBrand.set(company.brandId, list);

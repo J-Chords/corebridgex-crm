@@ -233,6 +233,9 @@ export const mockWorkstreamsProvider: WorkstreamsProvider = {
     }
     const company = db.companies.find((c) => c.id === resolved.companyId);
     if (!company) throw new Error("Company not found.");
+    if (!company.brandId) {
+      throw new Error("This client has no Brand set yet — add a Brand to this client before creating a Service.");
+    }
     requireActivitiesBelongToService(input.activityIds, input.serviceLineId);
 
     const id = crypto.randomUUID();

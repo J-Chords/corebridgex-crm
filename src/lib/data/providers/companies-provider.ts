@@ -3,7 +3,8 @@ import type { ClientHealth } from "../client-health";
 
 /** Company joined with the read-shape screens actually need — not a raw schema row. */
 export interface CompanyWithRelations extends Company {
-  brand: Brand;
+  /** Null when this Company has no Brand yet — a genuine, valid state, not a data error. */
+  brand: Brand | null;
   serviceLines: ServiceLine[];
   primaryContact: ClientContact | null;
   assignedStaff: User[];
@@ -14,7 +15,7 @@ export interface CompanyWithRelations extends Company {
 export interface CompanyInput {
   name: string;
   status: CompanyStatus;
-  brandId: string;
+  brandId: string | null;
   serviceLineIds: string[];
   contractStartDate: string | null;
   renewalDate: string | null;

@@ -2163,6 +2163,133 @@ test **executed** (`SUPABASE_SERVICE_ROLE_KEY` present) — see the acceptance-h
 above for what was covered; zero leftover disposable Auth users/profiles/staffing rows confirmed
 after cleanup.
 
+## Project Level — Client Workspace Module
+
+**PROJECT LEVEL — IMPLEMENTATION COMPLETE / FINAL MANUAL ACCEPTANCE PENDING.** Locked
+interpretation: Company is structural Project *context* (like Brand is to Company), never listed
+among the Project *attributes* (Title/Status/Creator/Start-End-Completion Date/Project
+Group/Description/Tags/Services — Template is no longer a Project attribute, see "Services/Activity
+Configuration correction" below) — so
+"only Title is required" is a claim about attributes, not about the Company relationship itself.
+`/dashboard/projects → New Project` is now ONE unified dialog, not a two-step modal hop: it
+defaults to "New client" (Title is the only required input, reused as the brand-new Company's own
+name — never a duplicate name field; an optional "Client Information" section offers Brand/a
+primary contact/contract-renewal dates) with a one-click "Existing client" toggle for attaching to
+a Company that already exists. **Brand is now optional** — the product owner resolved this: a new
+forward-only migration (`20260902140000_company_brand_optional.sql`) dropped
+`companies.brand_id`'s `NOT NULL`, and `create_workstream`/`apply_template` were hardened to raise
+a clear, honest error ("this client has no Brand set yet") rather than a raw constraint violation
+when a Service is attempted on a brand-less client — no fake/default Brand anywhere. A new
+`createClientProject` provider method (backed by a genuinely atomic `create_client_project` RPC
+that creates the Company + optional contact + Project inside one transaction, delegating the
+Project row itself entirely to the existing unmodified `create_project`) powers the new-client
+path; Company-page "New Project" is unchanged.
+
+**Client/Company UX consolidation.** `/dashboard/projects` is the ONE primary client-facing
+destination for every role — "Companies" has no sidebar entry at all. Project Overview gained a
+genuine "Client Information" area: status/Brand/contract-renewal display, a real Contacts list
+(reusing `useCompany`'s already-fetched `contacts`), and Admin-only actions that open the existing
+`CompanyFormDialog`/`ContactFormDialog` in place — Admin no longer needs to leave the Project for
+normal client administration. The "Full client record (advanced)" link has since been **removed**
+(Services/Activity Configuration correction, below) — Companies is reachable only by direct URL
+now, for the Superadmin-only legacy Service Line subscription checkboxes/staff assignment/Apply
+Template (Service-recipe) surface, never a normal-workflow requirement. The Projects list has
+role-conditional columns (Admin: Global Team Leads/Attention/Actions; Team Lead:
+Overdue/Waiting/Blocked/Team; Employee: My Open Work/Attention/Next Due) computed from data already
+fetched — one shared page/component for every role.
+
+**Services/Activity Configuration correction (retires the visible Project Template layer).** The
+product owner clarified the reusable "templates" for V1 ARE the global Services (`service_lines`)
+and their Activities directly — not a separate Project Template bundle wrapper. Retired from the
+visible app: the `/dashboard/projects/templates` admin page, its "Templates" button on
+`/dashboard/projects`, the "Apply Template" bundle action on a Project's Services tab, and the
+Template picker/`templateId` field on New Project. New Project's optional "Services" section and
+the Services tab's "Add Service" now both use one new shared component
+(`ProjectServicePicker`) — select an existing Service, then select its existing Activities;
+zero-Services stays valid; no new Service/Activity catalog row is ever created this way; adding an
+already-attached Service again is prevented by construction (the picker excludes already-used
+Service Lines). Hosted `project_templates`/`project_template_services`/`project_template_activities`
+(tables, migrations, provider code) are untouched and dormant, not destroyed — nothing that was
+ever materialized from a Project Template was altered. The pre-existing Service Template
+("recipe")/`apply_template` flow is unchanged and still the one path that materializes default
+Tasks/checklists/recurrence — reachable via direct URL to a Company's own page, since the new plain
+Service+Activity attachment deliberately does not trigger that. **Brand audit (Case A confirmed):**
+Activities are genuinely Brand-scoped (`departments.brand_id`/`workstreams.brand_id` stay `NOT
+NULL`; `service_lines` itself has no `brand_id` at all) — a real, current dependency, not legacy
+cruft; unifying it is a future Service-level-phase decision. Title-only/Brand-less/zero-Services
+Project creation stays valid; the new Services picker proactively guards ("Add a Brand to this
+client before configuring Services") before a Brand-less client can attempt Service configuration,
+never a raw backend error. See `docs/project-level-product-architecture.md`'s "Services & Activities
+— the V1 configuration model" and "Brand dependency" sections for the full detail.
+
+**Remaining, genuine, not-hidden:** a pre-existing, already-documented dead-end (a few dashboard
+widgets/command-palette/one keyboard shortcut linking non-Superadmin viewers to
+`/dashboard/companies/[id]`) was left untouched, per this pass's own explicit navigation-scope
+boundary (no broader Dashboard consolidation yet). Built forward from the Admin Foundation final checkpoint
+(`5fa92448d716996dee6589abeb00bcc28748a1e6`); deliberately left **uncommitted** pending manual UI
+testing. Full architecture, exact field mapping, and the complete gaps list are in
+`docs/project-level-product-architecture.md` — summary: Project gained Completion Date, genuinely
+separate Start/End Date (own work timeline, distinct from the pre-existing annual contract dates),
+Project Group, Tags, a safe Markdown Description editor, and a real status lifecycle (Active/On
+Hold/Completed/Canceled/Archived/Trash, reason required for On Hold/Canceled, Trash/Restore as
+explicit actions, configurable-but-disabled-by-design retention) via new Admin-only RPCs; threaded
+Comments extended to Task/Document targets (one reusable panel, never duplicated); Issues gained
+an optional, server-validated Activity relation; a Project Member gained an optional, data-only
+`project_role` label; the Project Services tab gained a read-only "Global Service Staffing"
+display; the Projects list gained a full Service/Team Lead/Member/Group/Tag filter set; Documents
+went from a read-only list to the complete upload/edit/download/Trash/restore surface plus
+per-Document Comments, proven with a real authenticated hosted Storage E2E (21/21 assertions,
+fully cleaned up). **Project Templates were corrected mid-effort**: the first pass built a
+second, competing Service/recurrence/Task system from scratch; corrected to a lightweight bundle
+of the pre-existing `templates`/`template_tasks`/`template_checklist_items` Service Template
+("recipe") architecture instead — a Project Template now only references existing recipes plus an
+optional Activity subset per recipe, and applying one (at Project creation, or later via
+Project → Services → Apply Template, both idempotent) materializes each recipe's own real
+recurrence/Tasks/checklists through the exact same centralized path the pre-existing Company-level
+"Apply Template" now also uses — **this Project Template bundle layer was itself later retired from
+the visible app** (Services/Activity Configuration correction, above); see
+`docs/project-level-product-architecture.md`'s "Template architecture — history / retirement"
+section for the full before/after. Authorization is explicitly unchanged throughout:
+no Company/Project/Workstream/Task helper reads Service staffing or gains new authority from
+Template materialization, proven directly by mock probes. Live hosted E2E also validated the
+corrected Template architecture (recurrence inheritance, Task/checklist materialization, Activity
+attachment, idempotent re-apply, Template-edit-does-not-mutate-existing-Projects, legacy
+Company-only Apply Template unchanged) — 32/33 assertions passed on the first architecture pass,
+16/16 mock probes and 32/33 hosted assertions passed on the Template correction pass (the one
+"failure" was a wrong test expectation, not a product defect — see the correction's own final
+report). All four provider builds pass; every migration applied hosted with live read-back
+confirmation, zero pending; a genuine pre-existing gap (`service_role` missing `SELECT` grant on
+the three Project Template tables, discovered live during this correction's own E2E cleanup) was
+also fixed via its own forward-only migration.
+
+**Manual Acceptance Step 1 (Project List) and Step 2 (New Project) are ACCEPTED** — see
+`docs/project-level-product-architecture.md`'s own sections for full detail: the combined list+Gantt
+timeline is removed (full-width role-conditional table, global Service Line names, readable
+avatar+name people display via the new shared `PeopleInline` component); New Project never exposes a
+Client/Company mode choice or picker in its normal global flow (always creates a brand-new Company +
+Project atomically; the legacy attach-to-existing-Company path stays reachable only from that
+Company's own page), uses a wider two-column collapsible layout, and a searchable `MultiSelect` for
+Members instead of an all-user chip wall. **Manual Acceptance Step 3 (Project Overview, role-aware)
+is STRUCTURALLY ACCEPTED** with a handful of Step 4 carryover corrections, all now implemented:
+"Renew" removed from the normal Project header (backend/dialog left dormant, untouched); the
+underlying Company/master status inside Administrative Details relabeled "Account Status" (never
+merged with the Project's own lifecycle status); Next Due now shows the actual Task's title plus its
+date, never a bare date; Project Details is compact — Owner always shown, Group/Tags/dates only
+rendered when at least one has a real value, else one concise empty-state line; Related Projects
+removed from normal Overview entirely (data untouched, just not promoted here); the `SharedNotesSection`
+composer is removed from Overview — Comments is now the one normal place for new Project discussion,
+with historical Notes kept visible read-only under a "Legacy Notes" heading on the Comments tab (no
+Notes data deleted, `SharedNotesSection` gained a `readOnly` prop). **Manual Acceptance Step 4 (final
+Project use-case validation) is IMPLEMENTED, uncommitted, MANUAL ACCEPTANCE PENDING** — Services,
+Tasks, Members, Comments, Documents, Time, Issues, and Reports were all audited against the
+management requirements and confirmed already compliant (global Service Line names on the Services
+tab via the pre-existing `workstreamDisplayHeading`, duplicate-Service prevention already in place,
+searchable Members selector, full Comment/reply/target-security architecture, Document/Time/Issue
+field mappings all already matching); no rebuild was needed anywhere except the Overview carryovers
+above and one small Services-tab label clarification ("Service Lead (this Project)" vs. "Global Team
+Leads," to keep the two staffing concepts visually distinct). No authorization changed, no new
+migration. This is the final pass before ONE Product Owner Project-level acceptance and checkpoint.
+
 ## Next roadmap
 
 **Phase 11 in its entirety (11A–11D) is COMPLETE and MANUALLY ACCEPTED** — see the phase's own sections above, including 11D's final decisions (Client Visit restriction is intentionally UI-only, no Visit RLS migration; legacy Internal Reports are Superadmin historical-archive-only with new generation removed from the UI; Review Queue and Client Report Schedules UI removed, both backends fully preserved; exactly three roles) and the JWT "issued at future" investigation (root-caused to transient Supabase hosted-infrastructure clock skew, confirmed resolved by the user reloading the authenticated app). Checkpointed and pushed to GitHub — see "Latest verified checkpoint" for the exact hash.
@@ -2231,6 +2358,11 @@ Read the Current phase and Next roadmap sections before proposing changes.
 
 ## Last updated
 
+- Date: 2026-09-04 (Project Level — Final Integration Correction, last pass before Project checkpoint: Project list's status experience consolidated into ONE system — a 6-tile KPI strip (Admin: Active/On Hold/Completed/Canceled/Archived/Trash) or 4-tile (Team Lead/Employee — Archived/Trash stay Admin-only, same restriction the prior toggle already had) plus a matching "Status" dropdown, replacing the old separate Active/Archived/Trash toggle; clicking a tile filters, clicking it again returns to "All Statuses." Global Service/Activity catalog creation locked to Admin everywhere: `TaskFormDialog` lost its inline "+ New service"/"+ Add existing activities"/"+ Create Activity" catalog-admin escape hatches (guidance text points to Project > Services instead); a new "Configure Activities" action on the Project Services tab reuses the pre-existing `AddServiceActivitiesDialog` (previously reachable only from the now-removed Task-form flow) to add remaining not-yet-enabled Activities to an already-attached Service, with no duplicate association possible. Task Assignees is now a searchable `MultiSelect` (same component as Project Members), replacing the permanent assignee chip wall. No new migration; no authorization/RLS change; one narrow, explicitly-flagged consequence — an Employee Service-lead can no longer silently extend their Service's Activity catalog as a side effect of Task creation (ask Team Lead/Admin instead), deferred to the Service-level phase. Uncommitted, pending final Product Owner Project-level acceptance and checkpoint.)
+- Date: 2026-09-03 (Project Level — Manual Acceptance Step 4, final Project use-case validation pass: removed "Renew" from the normal Project header, keeping the underlying renewal backend/dialog dormant; relabeled Administrative Details' Company status "Account Status" to stop it reading as a duplicate of the Project's own lifecycle status; Next Due now shows the actual Task's title plus date; Project Details made compact, showing only fields with real values; Related Projects removed from normal Overview; the Shared Notes composer removed from Overview entirely — Comments is now the one normal Project discussion surface, with historical Notes preserved read-only as "Legacy Notes" on the Comments tab. Audited Services/Tasks/Members/Comments/Documents/Time/Issues/Reports against management's requirements — all already compliant, no rebuild needed. No new migration, no authorization change. Uncommitted, pending one final Product Owner Project-level acceptance pass and checkpoint.)
+- Date: 2026-09-03 (Project Level — Manual Acceptance Step 3: Project Overview redesigned as one role-aware shared component — Admin/Team Lead/Employee each see a different, appropriately-scoped subset of the same panels (compact summary strip, grouped Work-needing-attention, Services summary, Team, and Admin-only Administrative Details renamed from "Client Information"); the former always-visible 5-status-badge strip above every tab is removed, its figures folded into Overview's own panels; new shared `PeopleInline`/`serviceLineDisplayName` helpers extracted and reused by the Project list too (Step 1 behavior unchanged). No new migration, no authorization change. Uncommitted, manual acceptance pending.)
+- Date: 2026-09-03 (Project Level — Manual Acceptance Step 2 correction: New Project's normal global entry point no longer exposes any Client/Company mode toggle or picker — always creates a brand-new Company + Project atomically; the legacy attach-to-an-existing-Company path stays technically available only from that Company's own page. Drawer widened to `max-w-4xl` with real two-column desktop grids; Members now a searchable `MultiSelect`; Project Group's new-group input hidden until "+ New group" is explicitly clicked; all remaining "client" wording removed from the normal flow; Project List's Services column now shows global Service Line names instead of Workstream instance names.)
+- Date: 2026-09-03 (Project Level — Services/Activity Configuration correction: retired the visible Project Template bundle layer — `/dashboard/projects/templates` page, its "Templates" button, the Services-tab "Apply Template" action, and the Template picker on New Project all removed; hosted `project_templates`/`project_template_services`/`project_template_activities` left dormant, untouched. New shared `ProjectServicePicker` component — select an existing Service, select its existing Activities — reused by New Project's optional "Services" section and Project → Services → "Add Service"; duplicate Project Services prevented by construction (already-attached Service Lines excluded from the picker). Brand/Activity-Catalog dependency audited and confirmed genuine (Case A) — Title-only/Brand-less/zero-Services Project creation stays valid, with a proactive "Add a Brand first" guard before Service configuration rather than a raw error. Removed the "Full client record (advanced)" link from Project Overview — Companies now reachable only by direct URL. No new migration. Uncommitted, final manual acceptance pending.)
 - Date: 2026-08-14
 - Date: 2026-08-15
 - Date: 2026-08-17

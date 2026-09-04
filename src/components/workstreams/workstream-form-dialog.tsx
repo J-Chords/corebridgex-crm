@@ -95,7 +95,7 @@ export function WorkstreamFormDialog({
   // selected the Activities section below is hidden entirely, so an unscoped fetch here would never
   // be shown, just wasted.
   const { departments: activityDepartments } = useActivityCatalog(
-    selectedServiceLine ? company.brand.id : undefined,
+    selectedServiceLine ? company.brand?.id : undefined,
     selectedServiceLine ? selectedServiceLine.id : undefined
   );
 
@@ -248,7 +248,7 @@ export function WorkstreamFormDialog({
         <FormDrawerHeader
           title={mode === "create" ? "New Service" : "Edit Service"}
           context={company.name}
-          secondaryContext={`Partner brand: ${company.brand.name}`}
+          secondaryContext={company.brand ? `Partner brand: ${company.brand.name}` : "No Brand set for this client yet"}
         />
         <FormDrawerBody>
           <FormDrawerSection label="Service">

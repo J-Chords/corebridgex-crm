@@ -1,4 +1,10 @@
-import type { TemplatesProvider, TemplateWithTasks, TemplateTaskWithChecklist, ApplyTemplateInput } from "../templates-provider";
+import type {
+  TemplatesProvider,
+  TemplateWithTasks,
+  TemplateTaskWithChecklist,
+  ApplyTemplateInput,
+  ApplyTemplateResult,
+} from "../templates-provider";
 import type { Template, TemplateTask, TemplateChecklistItem, ServiceLine, RecurrenceFrequency, Role } from "../../types";
 import { createClient } from "@/lib/supabase/client";
 
@@ -114,8 +120,26 @@ export const supabaseTemplatesProvider: TemplatesProvider = {
     return hydrated ?? null;
   },
 
-  async applyTemplate(_viewer, input: ApplyTemplateInput) {
+  async applyTemplate(_viewer, input: ApplyTemplateInput): Promise<ApplyTemplateResult> {
     const supabase = createClient();
+
+    if (input.projectId) {
+      // Project-aware path — reuses create_workstream's own role-based authorization (Superadmin/
+      // Supervisor/Employee) via apply_service_template_to_project, never the looser
+      // Company-only Supervisor-or-Superadmin check the legacy RPC below still uses unchanged.
+      const { data, error } = await supabase.rpc("apply_service_template_to_project", {
+        p_template_id: input.templateId,
+        p_project_id: input.projectId,
+        p_lead_user_id: input.leadUserId,
+        p_team_user_ids: input.teamUserIds,
+        p_start_date: input.startDate,
+        p_activity_ids: input.activityIds ?? [],
+      });
+      if (error) throw new Error(error.message);
+      const result = data as { workstreamId: string; status: "created" | "merged" };
+      return { workstreamId: result.workstreamId, status: result.status };
+    }
+
     const { data, error } = await supabase.rpc("apply_template", {
       target_template_id: input.templateId,
       p_company_id: input.companyId,
@@ -125,6 +149,6 @@ export const supabaseTemplatesProvider: TemplatesProvider = {
       p_start_date: input.startDate,
     });
     if (error) throw new Error(error.message);
-    return { workstreamId: data as string };
+    return { workstreamId: data as string, status: "created" };
   },
 };

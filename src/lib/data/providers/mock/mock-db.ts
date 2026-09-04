@@ -23,7 +23,19 @@ import { seedAccomplishmentsReports } from "./seed-accomplishments-reports";
 import { seedSavedViews } from "./seed-saved-views";
 import { seedProjects } from "./seed-projects";
 import { seedProjectMembers } from "./seed-project-members";
-import type { ClientReport, ClientReportSchedule, DailyUpdate, Document, TimeEntryCorrection, VisitEntry } from "../../types";
+import { seedProjectGroups } from "./seed-project-groups";
+import type {
+  ClientReport,
+  ClientReportSchedule,
+  DailyUpdate,
+  Document,
+  ProjectComment,
+  ProjectIssue,
+  ProjectTemplate,
+  ProjectTrashSettings,
+  TimeEntryCorrection,
+  VisitEntry,
+} from "../../types";
 
 /**
  * Single in-memory mock "database", shared by every mock provider so a
@@ -80,4 +92,16 @@ export const db = {
   // "zero-Service creation is valid" rule.
   serviceTeamLeads: [] as { serviceLineId: string; userId: string }[],
   serviceEmployees: [] as { serviceLineId: string; userId: string }[],
+  // Project Level Stage C.
+  projectGroups: [...seedProjectGroups],
+  projectComments: [] as ProjectComment[],
+  projectIssues: [] as ProjectIssue[],
+  // Project Level completion pass — Templates, member responsibility (folded into projectMembers'
+  // own rows, see seed-project-members.ts), Trash retention.
+  projectTemplates: [] as ProjectTemplate[],
+  // Correction — each entry references an existing Service Template/recipe (`templates.id`), never
+  // a bare Service Line. serviceLineId is always derived from that recipe, never independent input.
+  projectTemplateServices: [] as { projectTemplateId: string; serviceTemplateId: string; serviceLineId: string }[],
+  projectTemplateActivities: [] as { projectTemplateId: string; serviceTemplateId: string; activityId: string }[],
+  projectTrashSettings: { retentionDays: null, updatedAt: new Date().toISOString() } as ProjectTrashSettings,
 };

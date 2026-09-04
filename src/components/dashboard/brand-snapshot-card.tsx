@@ -38,8 +38,11 @@ export function BrandSnapshotCard({ brands, companies, tasks }: BrandSnapshotCar
     const pct = Math.round((clientCount / maxClients) * 100);
     return (
       <Link
+        // Project Closure — Navigation Correction: Projects has no per-Brand filter today, so this
+        // is not a like-for-like destination — reported as a known filter gap rather than keeping
+        // the competing Companies destination (Section 3 of that correction).
         key={brand.id}
-        href={`/dashboard/companies?brand=${brand.id}`}
+        href="/dashboard/projects"
         className={cn(
           "-mx-2 flex flex-col gap-1.5 rounded-md px-2 py-2 transition-colors hover:bg-muted/60",
           STAGGER_ITEM_CLASS

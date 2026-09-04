@@ -107,11 +107,21 @@ function isNormallyVisible(doc: Document): boolean {
 
 export const mockDocumentsProvider: DocumentsProvider = {
   async listProjectDocuments(viewer, projectId, filters: DocumentFilters = {}) {
-    let rows = db.documents.filter((d) => d.projectId === projectId && isNormallyVisible(d));
-    // Re-evaluated per row, exactly like the hosted `can_access_document` policy would be for every
-    // row a real SELECT returns — a Task-linked row never gets a free pass just because it's being
-    // browsed from the Project-level list (Phase 14A Part 9's "Task-linked visibility leak" rule).
-    rows = rows.filter((d) => canAccessDocumentRecord(viewer, documentContext(d), db.users));
+    let rows: Document[];
+    if (filters.trashed) {
+      // Part 14 — Trash view, scoped to whoever could restore it (mirrors the hosted
+      // `documents_select_trash` RLS policy — `can_manage_document_row`, not the read gate).
+      rows = db.documents.filter(
+        (d) => d.projectId === projectId && d.uploadState === "ready" && d.deletedAt !== null
+      );
+      rows = rows.filter((d) => canManageDocument(viewer, documentContext(d), db.users));
+    } else {
+      rows = db.documents.filter((d) => d.projectId === projectId && isNormallyVisible(d));
+      // Re-evaluated per row, exactly like the hosted `can_access_document` policy would be for every
+      // row a real SELECT returns — a Task-linked row never gets a free pass just because it's being
+      // browsed from the Project-level list (Phase 14A Part 9's "Task-linked visibility leak" rule).
+      rows = rows.filter((d) => canAccessDocumentRecord(viewer, documentContext(d), db.users));
+    }
     if (filters.category) rows = rows.filter((d) => d.category === filters.category);
     if (filters.search) {
       const q = filters.search.toLowerCase();

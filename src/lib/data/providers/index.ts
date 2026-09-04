@@ -39,6 +39,12 @@ import { mockAdminUsersProvider } from "./mock/mock-admin-users-provider";
 import { supabaseAdminUsersProvider } from "./supabase/supabase-admin-users-provider";
 import { mockServiceMembershipProvider } from "./mock/mock-service-membership-provider";
 import { supabaseServiceMembershipProvider } from "./supabase/supabase-service-membership-provider";
+import { mockProjectCommentsProvider } from "./mock/mock-project-comments-provider";
+import { supabaseProjectCommentsProvider } from "./supabase/supabase-project-comments-provider";
+import { mockProjectIssuesProvider } from "./mock/mock-project-issues-provider";
+import { supabaseProjectIssuesProvider } from "./supabase/supabase-project-issues-provider";
+import { mockProjectTemplatesProvider } from "./mock/mock-project-templates-provider";
+import { supabaseProjectTemplatesProvider } from "./supabase/supabase-project-templates-provider";
 
 /**
  * Single switch for the whole app's backend, driven by `NEXT_PUBLIC_DATA_PROVIDER` (see
@@ -95,3 +101,7 @@ export const adminUsersProvider = usesSupabaseData ? supabaseAdminUsersProvider 
 export const serviceMembershipProvider = usesSupabaseData
   ? supabaseServiceMembershipProvider
   : mockServiceMembershipProvider;
+// Project Level Stage C — same precedent as Documents/Admin Users: real only under full "supabase".
+export const projectCommentsProvider = usesSupabaseData ? supabaseProjectCommentsProvider : mockProjectCommentsProvider;
+export const projectIssuesProvider = usesSupabaseData ? supabaseProjectIssuesProvider : mockProjectIssuesProvider;
+export const projectTemplatesProvider = usesSupabaseData ? supabaseProjectTemplatesProvider : mockProjectTemplatesProvider;

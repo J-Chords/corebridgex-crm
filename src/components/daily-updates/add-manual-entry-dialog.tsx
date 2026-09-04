@@ -52,7 +52,7 @@ export function AddManualEntryDialog({ open, onOpenChange, onSave }: AddManualEn
   const selectedCompany = companies.find((c) => c.id === companyId);
   const companyProjects = selectedCompany ? projects.filter((p) => p.companyId === selectedCompany.id) : [];
   const companyProjectLabels = operationalProjectPickerLabels(companyProjects);
-  const { departments } = useActivityCatalog(selectedCompany?.brand.id);
+  const { departments } = useActivityCatalog(selectedCompany?.brand?.id);
 
   useEffect(() => {
     if (!open) return;

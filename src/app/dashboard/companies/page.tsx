@@ -260,7 +260,7 @@ function CompaniesPageContent() {
                 <TableCell>
                   <ClientHealthBadge health={company.health} />
                 </TableCell>
-                <TableCell className="text-muted-foreground">{company.brand.name}</TableCell>
+                <TableCell className="text-muted-foreground">{company.brand?.name ?? "—"}</TableCell>
                 <TableCell className="text-muted-foreground">
                   {company.primaryContact?.name ?? "—"}
                 </TableCell>

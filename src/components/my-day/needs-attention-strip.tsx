@@ -7,6 +7,7 @@ import { AlertTriangle, Building2, ChevronDown, Sparkles } from "lucide-react";
 import type { User } from "@/lib/data/types";
 import type { TaskWithRelations } from "@/lib/data/providers/tasks-provider";
 import type { CompanyWithRelations } from "@/lib/data/providers/companies-provider";
+import { projectHrefForCompany } from "@/lib/data/project-display";
 import { badgeVariants } from "@/components/ui/badge";
 import { ContainedIcon } from "@/components/ui/contained-icon";
 import { STAGGER_ITEM_CLASS, staggerDelay } from "@/lib/stagger";
@@ -42,10 +43,17 @@ interface AttentionCategory {
   items: AttentionItem[];
 }
 
-function buildAtRiskCategory(companies: CompanyWithRelations[]): AttentionCategory | null {
+function buildAtRiskCategory(
+  companies: CompanyWithRelations[],
+  projects: { id: string; companyId: string }[]
+): AttentionCategory | null {
   const items = companies
     .filter((c) => c.health.status === "at-risk")
-    .map((company) => ({ id: `company-${company.id}`, message: `${company.name} — at risk`, href: `/dashboard/companies/${company.id}` }));
+    .map((company) => ({
+      id: `company-${company.id}`,
+      message: `${company.name} — at risk`,
+      href: projectHrefForCompany(company.id, projects),
+    }));
   if (items.length === 0) return null;
   return {
     key: "at-risk",
@@ -88,6 +96,9 @@ interface NeedsAttentionStripProps {
   teamTasks: TaskWithRelations[];
   /** Org-wide-only signal (Superadmin) — omit for Supervisor, whose attention strip has no client-health scope. */
   atRiskCompanies?: CompanyWithRelations[];
+  /** Required whenever `atRiskCompanies` is passed — resolves each Company to its own Project
+   * workspace (Project Closure — Navigation Correction). */
+  projects?: { id: string; companyId: string }[];
   className?: string;
   style?: CSSProperties;
 }
@@ -109,13 +120,14 @@ export function NeedsAttentionStrip({
   teamMembers,
   teamTasks,
   atRiskCompanies,
+  projects,
   className,
   style,
 }: NeedsAttentionStripProps) {
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
 
   const categories = [
-    buildAtRiskCategory(atRiskCompanies ?? []),
+    buildAtRiskCategory(atRiskCompanies ?? [], projects ?? []),
     buildStaffCategory(teamMembers, teamTasks),
   ].filter((c): c is AttentionCategory => c !== null);
 

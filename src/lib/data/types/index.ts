@@ -23,3 +23,5 @@ export * from "./client-report";
 export * from "./visit-entry";
 export * from "./client-report-schedule";
 export * from "./service-membership";
+export * from "./project-comment";
+export * from "./project-issue";

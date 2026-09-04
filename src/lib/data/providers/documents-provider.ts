@@ -36,6 +36,10 @@ export interface DocumentsProvider {
 export interface DocumentFilters {
   search?: string;
   category?: DocumentCategory;
+  /** Part 14 — Trash view. False/omitted (default): the normal ready+active list. True: ready,
+   * soft-deleted Documents only, scoped to whoever could restore them (mirrors the hosted
+   * `documents_select_trash` RLS policy — `can_manage_document_row`, not the broader read gate). */
+  trashed?: boolean;
 }
 
 export interface UploadDocumentInput {

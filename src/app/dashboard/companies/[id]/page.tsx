@@ -24,6 +24,7 @@ import { CompanyFormDialog } from "@/components/companies/company-form-dialog";
 import { ContactFormDialog } from "@/components/companies/contact-form-dialog";
 import { WorkstreamStatusBadge } from "@/components/workstreams/workstream-status-badge";
 import { WorkstreamFormDialog } from "@/components/workstreams/workstream-form-dialog";
+import { ProjectFormDialog } from "@/components/projects/project-form-dialog";
 import { BudgetBar, BudgetBarCompact } from "@/components/ui/budget-bar";
 import { computeBudgetRollup } from "@/lib/data/time-budget";
 import { RecurrenceIndicatorCompact } from "@/components/workstreams/recurrence-indicator";
@@ -55,6 +56,7 @@ export default function CompanyDetailPage({ params }: { params: Promise<{ id: st
   const { notes, refresh: refreshNotes } = useCompanyNotes(id);
 
   const [editOpen, setEditOpen] = useState(false);
+  const [createProjectOpen, setCreateProjectOpen] = useState(false);
   const [contactDialogOpen, setContactDialogOpen] = useState(false);
   const [editingContact, setEditingContact] = useState<ClientContact | undefined>(undefined);
   const [workstreamDialogOpen, setWorkstreamDialogOpen] = useState(false);
@@ -117,12 +119,19 @@ export default function CompanyDetailPage({ params }: { params: Promise<{ id: st
             <CompanyProjectAvatar companyId={company.id} companyName={company.name} />
             <h1 className="font-heading text-2xl font-semibold">{company.name}</h1>
             <CompanyStatusBadge status={company.status} />
-            <Badge variant="neutral">{company.brand.name}</Badge>
+            <Badge variant="neutral">{company.brand?.name ?? "No brand yet"}</Badge>
           </div>
           {canManage && (
-            <Button variant="outline" onClick={() => setEditOpen(true)}>
-              <Pencil /> Edit company
-            </Button>
+            <div className="flex items-center gap-2">
+              {isSuperadmin(user) && (
+                <Button size="sm" onClick={() => setCreateProjectOpen(true)}>
+                  <Plus /> New Project
+                </Button>
+              )}
+              <Button variant="outline" onClick={() => setEditOpen(true)}>
+                <Pencil /> Edit company
+              </Button>
+            </div>
           )}
         </div>
         <ClientHealthSummary health={company.health} />
@@ -353,6 +362,15 @@ export default function CompanyDetailPage({ params }: { params: Promise<{ id: st
             company={company}
             onSaved={refresh}
           />
+          {isSuperadmin(user) && (
+            <ProjectFormDialog
+              open={createProjectOpen}
+              onOpenChange={setCreateProjectOpen}
+              mode="create"
+              defaultCompanyId={company.id}
+              onSaved={() => router.push("/dashboard/projects")}
+            />
+          )}
           <ContactFormDialog
             open={contactDialogOpen}
             onOpenChange={setContactDialogOpen}

@@ -1,57 +1,61 @@
 "use client";
 
-import { Suspense, use, useMemo, useState } from "react";
+import { Suspense, use, useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import {
   ArrowLeft,
-  Ban,
-  CheckCircle2,
-  Circle,
-  Clock,
   Pencil,
-  PlayCircle,
   Plus,
-  RefreshCw,
   Search,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth/auth-context";
-import { useProject, useProjects } from "@/lib/data/hooks/use-projects";
+import { useProject, useProjectGroups } from "@/lib/data/hooks/use-projects";
 import { useWorkstreams } from "@/lib/data/hooks/use-workstreams";
 import { useTasks } from "@/lib/data/hooks/use-tasks";
-import { useCompany } from "@/lib/data/hooks/use-companies";
+import { useCompany, useCompanyLookups } from "@/lib/data/hooks/use-companies";
+import { useServiceLineStaffing } from "@/lib/data/hooks/use-service-membership";
 import { useCompanyNotes } from "@/lib/data/hooks/use-notes";
 import { useRunningTimer } from "@/lib/data/hooks/use-time-entries";
-import { notesProvider } from "@/lib/data/providers";
+import { projectsProvider, projectIssuesProvider } from "@/lib/data/providers";
 import { DEFAULT_TASK_FILTERS, filterTasks, groupTasksBy } from "@/lib/data/hooks/use-task-filters";
 import { isAssigneeColumnRedundantForViewer } from "@/lib/data/task-display";
-import { operationalProjectIdentity } from "@/lib/data/project-display";
-import { canCreateWorkstreamInProject, canManageProjects, isEmployee } from "@/lib/data/permissions";
+import { operationalProjectIdentity, serviceLineDisplayName } from "@/lib/data/project-display";
+import { canCreateWorkstreamInProject, canManageProjects, canManageWorkstreams, isEmployee, isSupervisor } from "@/lib/data/permissions";
+import { AddServiceActivitiesDialog } from "@/components/workstreams/add-service-activities-dialog";
+import type { WorkstreamWithRelations } from "@/lib/data/providers/workstreams-provider";
+import { PeopleInline } from "@/components/projects/people-inline";
 import { workstreamDisplayHeading } from "@/lib/data/workstream-name";
+import { SafeMarkdown } from "@/lib/markdown-lite";
 import { ROLE_LABELS } from "@/lib/data/role-labels";
-import type { TaskStatus } from "@/lib/data/types";
+import type { ClientContact, ProjectIssue, TaskStatus } from "@/lib/data/types";
 import type { TaskWithRelations } from "@/lib/data/providers/tasks-provider";
-import { STATUS_COLOR_VAR, STATUS_META } from "@/components/tasks/task-status-badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
-import { ProjectStatusBadge } from "@/components/projects/project-status-badge";
+import { Badge } from "@/components/ui/badge";
 import { CompanyProjectAvatar } from "@/components/companies/company-project-avatar";
+import { CompanyStatusBadge } from "@/components/companies/company-status-badge";
+import { CompanyFormDialog } from "@/components/companies/company-form-dialog";
+import { ContactFormDialog } from "@/components/companies/contact-form-dialog";
 import { WorkstreamStatusBadge } from "@/components/workstreams/workstream-status-badge";
-import { WorkstreamFormDialog } from "@/components/workstreams/workstream-form-dialog";
+import { AddProjectServiceDialog } from "@/components/projects/add-project-service-dialog";
 import { ProjectFormDialog } from "@/components/projects/project-form-dialog";
-import { ProjectRenewalDialog } from "@/components/projects/project-renewal-dialog";
+import { ProjectStatusControl } from "@/components/projects/project-status-control";
+import { ProjectCommentsSection } from "@/components/projects/project-comments-section";
+import { ProjectIssuesSection } from "@/components/projects/project-issues-section";
+import { ProjectDocumentsSection } from "@/components/projects/project-documents-section";
 import { TaskListSection } from "@/components/tasks/task-list-section";
 import { TaskTimeline } from "@/components/tasks/task-timeline";
 import { TaskFormDialog } from "@/components/tasks/task-form-dialog";
 import { SharedNotesSection } from "@/components/notes/shared-notes-section";
-import { ProjectCompletedWork } from "@/components/projects/project-completed-work";
 import { ProjectTimeTeam } from "@/components/projects/project-time-team";
-import { ProjectTimeline } from "@/components/projects/project-timeline";
 import { ClientReportsTable } from "@/components/client-reports/client-reports-table";
 import { useClientReports } from "@/lib/data/hooks/use-client-reports";
+import { MultiSelect } from "@/components/ui/multi-select";
+import { useToastManager } from "@/components/ui/toast";
 import { getInitials as initials } from "@/lib/initials";
 
 function formatDate(value: string | null) {
@@ -59,33 +63,153 @@ function formatDate(value: string | null) {
   return new Date(value).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
 }
 
-type TabKey = "overview" | "tasks" | "services" | "team" | "history";
+// Project Level Stage C IA — Timeline tab removed entirely (the underlying `ProjectTimeline`
+// component/audit data is untouched, just no longer rendered); Team renamed Members; History's own
+// four sub-sections dissolved into their own top-level tabs (Context -> folded into Overview's own
+// Notes panel; Completed Work dropped as a dedicated panel — redundant with Tasks' own "Done"
+// status group; Client Reports -> Reports; Time & Team -> Time); Comments/Documents/Issues are new.
+type TabKey = "overview" | "services" | "tasks" | "members" | "comments" | "documents" | "time" | "issues" | "reports";
 type TaskView = "list" | "timeline";
 const TABS: { key: TabKey; label: string }[] = [
   { key: "overview", label: "Overview" },
-  { key: "tasks", label: "Tasks" },
   { key: "services", label: "Services" },
-  { key: "team", label: "Team" },
-  { key: "history", label: "History" },
+  { key: "tasks", label: "Tasks" },
+  { key: "members", label: "Members" },
+  { key: "comments", label: "Comments" },
+  { key: "documents", label: "Documents" },
+  { key: "time", label: "Time" },
+  { key: "issues", label: "Issues" },
+  { key: "reports", label: "Reports" },
 ];
 
-type HistorySectionKey = "context" | "completed" | "reports" | "time" | "timeline";
-const HISTORY_SECTIONS: { key: HistorySectionKey; label: string }[] = [
-  { key: "context", label: "Context" },
-  { key: "completed", label: "Completed Work" },
-  { key: "reports", label: "Client Reports" },
-  { key: "time", label: "Time & Team" },
-  { key: "timeline", label: "Timeline" },
-];
+/** Short "Sep 8" form for a Next Due date — no year, matches the Project list's own convention. */
+function formatShortDate(iso: string | null): string {
+  if (!iso) return "—";
+  return new Date(`${iso}T00:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
 
-const STATUS_ORDER: TaskStatus[] = ["todo", "in-progress", "blocked", "waiting-on-client", "done"];
-const STATUS_ICONS: Record<TaskStatus, typeof Circle> = {
-  todo: Circle,
-  "in-progress": PlayCircle,
-  blocked: Ban,
-  "waiting-on-client": Clock,
-  done: CheckCircle2,
-};
+/**
+ * A compact `Overdue`/`Waiting`/`Blocked` + `Next due` panel — Section 16's "Work needing
+ * attention," reused for both the project-wide Admin/Team Lead view and the "my work" Employee
+ * view (same shape, different counts/labels fed in — Section 12's "shared visual system, not three
+ * unrelated designs"). All figures come from the Tasks already fetched on this page; nothing new
+ * is queried, nothing is fabricated (Section 25) — zero of everything renders as one calm empty
+ * state rather than a row of dashes (Section 17).
+ */
+function AttentionPanel({
+  title,
+  overdueCount,
+  waitingCount,
+  blockedCount,
+  openCount,
+  nextDueTask,
+  onViewTasks,
+}: {
+  title: string;
+  overdueCount: number;
+  waitingCount: number;
+  blockedCount: number;
+  openCount?: number;
+  /** Step 4 Section 7 — the next-due item's own identity, never a bare date. */
+  nextDueTask: { title: string; dueDate: string } | null;
+  onViewTasks: () => void;
+}) {
+  const nothingToShow = overdueCount === 0 && waitingCount === 0 && blockedCount === 0 && !nextDueTask;
+  return (
+    <Card>
+      <CardHeader className="flex items-center justify-between">
+        <CardTitle className="text-base">{title}</CardTitle>
+        <button type="button" onClick={onViewTasks} className="text-sm text-muted-foreground hover:underline">
+          View Tasks
+        </button>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-3">
+        {nothingToShow ? (
+          <p className="text-sm text-muted-foreground">
+            {openCount ? `${openCount} open, nothing overdue or blocked.` : "No upcoming work."}
+          </p>
+        ) : (
+          <>
+            <div className="flex flex-wrap items-center gap-2">
+              {overdueCount > 0 && <Badge variant="destructive">{overdueCount} overdue</Badge>}
+              {waitingCount > 0 && <Badge variant="secondary">{waitingCount} waiting</Badge>}
+              {blockedCount > 0 && <Badge variant="secondary">{blockedCount} blocked</Badge>}
+            </div>
+            {nextDueTask && (
+              <p className="text-sm text-muted-foreground">
+                Next due: <span className="font-medium text-foreground">{nextDueTask.title}</span> —{" "}
+                {formatShortDate(nextDueTask.dueDate)}
+              </p>
+            )}
+          </>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+/** Section 15 — actual global Service Line names, a compact 3-item + overflow list, never a bare
+ * count or a duplicate metric card. */
+function ServicesSummaryPanel({
+  workstreams,
+  serviceLines,
+  onViewServices,
+}: {
+  workstreams: { name: string; serviceLineId: string | null }[];
+  serviceLines: { id: string; name: string }[];
+  onViewServices: () => void;
+}) {
+  const names = workstreams.map((w) => serviceLineDisplayName(w, serviceLines));
+  const shown = names.slice(0, 3);
+  const overflow = names.length - shown.length;
+  return (
+    <Card>
+      <CardHeader className="flex items-center justify-between">
+        <CardTitle className="text-base">Services</CardTitle>
+        <button type="button" onClick={onViewServices} className="text-sm text-muted-foreground hover:underline">
+          View Services
+        </button>
+      </CardHeader>
+      <CardContent>
+        {names.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No Services configured yet.</p>
+        ) : (
+          <div className="flex flex-col gap-1">
+            {shown.map((name, i) => (
+              <span key={`${name}-${i}`} className="text-sm">
+                {name}
+              </span>
+            ))}
+            {overflow > 0 && <span className="text-xs text-muted-foreground">+{overflow} more</span>}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+/** Section 9E/10E — compact Project participants, never a giant people grid. */
+function TeamPanel({
+  members,
+  onViewMembers,
+}: {
+  members: { id: string; fullName: string }[];
+  onViewMembers: () => void;
+}) {
+  return (
+    <Card>
+      <CardHeader className="flex items-center justify-between">
+        <CardTitle className="text-base">Team</CardTitle>
+        <button type="button" onClick={onViewMembers} className="text-sm text-muted-foreground hover:underline">
+          View Members
+        </button>
+      </CardHeader>
+      <CardContent>
+        <PeopleInline people={members} emptyText="No Project members yet." />
+      </CardContent>
+    </Card>
+  );
+}
 
 /**
  * Phase 13B (redesigned, Reference 1's visual language) — the Project workspace is the primary
@@ -150,14 +274,22 @@ function LoadedProjectDetailPage({
   project: NonNullable<ReturnType<typeof useProject>["project"]>;
   refreshProject: () => void;
 }) {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const { workstreams, isLoading: workstreamsLoading, refresh: refreshWorkstreams } = useWorkstreams({ projectId: project.id });
   const { tasks, isLoading: tasksLoading, refresh: refreshTasks } = useTasks({ workstreamIds: workstreams.map((w) => w.id) });
-  const { company } = useCompany(project.companyId);
-  const { notes, refresh: refreshNotes } = useCompanyNotes(project.companyId);
+  const { company, contacts: clientContacts, refresh: refreshCompany } = useCompany(project.companyId);
+  const [editCompanyOpen, setEditCompanyOpen] = useState(false);
+  const [editContact, setEditContact] = useState<ClientContact | "new" | null>(null);
+  const { notes } = useCompanyNotes(project.companyId);
   const { runningTimer } = useRunningTimer();
-  const { projects: allProjects } = useProjects();
+  const { assignableStaff, serviceLines } = useCompanyLookups();
+  const { groups: projectGroups } = useProjectGroups();
+  const serviceLineIds = useMemo(
+    () => Array.from(new Set(workstreams.map((w) => w.serviceLine?.id).filter((id): id is string => !!id))),
+    [workstreams]
+  );
+  const { staffing: globalServiceStaffing } = useServiceLineStaffing(serviceLineIds);
+  const toastManager = useToastManager();
   // Phase 13C — Client Reports are org-wide-authorized (canViewClientReport), never re-derived here;
   // this only narrows an already-authorized set down to this Project's own reports.
   const { reports: allAuthorizedReports } = useClientReports();
@@ -166,6 +298,18 @@ function LoadedProjectDetailPage({
     [allAuthorizedReports, project.id]
   );
 
+  const [issues, setIssues] = useState<ProjectIssue[]>([]);
+  const refreshIssues = useCallback(async () => {
+    setIssues(await projectIssuesProvider.listIssues(user, project.id));
+  }, [user, project.id]);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    refreshIssues();
+  }, [refreshIssues]);
+  // Stable target reference for the Comments panel — never a fresh literal per render, so
+  // useProjectComments' effect doesn't re-fetch needlessly.
+  const commentsTarget = useMemo(() => ({ projectId: project.id }), [project.id]);
+
   // Deep-link seeding — e.g. the Projects Gantt (Part B) links to
   // `/dashboard/projects/[id]?tab=tasks&view=timeline` so clicking a Project's scheduled-work bar
   // opens straight to its Task Timeline. Lazy initializer, same convention `/dashboard/tasks`
@@ -173,13 +317,15 @@ function LoadedProjectDetailPage({
   // leaves `tab`/`taskView` at their existing "overview"/"list" defaults.
   const [tab, setTab] = useState<TabKey>(() => {
     const tabParam = searchParams.get("tab");
-    return tabParam === "overview" || tabParam === "tasks" || tabParam === "services" || tabParam === "team" || tabParam === "history"
-      ? tabParam
-      : "overview";
+    return TABS.some((t) => t.key === tabParam) ? (tabParam as TabKey) : "overview";
   });
   const [addServiceOpen, setAddServiceOpen] = useState(false);
+  // Project Final Integration Correction — "Configure Activities" on an already-attached Service
+  // reuses the existing `AddServiceActivitiesDialog` (previously only reachable from the Task form's
+  // now-removed inline flow) — offers only this Service's remaining, not-yet-enabled catalog
+  // Activities, never requires re-adding the Service itself.
+  const [configureActivitiesFor, setConfigureActivitiesFor] = useState<WorkstreamWithRelations | null>(null);
   const [editOpen, setEditOpen] = useState(false);
-  const [renewOpen, setRenewOpen] = useState(false);
   const [taskSearch, setTaskSearch] = useState("");
   const [taskView, setTaskView] = useState<TaskView>(() => {
     const viewParam = searchParams.get("view");
@@ -189,7 +335,14 @@ function LoadedProjectDetailPage({
   const [createTaskOpen, setCreateTaskOpen] = useState(false);
   const [createTaskDefaultStatus, setCreateTaskDefaultStatus] = useState<TaskStatus | undefined>(undefined);
   const [editingTask, setEditingTask] = useState<TaskWithRelations | null>(null);
-  const [historySection, setHistorySection] = useState<HistorySectionKey>("context");
+  const [memberIds, setMemberIds] = useState<string[]>(() => project.members.map((m) => m.id));
+  const [savingMembers, setSavingMembers] = useState(false);
+  // Project Final Pre-Acceptance Correction — Project Role/Responsibility editing. Reuses the
+  // already-hosted `project_role` column + `set_project_member_role` RPC (Admin-only server-side)
+  // via the existing `projectsProvider.setProjectMemberRole` method — no new migration/provider.
+  const [editingRoleFor, setEditingRoleFor] = useState<string | null>(null);
+  const [roleDraft, setRoleDraft] = useState("");
+  const [savingRole, setSavingRole] = useState(false);
 
   function openCreateTask(defaultStatus?: TaskStatus) {
     setCreateTaskDefaultStatus(defaultStatus);
@@ -210,10 +363,77 @@ function LoadedProjectDetailPage({
     return counts;
   }, [tasks]);
 
-  const relatedProjects = useMemo(
-    () => allProjects.filter((p) => p.companyId === project.companyId && p.id !== project.id),
-    [allProjects, project]
+// Manual Acceptance Step 3/4 — Overview role-awareness. All derived from Tasks/Services/Members
+  // already fetched above; nothing new queried, nothing fabricated (Section 25). Next Due always
+  // carries the Task itself (title + date), never a bare date with no item identity (Step 4
+  // Section 7).
+  const isTeamLead = isSupervisor(user);
+  const nextDueTask = useMemo(() => {
+    const withDue = tasks
+      .filter((t) => t.status !== "done" && t.dueDate != null)
+      .map((t) => ({ title: t.title, dueDate: t.dueDate as string }));
+    return withDue.sort((a, b) => (a.dueDate < b.dueDate ? -1 : 1))[0] ?? null;
+  }, [tasks]);
+  const myTasks = useMemo(
+    () => tasks.filter((t) => t.status !== "done" && t.assignees.some((a) => a.id === user.id)),
+    [tasks, user.id]
   );
+  const today = new Date().toISOString().slice(0, 10);
+  const myOverdueCount = myTasks.filter((t) => t.dueDate != null && t.dueDate < today).length;
+  const myNextDueTask = useMemo(() => {
+    const withDue = myTasks.filter((t) => t.dueDate != null).map((t) => ({ title: t.title, dueDate: t.dueDate as string }));
+    return withDue.sort((a, b) => (a.dueDate < b.dueDate ? -1 : 1))[0] ?? null;
+  }, [myTasks]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setMemberIds(project.members.map((m) => m.id));
+  }, [project.members]);
+
+  async function handleSaveMembers() {
+    setSavingMembers(true);
+    try {
+      await projectsProvider.updateProject(user, project.id, {
+        companyId: project.companyId,
+        name: project.name,
+        ownerId: project.ownerId,
+        contractStartDate: project.contractStartDate,
+        contractMonths: project.contractMonths,
+        contractEndDate: project.contractEndDate,
+        completionDate: project.completionDate,
+        startDate: project.startDate,
+        endDate: project.endDate,
+        description: project.description,
+        projectGroupId: project.projectGroupId,
+        tags: project.tags,
+        memberUserIds: memberIds,
+      });
+      refreshProject();
+      toastManager.add({ description: "Members updated" });
+    } catch (err) {
+      toastManager.add({ description: err instanceof Error ? err.message : "Couldn't update members." });
+    } finally {
+      setSavingMembers(false);
+    }
+  }
+
+  function startEditingRole(memberId: string, currentRole: string | null) {
+    setEditingRoleFor(memberId);
+    setRoleDraft(currentRole ?? "");
+  }
+
+  async function handleSaveRole(memberId: string) {
+    setSavingRole(true);
+    try {
+      await projectsProvider.setProjectMemberRole(user, project.id, memberId, roleDraft.trim() || null);
+      setEditingRoleFor(null);
+      refreshProject();
+    } catch (err) {
+      toastManager.add({ description: err instanceof Error ? err.message : "Couldn't update responsibility." });
+    } finally {
+      setSavingRole(false);
+    }
+  }
 
   function toggleGroup(key: string) {
     setCollapsedGroups((prev) => {
@@ -254,50 +474,20 @@ function LoadedProjectDetailPage({
               <span className="text-sm text-muted-foreground">{projectIdentity.secondary}</span>
             )}
           </div>
-          <ProjectStatusBadge status={project.status} />
+          <ProjectStatusControl project={project} onChanged={refreshProject} />
         </div>
         <div className="flex items-center gap-2">
-          {workstreams.length > 0 && (
+          {workstreams.length > 0 && project.status !== "trash" && (
             <Button size="sm" onClick={() => openCreateTask()} data-shortcut="new-task">
               <Plus /> New Task
             </Button>
           )}
           {canManageProjects(user) && (
-            <>
-              <Button size="sm" variant="outline" onClick={() => setRenewOpen(true)}>
-                <RefreshCw /> Renew
-              </Button>
-              <Button size="sm" variant="outline" onClick={() => setEditOpen(true)}>
-                <Pencil /> Edit
-              </Button>
-            </>
+            <Button size="sm" variant="outline" onClick={() => setEditOpen(true)}>
+              <Pencil /> Edit
+            </Button>
           )}
         </div>
-      </div>
-
-      {/* Phase 13B — five compact status summary blocks (Reference 1), always visible above the
-          tabs regardless of which tab is open, so the Project's overall work state never requires
-          switching tabs to see. Counts come straight from the already-fetched Project Tasks — no
-          new query. */}
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
-        {STATUS_ORDER.map((status) => {
-          const Icon = STATUS_ICONS[status];
-          const color = STATUS_COLOR_VAR[status];
-          return (
-            <Card key={status} className="flex-row items-center gap-2.5 p-3">
-              <span
-                className="flex size-8 shrink-0 items-center justify-center rounded-md"
-                style={{ backgroundColor: `color-mix(in oklch, ${color} 16%, var(--card))`, color }}
-              >
-                <Icon className="size-4" aria-hidden="true" />
-              </span>
-              <div className="flex min-w-0 flex-col">
-                <span className="truncate text-xs text-muted-foreground">{STATUS_META[status].label}</span>
-                <span className="text-lg leading-tight font-semibold">{statusCounts[status]}</span>
-              </div>
-            </Card>
-          );
-        })}
       </div>
 
       <div className="flex items-center gap-1 border-b">
@@ -320,34 +510,212 @@ function LoadedProjectDetailPage({
 
       {tab === "overview" && (
         <div className="flex flex-col gap-4">
-          <Card>
-            <CardHeader className="flex items-center justify-between">
-              <CardTitle className="text-base">Current Services</CardTitle>
-              <button type="button" onClick={() => setTab("services")} className="text-sm text-muted-foreground hover:underline">
-                View all
-              </button>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-1">
-              {!workstreamsLoading && workstreams.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No services yet for this project.</p>
-              ) : (
-                workstreams.slice(0, 4).map((workstream, i) => (
-                  <div key={workstream.id}>
-                    {i > 0 && <Separator className="my-3" />}
-                    <Link
-                      href={`/dashboard/workstreams/${workstream.id}`}
-                      className="flex flex-wrap items-center justify-between gap-3 rounded-md py-1 hover:underline"
-                    >
-                      <span className="text-sm font-medium">
-                        {workstreamDisplayHeading(workstream.name, workstream.serviceLine?.name ?? null)}
-                      </span>
-                      <WorkstreamStatusBadge status={workstream.status} />
-                    </Link>
-                  </div>
-                ))
+          {/* B. Compact operational summary — role-conditional, 3-4 tiles, never a duplicate of the
+              detail panels below (Section 5/9B/10B/11B). */}
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {(canManageProjects(user)
+              ? [
+                  { label: "Services", value: workstreams.length },
+                  { label: "Open Work", value: project.tasks.openCount },
+                  { label: "Attention", value: project.tasks.overdueCount },
+                  { label: "Team", value: project.members.length },
+                ]
+              : isTeamLead
+                ? [
+                    { label: "Open Tasks", value: project.tasks.openCount },
+                    { label: "Attention", value: project.tasks.overdueCount },
+                    { label: "Next Due", value: formatShortDate(nextDueTask?.dueDate ?? null) },
+                    { label: "Team", value: project.members.length },
+                  ]
+                : [
+                    { label: "My Open Work", value: myTasks.length },
+                    { label: "My Attention", value: myOverdueCount },
+                    { label: "Next Due", value: formatShortDate(myNextDueTask?.dueDate ?? null) },
+                  ]
+            ).map((item) => (
+              <Card key={item.label} className="p-3">
+                <span className="font-mono text-[10px] tracking-wide text-muted-foreground uppercase">{item.label}</span>
+                <span className="text-lg leading-tight font-semibold">{item.value}</span>
+              </Card>
+            ))}
+          </div>
+
+          {/* C + D. Work needing attention, and Services — one coherent grouped panel each, side
+              by side at desktop width, never split into many equal-weight cards (Section 5/16). */}
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            {canManageProjects(user) || isTeamLead ? (
+              <AttentionPanel
+                title="Work needing attention"
+                overdueCount={project.tasks.overdueCount}
+                waitingCount={statusCounts["waiting-on-client"]}
+                blockedCount={statusCounts.blocked}
+                openCount={project.tasks.openCount}
+                nextDueTask={nextDueTask}
+                onViewTasks={() => setTab("tasks")}
+              />
+            ) : (
+              <AttentionPanel
+                title="My work"
+                overdueCount={myOverdueCount}
+                waitingCount={myTasks.filter((t) => t.status === "waiting-on-client").length}
+                blockedCount={myTasks.filter((t) => t.status === "blocked").length}
+                openCount={myTasks.length}
+                nextDueTask={myNextDueTask}
+                onViewTasks={() => setTab("tasks")}
+              />
+            )}
+            <ServicesSummaryPanel workstreams={workstreams} serviceLines={serviceLines} onViewServices={() => setTab("services")} />
+          </div>
+
+          {/* E + F. Team, and (Admin-only) Administrative Details — Admin gets both side by side;
+              Team Lead gets Team alone; Employee gets neither (Section 9E/9F/10D/11). */}
+          {canManageProjects(user) ? (
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+              <TeamPanel members={project.members} onViewMembers={() => setTab("members")} />
+              {company && (
+                <Card>
+                  <CardHeader className="flex items-center justify-between">
+                    <CardTitle className="text-base">Administrative Details</CardTitle>
+                    <Button size="sm" variant="outline" onClick={() => setEditCompanyOpen(true)}>
+                      <Pencil /> Edit
+                    </Button>
+                  </CardHeader>
+                  <CardContent className="flex flex-col gap-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="flex flex-col gap-0.5">
+                        <span className="font-mono text-[10px] tracking-wide text-muted-foreground uppercase">Account Status</span>
+                        <CompanyStatusBadge status={company.status} />
+                      </div>
+                      <div className="flex flex-col gap-0.5">
+                        <span className="font-mono text-[10px] tracking-wide text-muted-foreground uppercase">Partner Brand</span>
+                        <span className="text-sm">{company.brand?.name ?? "No brand yet"}</span>
+                      </div>
+                      <div className="flex flex-col gap-0.5">
+                        <span className="font-mono text-[10px] tracking-wide text-muted-foreground uppercase">Contract Start</span>
+                        <span className="text-sm">{formatDate(company.contractStartDate)}</span>
+                      </div>
+                      <div className="flex flex-col gap-0.5">
+                        <span className="font-mono text-[10px] tracking-wide text-muted-foreground uppercase">Renewal Date</span>
+                        <span className="text-sm">{formatDate(company.renewalDate)}</span>
+                      </div>
+                    </div>
+
+                    <Separator />
+
+                    <div className="flex flex-col gap-2">
+                      <div className="flex items-center justify-between">
+                        <span className="font-mono text-[10px] tracking-wide text-muted-foreground uppercase">Contacts</span>
+                        <button
+                          type="button"
+                          onClick={() => setEditContact("new")}
+                          className="text-xs text-muted-foreground hover:underline"
+                        >
+                          + Add contact
+                        </button>
+                      </div>
+                      {clientContacts.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">No contacts yet.</p>
+                      ) : (
+                        <div className="flex flex-col gap-1">
+                          {clientContacts.map((contact, i) => (
+                            <div key={contact.id}>
+                              {i > 0 && <Separator className="my-2" />}
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <div className="flex flex-col">
+                                  <span className="flex items-center gap-1.5 text-sm font-medium">
+                                    {contact.name}
+                                    {contact.isPrimary && (
+                                      <Badge variant="secondary" className="text-[10px]">
+                                        Primary
+                                      </Badge>
+                                    )}
+                                  </span>
+                                  <span className="text-xs text-muted-foreground">
+                                    {[contact.title, contact.email, contact.phone].filter(Boolean).join(" · ") || "—"}
+                                  </span>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => setEditContact(contact)}
+                                  className="text-xs text-muted-foreground hover:underline"
+                                >
+                                  Edit
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    <Separator />
+
+                    <div className="flex flex-col gap-1">
+                      <span className="font-mono text-[10px] tracking-wide text-muted-foreground uppercase">Created by</span>
+                      <span className="text-sm">{project.createdBy.fullName}</span>
+                    </div>
+                  </CardContent>
+                </Card>
               )}
-            </CardContent>
-          </Card>
+            </div>
+          ) : isTeamLead ? (
+            <TeamPanel members={project.members} onViewMembers={() => setTab("members")} />
+          ) : null}
+
+          {/* Shared Project information — compact by default (Step 4 Section 8): Owner is always
+              shown; Group/dates/Tags only take space when at least one actually has a value, never
+              a grid of "Not set"/"—" placeholders. Read-only for everyone except via the header's
+              own Admin-only Edit button. */}
+          {(() => {
+            const detailItems = [
+              project.projectGroupId && { label: "Project Group", value: projectGroups.find((g) => g.id === project.projectGroupId)?.name },
+              project.startDate && { label: "Start date", value: formatDate(project.startDate) },
+              project.endDate && { label: "End date", value: formatDate(project.endDate) },
+              project.completionDate && { label: "Completion date", value: formatDate(project.completionDate) },
+            ].filter((x): x is { label: string; value: string | undefined } => !!x);
+            const hasMoreDetails = detailItems.length > 0 || project.tags.length > 0;
+            return (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">Project Details</CardTitle>
+                </CardHeader>
+                <CardContent className="flex flex-col gap-3">
+                  {project.description && (
+                    <SafeMarkdown text={project.description} className="text-sm text-muted-foreground [&_p]:m-0" />
+                  )}
+                  <div className="flex flex-col gap-0.5">
+                    <span className="font-mono text-[10px] tracking-wide text-muted-foreground uppercase">Owner</span>
+                    <span className="text-sm">{project.owner.fullName}</span>
+                  </div>
+                  {hasMoreDetails ? (
+                    <>
+                      {detailItems.length > 0 && (
+                        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+                          {detailItems.map((item) => (
+                            <div key={item.label} className="flex flex-col gap-0.5">
+                              <span className="font-mono text-[10px] tracking-wide text-muted-foreground uppercase">{item.label}</span>
+                              <span className="text-sm">{item.value}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {project.tags.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5">
+                          {project.tags.map((tag) => (
+                            <Badge key={tag} variant="neutral">
+                              {tag}
+                            </Badge>
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">No additional Project details have been added.</p>
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })()}
         </div>
       )}
 
@@ -420,7 +788,7 @@ function LoadedProjectDetailPage({
 
       {tab === "services" && (
         <div className="flex flex-col gap-4">
-          <div className="flex items-center justify-end">
+          <div className="flex items-center justify-end gap-2">
             {canAddService && company && (
               <Button size="sm" onClick={() => setAddServiceOpen(true)}>
                 <Plus /> Add Service
@@ -434,6 +802,8 @@ function LoadedProjectDetailPage({
               )}
               {workstreams.map((workstream, i) => {
                 const openTaskCount = tasks.filter((t) => t.workstreamId === workstream.id && t.status !== "done").length;
+                const staffing = globalServiceStaffing.find((s) => s.serviceLineId === workstream.serviceLine?.id);
+                const nameFor = (userId: string) => assignableStaff.find((s) => s.id === userId)?.fullName ?? "Unknown";
                 return (
                   <div key={workstream.id}>
                     {i > 0 && <Separator className="my-3" />}
@@ -446,15 +816,42 @@ function LoadedProjectDetailPage({
                           {workstreamDisplayHeading(workstream.name, workstream.serviceLine?.name ?? null)}
                         </span>
                         <span className="text-xs text-muted-foreground">
-                          Lead: {workstream.lead.fullName} · {workstream.activities.length} activit
+                          Service Lead (this Project): {workstream.lead.fullName} · {workstream.activities.length} activit
                           {workstream.activities.length === 1 ? "y" : "ies"}
                         </span>
                       </div>
                       <div className="flex items-center gap-3">
                         <span className="text-xs text-muted-foreground">{openTaskCount} open</span>
                         <WorkstreamStatusBadge status={workstream.status} />
+                        {canManageWorkstreams(user) && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              setConfigureActivitiesFor(workstream);
+                            }}
+                            className="text-xs text-muted-foreground hover:underline"
+                          >
+                            Configure Activities
+                          </button>
+                        )}
                       </div>
                     </Link>
+                    {workstream.serviceLine && staffing && (staffing.teamLeadUserIds.length > 0 || staffing.employeeUserIds.length > 0) && (
+                      <div className="mt-2 flex flex-col gap-0.5 rounded-md border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+                        <span className="font-mono text-[10px] tracking-wide uppercase">Global Service Staffing</span>
+                        <span>
+                          Global Team Leads:{" "}
+                          {staffing.teamLeadUserIds.length > 0 ? staffing.teamLeadUserIds.map(nameFor).join(", ") : "None"}
+                        </span>
+                        <span>
+                          Service Members:{" "}
+                          {staffing.employeeUserIds.length > 0 ? staffing.employeeUserIds.map(nameFor).join(", ") : "None"}
+                        </span>
+                        <span className="italic">These assignments apply to this Service across all Projects.</span>
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -463,132 +860,167 @@ function LoadedProjectDetailPage({
         </div>
       )}
 
-      {tab === "team" && (
+      {tab === "members" && (
         <Card>
-          <CardContent className="flex flex-col gap-1">
-            {project.members.length === 0 && (
-              <p className="text-sm text-muted-foreground">No members recorded for this project yet.</p>
-            )}
-            {project.members.map((member, i) => (
-              <div key={member.id}>
-                {i > 0 && <Separator className="my-2.5" />}
-                <div className="flex items-center gap-2.5">
-                  <Avatar className="size-7 ring-2 ring-card">
-                    <AvatarFallback className="text-xs">{initials(member.fullName)}</AvatarFallback>
-                  </Avatar>
-                  <div className="flex flex-col">
-                    <span className="text-sm font-medium">
-                      {member.fullName}
-                      {member.id === project.ownerId && " (Owner)"}
-                    </span>
-                    <span className="text-xs text-muted-foreground">{ROLE_LABELS[member.role]}</span>
-                  </div>
+          <CardHeader className="flex items-center justify-between">
+            <CardTitle className="text-base">Members</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4">
+            {canManageProjects(user) && (
+              <div className="flex flex-col gap-2 rounded-md border p-3">
+                <MultiSelect
+                  options={assignableStaff.map((s) => ({ id: s.id, label: s.fullName, sublabel: s.email }))}
+                  value={memberIds}
+                  onChange={setMemberIds}
+                  placeholder="No members"
+                  searchPlaceholder="Search people…"
+                  aria-label="Project members"
+                />
+                <div className="flex justify-end">
+                  <Button size="sm" disabled={savingMembers} onClick={handleSaveMembers}>
+                    {savingMembers ? "Saving…" : "Save members"}
+                  </Button>
                 </div>
               </div>
-            ))}
+            )}
+            <div className="flex flex-col gap-1">
+              {project.members.length === 0 && (
+                <p className="text-sm text-muted-foreground">No members recorded for this project yet.</p>
+              )}
+              {project.members.map((member, i) => {
+                const isEditingRole = editingRoleFor === member.id;
+                return (
+                  <div key={member.id}>
+                    {i > 0 && <Separator className="my-2.5" />}
+                    <div className="flex items-center justify-between gap-2.5">
+                      <div className="flex min-w-0 items-center gap-2.5">
+                        <Avatar className="size-7 ring-2 ring-card">
+                          <AvatarFallback className="text-xs">{initials(member.fullName)}</AvatarFallback>
+                        </Avatar>
+                        <div className="flex min-w-0 flex-col">
+                          <span className="text-sm font-medium">
+                            {member.fullName}
+                            {member.id === project.ownerId && " (Owner)"}
+                          </span>
+                          <span className="text-xs text-muted-foreground">{ROLE_LABELS[member.role]}</span>
+                          {!isEditingRole && member.projectRole && (
+                            <span className="text-xs text-muted-foreground">Project Role: {member.projectRole}</span>
+                          )}
+                        </div>
+                      </div>
+                      {canManageProjects(user) && !isEditingRole && (
+                        <button
+                          type="button"
+                          onClick={() => startEditingRole(member.id, member.projectRole)}
+                          className="shrink-0 text-xs text-muted-foreground hover:underline"
+                        >
+                          {member.projectRole ? "Edit responsibility" : "+ Add responsibility"}
+                        </button>
+                      )}
+                    </div>
+                    {isEditingRole && (
+                      <div className="mt-1.5 ml-9.5 flex items-center gap-1.5">
+                        <Input
+                          autoFocus
+                          value={roleDraft}
+                          onChange={(e) => setRoleDraft(e.target.value)}
+                          placeholder="e.g. Payroll Reviewer (optional)"
+                          className="h-7 max-w-64 text-xs"
+                        />
+                        <Button size="sm" variant="outline" disabled={savingRole} onClick={() => handleSaveRole(member.id)}>
+                          {savingRole ? "Saving…" : "Save"}
+                        </Button>
+                        <Button size="sm" variant="ghost" onClick={() => setEditingRoleFor(null)}>
+                          Cancel
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           </CardContent>
         </Card>
       )}
 
-      {tab === "history" && (
+      {tab === "comments" && (
         <div className="flex flex-col gap-4">
-          <div className="flex flex-wrap items-center gap-1 rounded-lg border bg-muted/20 p-1">
-            {HISTORY_SECTIONS.map((s) => (
-              <button
-                key={s.key}
-                type="button"
-                onClick={() => setHistorySection(s.key)}
-                className={
-                  "rounded-md px-3 py-1.5 text-sm font-medium transition-colors " +
-                  (historySection === s.key ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")
-                }
-              >
-                {s.label}
-              </button>
-            ))}
-          </div>
-
-          {historySection === "context" && (
-            <div className="flex flex-col gap-4">
-              {project.description && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-base">Description</CardTitle>
-                  </CardHeader>
-                  <CardContent className="text-sm text-muted-foreground">{project.description}</CardContent>
-                </Card>
-              )}
-
-              <SharedNotesSection
-                notes={notes}
-                onAddNote={async (input) => {
-                  await notesProvider.createCompanyNote(user, project.companyId, input);
-                  refreshNotes();
-                }}
-              />
-
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base">Related Projects</CardTitle>
-                </CardHeader>
-                <CardContent className="flex flex-col gap-1">
-                  {relatedProjects.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">No other related Projects yet.</p>
-                  ) : (
-                    relatedProjects.map((p, i) => (
-                      <div key={p.id}>
-                        {i > 0 && <Separator className="my-3" />}
-                        <Link
-                          href={`/dashboard/projects/${p.id}`}
-                          className="flex flex-wrap items-center justify-between gap-3 rounded-md py-1 hover:underline"
-                        >
-                          <div className="flex items-center gap-2.5">
-                            <CompanyProjectAvatar companyId={p.companyId} companyName={p.companyName} size="sm" isInternal={p.isInternal} />
-                            <div className="flex flex-col gap-1">
-                              <span className="text-sm font-medium">{p.name}</span>
-                              <span className="text-xs text-muted-foreground">
-                                {formatDate(p.contractStartDate)} – {formatDate(p.contractEndDate)}
-                              </span>
-                            </div>
-                          </div>
-                          <ProjectStatusBadge status={p.status} />
-                        </Link>
-                      </div>
-                    ))
-                  )}
-                </CardContent>
-              </Card>
-            </div>
-          )}
-
-          {historySection === "completed" && <ProjectCompletedWork tasks={tasks} />}
-
-          {historySection === "reports" && (
-            <ClientReportsTable
-              reports={projectReports}
-              isLoading={false}
-              emptyMessage="No Client Reports generated for this Project yet."
-            />
-          )}
-
-          {historySection === "time" && <ProjectTimeTeam user={user} tasks={tasks} />}
-
-          {historySection === "timeline" && (
-            <ProjectTimeline tasks={tasks} notes={notes} reports={projectReports} workstreams={workstreams} />
-          )}
+          <ProjectCommentsSection target={commentsTarget} />
+          {/* Step 4 — Comments is now the one normal place for new Project discussion/context;
+              legacy Notes stay visible for reference (never destructively deleted) but strictly
+              read-only, so no new legacy Note can be authored from the normal V1 Project UI. */}
+          <SharedNotesSection notes={notes} readOnly title="Legacy Notes" />
         </div>
       )}
 
+      {tab === "documents" && <ProjectDocumentsSection projectId={project.id} />}
+
+      {tab === "time" && <ProjectTimeTeam user={user} tasks={tasks} />}
+
+      {tab === "issues" && (
+        <ProjectIssuesSection
+          projectId={project.id}
+          issues={issues}
+          workstreams={workstreams.map((w) => ({
+            id: w.id,
+            name: w.name,
+            activities: w.activities.map((a) => ({ id: a.id, name: a.name })),
+          }))}
+          onChanged={refreshIssues}
+        />
+      )}
+
+      {tab === "reports" && (
+        <ClientReportsTable
+          reports={projectReports}
+          isLoading={false}
+          emptyMessage="No Client Reports generated for this Project yet."
+        />
+      )}
+
       {company && (
-        <WorkstreamFormDialog
+        <AddProjectServiceDialog
           open={addServiceOpen}
           onOpenChange={setAddServiceOpen}
-          mode="create"
           company={company}
           projectId={project.id}
+          ownerId={project.ownerId}
+          existingServiceLineIds={serviceLineIds}
           onSaved={() => {
             refreshWorkstreams();
             refreshProject();
+          }}
+        />
+      )}
+
+      {configureActivitiesFor && (
+        <AddServiceActivitiesDialog
+          open={configureActivitiesFor !== null}
+          onOpenChange={(next) => !next && setConfigureActivitiesFor(null)}
+          workstream={configureActivitiesFor}
+          onSaved={refreshWorkstreams}
+        />
+      )}
+
+      {company && canManageProjects(user) && (
+        <CompanyFormDialog
+          open={editCompanyOpen}
+          onOpenChange={setEditCompanyOpen}
+          mode="edit"
+          company={company}
+          onSaved={refreshCompany}
+        />
+      )}
+
+      {company && canManageProjects(user) && editContact !== null && (
+        <ContactFormDialog
+          open
+          onOpenChange={(next) => !next && setEditContact(null)}
+          companyId={company.id}
+          contact={editContact === "new" ? undefined : editContact}
+          onSaved={() => {
+            setEditContact(null);
+            refreshCompany();
           }}
         />
       )}
@@ -614,15 +1046,7 @@ function LoadedProjectDetailPage({
       )}
 
       {canManageProjects(user) && (
-        <>
-          <ProjectFormDialog open={editOpen} onOpenChange={setEditOpen} mode="edit" project={project} onSaved={refreshProject} />
-          <ProjectRenewalDialog
-            open={renewOpen}
-            onOpenChange={setRenewOpen}
-            project={project}
-            onRenewed={(newProject) => router.push(`/dashboard/projects/${newProject.id}`)}
-          />
-        </>
+        <ProjectFormDialog open={editOpen} onOpenChange={setEditOpen} mode="edit" project={project} onSaved={refreshProject} />
       )}
     </div>
   );

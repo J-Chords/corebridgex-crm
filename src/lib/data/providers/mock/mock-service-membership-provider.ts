@@ -19,6 +19,11 @@ export const mockServiceMembershipProvider: ServiceMembershipProvider = {
     return db.serviceLines.map((line) => toStaffing(line.id));
   },
 
+  async getStaffingForServiceLines(viewer, serviceLineIds) {
+    if (!viewer.active) return [];
+    return Array.from(new Set(serviceLineIds)).map((id) => toStaffing(id));
+  },
+
   async setTeamLeads(viewer, serviceLineId, userIds) {
     if (!canManageAdminUsers(viewer)) {
       throw new Error("Only an admin can manage Service staffing.");

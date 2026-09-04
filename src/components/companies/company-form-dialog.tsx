@@ -68,7 +68,7 @@ export function CompanyFormDialog({ open, onOpenChange, mode, company, onSaved }
       setForm({
         name: company.name,
         status: company.status,
-        brandId: company.brandId,
+        brandId: company.brandId ?? "",
         serviceLineIds: company.serviceLines.map((sl) => sl.id),
         contractStartDate: company.contractStartDate ?? "",
         renewalDate: company.renewalDate ?? "",
@@ -113,7 +113,7 @@ export function CompanyFormDialog({ open, onOpenChange, mode, company, onSaved }
       const input = {
         name: form.name.trim(),
         status: form.status,
-        brandId: form.brandId,
+        brandId: form.brandId || null,
         serviceLineIds: form.serviceLineIds,
         contractStartDate: form.contractStartDate || null,
         renewalDate: form.renewalDate || null,
@@ -178,16 +178,17 @@ export function CompanyFormDialog({ open, onOpenChange, mode, company, onSaved }
                   </Select>
                 </div>
                 <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="company-brand">Partner brand</Label>
+                  <Label htmlFor="company-brand">Partner brand (optional)</Label>
                   <Select
-                    items={Object.fromEntries(brands.map((b) => [b.id, b.name]))}
+                    items={{ "": "No brand yet", ...Object.fromEntries(brands.map((b) => [b.id, b.name])) }}
                     value={form.brandId}
                     onValueChange={(v) => setForm((p) => ({ ...p, brandId: v ?? "" }))}
                   >
                     <SelectTrigger id="company-brand" className="w-full">
-                      <SelectValue placeholder="Select brand" />
+                      <SelectValue placeholder="No brand yet" />
                     </SelectTrigger>
                     <SelectContent>
+                      <SelectItem value="">No brand yet</SelectItem>
                       {brands.map((brand) => (
                         <SelectItem key={brand.id} value={brand.id}>
                           {brand.name}
@@ -195,6 +196,9 @@ export function CompanyFormDialog({ open, onOpenChange, mode, company, onSaved }
                       ))}
                     </SelectContent>
                   </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Client/master data — required only before this client&apos;s first Service can be created.
+                  </p>
                 </div>
               </div>
 
@@ -266,7 +270,7 @@ export function CompanyFormDialog({ open, onOpenChange, mode, company, onSaved }
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
-            <Button type="submit" disabled={isSubmitting || !form.name || !form.brandId}>
+            <Button type="submit" disabled={isSubmitting || !form.name}>
               {isSubmitting ? "Saving…" : mode === "create" ? "Create company" : "Save changes"}
             </Button>
           </DialogFooter>

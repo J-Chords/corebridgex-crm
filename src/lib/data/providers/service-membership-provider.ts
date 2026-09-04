@@ -9,6 +9,14 @@ import type { ServiceStaffing, User } from "../types";
  */
 export interface ServiceMembershipProvider {
   listServiceStaffing(viewer: User): Promise<ServiceStaffing[]>;
+  /**
+   * Project Level Part 12 — read-only, for any active viewer (not Admin-gated like
+   * `listServiceStaffing`): the DB's own RLS already allows any active user to read these two
+   * tables (`service_team_leads`/`service_employees` are org-directory data, not sensitive), so a
+   * legitimate Project viewer can see "who globally leads/works in" a Service their Project uses.
+   * Displaying this never grants new authority — see `docs/project-level-product-architecture.md`.
+   */
+  getStaffingForServiceLines(viewer: User, serviceLineIds: string[]): Promise<ServiceStaffing[]>;
   /** Replace-set semantics. Every user id must be an active supervisor — enforced at the DB layer
    * regardless of this check. */
   setTeamLeads(viewer: User, serviceLineId: string, userIds: string[]): Promise<ServiceStaffing>;

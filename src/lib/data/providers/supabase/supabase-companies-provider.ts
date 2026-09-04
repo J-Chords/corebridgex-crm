@@ -107,8 +107,13 @@ async function hydrateCompanies(companies: Company[]): Promise<CompanyWithRelati
   }[];
 
   return companies.map((company) => {
-    const brand = brands.find((b) => b.id === company.brandId);
-    if (!brand) throw new Error(`Company ${company.id} references unknown brand ${company.brandId}`);
+    // Null brandId is a genuine, valid "no Brand chosen yet" state — only a NON-null brandId that
+    // matches no real brand row is a real data-integrity error.
+    let brand: Brand | null = null;
+    if (company.brandId) {
+      brand = brands.find((b) => b.id === company.brandId) ?? null;
+      if (!brand) throw new Error(`Company ${company.id} references unknown brand ${company.brandId}`);
+    }
     const serviceLines = csl
       .filter((r) => r.company_id === company.id && r.service_line)
       .map((r) => (Array.isArray(r.service_line) ? r.service_line[0] : r.service_line) as ServiceLine)

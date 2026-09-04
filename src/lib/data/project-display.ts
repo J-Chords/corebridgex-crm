@@ -57,6 +57,32 @@ export function operationalProjectLabel(project: { companyName: string; name: st
  * it exists so a future multi-Project-per-Company Company doesn't silently produce indistinguishable
  * picker rows.
  */
+/**
+ * Prefers the global Service Line's own catalog name ("Accounting") over the Workstream instance's
+ * own, possibly-dated name ("Accounting 2026") — falls back to the instance name only for a legacy
+ * Workstream with no `serviceLineId` set. Shared by the Project list's Services column and the
+ * Project Overview's Services summary, so both surfaces read identically (Manual Acceptance Step 2
+ * carryover, Step 3 reuse).
+ */
+export function serviceLineDisplayName(
+  service: { name: string; serviceLineId: string | null },
+  serviceLines: { id: string; name: string }[]
+): string {
+  return (service.serviceLineId && serviceLines.find((sl) => sl.id === service.serviceLineId)?.name) || service.name;
+}
+
+/**
+ * Project Closure — Navigation Correction. Resolves a Company to its own Project workspace URL for
+ * dashboard/search surfaces that only have Company data on hand (Client Health, Needs Attention,
+ * command palette) — Projects, not Companies, is the normal visible client destination. Never
+ * guesses: a Company with zero or more than one Project (the documented future multi-Project case)
+ * falls back to the safe `/dashboard/projects` list rather than picking one arbitrarily.
+ */
+export function projectHrefForCompany(companyId: string, projects: { id: string; companyId: string }[]): string {
+  const matches = projects.filter((p) => p.companyId === companyId);
+  return matches.length === 1 ? `/dashboard/projects/${matches[0].id}` : "/dashboard/projects";
+}
+
 export function operationalProjectPickerLabels<T extends { id: string; companyName: string; name: string }>(
   projects: T[]
 ): Record<string, string> {

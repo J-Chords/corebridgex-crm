@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
 import {
-  Building2,
   CalendarDays,
   ChevronsLeft,
   ChevronsRight,
@@ -84,8 +83,8 @@ export function AppSidebar() {
 
   // Employee-first: every role gets the same core operational destinations — Supervisor and
   // Superadmin only ever ADD to this, never replace it, per the locked "Supervisor = Employee +
-  // team" / "Superadmin = + org admin" principle. Companies is Superadmin-only (existing gate);
-  // Team Time/Team Updates keep their existing page-level visibility gates.
+  // team" / "Superadmin = + org admin" principle. Team Time/Team Updates keep their existing
+  // page-level visibility gates.
   const workspaceItems: NavItem[] = [
     { href: "/dashboard", label: "Home", icon: Home },
     { href: "/dashboard/my-day", label: "My Day", icon: Sun },
@@ -93,10 +92,11 @@ export function AppSidebar() {
     { href: "/dashboard/planner", label: "Planner", icon: CalendarDays },
     { href: "/dashboard/reports/client", label: "Reports", icon: ClipboardList },
   ];
-  const clientWorkItems: NavItem[] = [
-    ...(user && isSuperadmin(user) ? [{ href: "/dashboard/companies", label: "Companies", icon: Building2 }] : []),
-    { href: "/dashboard/projects", label: "Projects", icon: FolderKanban },
-  ];
+  // Project Level consolidation — Projects is now the ONE primary client/company workspace
+  // destination for every role, including Superadmin; "Companies" is deliberately no longer a
+  // top-level nav item (the route/data model/RLS are all untouched — Superadmin still reaches it
+  // via a "View full client record" link from a Project's own Overview tab, or its direct URL).
+  const clientWorkItems: NavItem[] = [{ href: "/dashboard/projects", label: "Projects", icon: FolderKanban }];
   const teamItems: NavItem[] = [
     ...(user && canViewTeamTimePage(user) ? [{ href: "/dashboard/team-time", label: "Team Time", icon: Clock }] : []),
     ...(user && canViewTeamUpdatesPage(user) ? [{ href: "/dashboard/team-updates", label: "Team Updates", icon: Users }] : []),
