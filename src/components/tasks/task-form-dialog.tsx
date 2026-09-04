@@ -2,10 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { AlertCircle, Check, History, X } from "lucide-react";
+import { AlertCircle, History, X } from "lucide-react";
 import { useAuth } from "@/lib/auth/auth-context";
 import { todayDateOnly } from "@/lib/planner-dates";
 import { operationalProjectPickerLabels } from "@/lib/data/project-display";
+import { workstreamDisplayHeading, splitWorkstreamQualifier } from "@/lib/data/workstream-name";
 import { useCompanyLookups } from "@/lib/data/hooks/use-companies";
 import { useProjects } from "@/lib/data/hooks/use-projects";
 import { useSubtasks } from "@/lib/data/hooks/use-tasks";
@@ -22,7 +23,6 @@ import { MultiSelect } from "@/components/ui/multi-select";
 import { ChecklistBuilder, type ChecklistBuilderRow } from "@/components/tasks/checklist-builder";
 import { ReusePastTaskDialog } from "@/components/tasks/reuse-past-task-dialog";
 import {
-  FormDrawer,
   FormDrawerHeader,
   FormDrawerBody,
   FormDrawerSection,
@@ -30,6 +30,7 @@ import {
   FormDrawerField,
   FormDrawerFooter,
 } from "@/components/ui/form-drawer";
+import { FormDialog, FormDialogColumns } from "@/components/ui/form-dialog";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -38,7 +39,10 @@ import { Alert, AlertTitle } from "@/components/ui/alert";
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
+  SelectSeparator,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
@@ -147,6 +151,45 @@ export function TaskFormDialog({
   const [reuseOpen, setReuseOpen] = useState(false);
 
   const selectedWorkstream = workstreams.find((w) => w.id === form.workstreamId);
+  // Service Visual Acceptance correction — primary identity is always the global Service name
+  // ("Accounting"), never this Project Service's own reference/qualifier ("Accounting 2026").
+  // Project context only gets appended for disambiguation when "All projects" makes two Services
+  // of the same name genuinely ambiguous; a Project already selected makes every Service name in
+  // the (filtered) list unique on its own (a Project can't attach the same Service Line twice).
+  const showProjectContext = form.projectId === ALL_PROJECTS;
+  function workstreamPrimaryLabel(w: typeof workstreams[number]): string {
+    return workstreamDisplayHeading(w.name, w.serviceLine?.name ?? null);
+  }
+  function workstreamQualifierLabel(w: typeof workstreams[number]): string {
+    return splitWorkstreamQualifier(w.name, w.serviceLine?.name ?? null);
+  }
+  function workstreamProjectName(w: typeof workstreams[number]): string {
+    return (w.projectId && projects.find((p) => p.id === w.projectId)?.name) || "No Project";
+  }
+  // Flat single-line label for the closed trigger and keyboard typeahead only — the open dropdown
+  // itself groups by Project (below) rather than repeating the project name on every row.
+  function workstreamTriggerLabel(w: typeof workstreams[number]): string {
+    const primary = workstreamPrimaryLabel(w);
+    return showProjectContext ? `${primary} — ${workstreamProjectName(w)}` : primary;
+  }
+  const workstreamGroups = (() => {
+    if (!showProjectContext) return null;
+    const order: string[] = [];
+    const byProject = new Map<string, typeof workstreams>();
+    for (const w of workstreams) {
+      const key = w.projectId ?? "none";
+      if (!byProject.has(key)) {
+        order.push(key);
+        byProject.set(key, []);
+      }
+      byProject.get(key)!.push(w);
+    }
+    return order.map((key) => ({
+      key,
+      projectName: byProject.get(key)![0] ? workstreamProjectName(byProject.get(key)![0]) : "No Project",
+      items: byProject.get(key)!,
+    }));
+  })();
   // Scoped to what THIS workstream actually enabled — falls back to the full service catalog for a
   // legacy workstream with no persisted Activity selections yet (see the hook's own doc comment).
   const { departments } = useWorkstreamActivities(selectedWorkstream);
@@ -351,7 +394,7 @@ export function TaskFormDialog({
   }
 
   return (
-    <FormDrawer
+    <FormDialog
       open={open}
       onOpenChange={onOpenChange}
       srTitle={mode === "create" ? "New task" : `Editing "${task?.title ?? "this task"}"`}
@@ -362,7 +405,7 @@ export function TaskFormDialog({
           context={selectedWorkstream ? selectedWorkstream.company.name : undefined}
           secondaryContext={
             selectedWorkstream
-              ? `${selectedWorkstream.name}${selectedActivityLabel ? ` · ${selectedActivityLabel}` : ""}`
+              ? `${workstreamPrimaryLabel(selectedWorkstream)}${selectedActivityLabel ? ` · ${selectedActivityLabel}` : ""}`
               : undefined
           }
         />
@@ -385,6 +428,7 @@ export function TaskFormDialog({
             />
           </FormDrawerSection>
 
+          <FormDialogColumns>
           <FormDrawerSection label="Context">
               <div className="flex flex-col gap-4">
                 {contextLocked ? (
@@ -399,7 +443,7 @@ export function TaskFormDialog({
                         return projectName ? ` — ${projectName}` : "";
                       })()}
                       {" — "}
-                      {selectedWorkstream?.name ?? "—"}
+                      {selectedWorkstream ? workstreamPrimaryLabel(selectedWorkstream) : "—"}
                       {selectedActivityLabel ? ` — ${selectedActivityLabel}` : ""}
                     </p>
                     <p className="text-xs text-muted-foreground">
@@ -437,7 +481,7 @@ export function TaskFormDialog({
                 <div className="flex flex-col gap-1.5">
                   <Label htmlFor="task-workstream">Service</Label>
                   <Select
-                    items={Object.fromEntries(workstreams.map((w) => [w.id, w.name]))}
+                    items={Object.fromEntries(workstreams.map((w) => [w.id, workstreamTriggerLabel(w)]))}
                     value={form.workstreamId}
                     onValueChange={(v) => handleWorkstreamChange(v ?? "")}
                   >
@@ -445,18 +489,40 @@ export function TaskFormDialog({
                       <SelectValue placeholder="Select service" />
                     </SelectTrigger>
                     <SelectContent>
-                      {workstreams.map((workstream) => (
-                        <SelectItem key={workstream.id} value={workstream.id}>
-                          {workstream.name}
-                        </SelectItem>
-                      ))}
+                      {workstreamGroups
+                        ? workstreamGroups.map((group, gi) => (
+                            <SelectGroup key={group.key}>
+                              {gi > 0 && <SelectSeparator />}
+                              <SelectLabel>{group.projectName}</SelectLabel>
+                              {group.items.map((workstream) => (
+                                <SelectItem key={workstream.id} value={workstream.id}>
+                                  <span className="flex flex-col py-0.5">
+                                    <span>{workstreamPrimaryLabel(workstream)}</span>
+                                    {workstreamQualifierLabel(workstream) && (
+                                      <span className="text-xs text-muted-foreground">
+                                        Reference: {workstreamQualifierLabel(workstream)}
+                                      </span>
+                                    )}
+                                  </span>
+                                </SelectItem>
+                              ))}
+                            </SelectGroup>
+                          ))
+                        : workstreams.map((workstream) => (
+                            <SelectItem key={workstream.id} value={workstream.id}>
+                              <span className="flex flex-col py-0.5">
+                                <span>{workstreamPrimaryLabel(workstream)}</span>
+                                {workstreamQualifierLabel(workstream) && (
+                                  <span className="text-xs text-muted-foreground">
+                                    Reference: {workstreamQualifierLabel(workstream)}
+                                  </span>
+                                )}
+                              </span>
+                            </SelectItem>
+                          ))}
                     </SelectContent>
                   </Select>
-                  {selectedWorkstream ? (
-                    <p className="text-xs text-muted-foreground">
-                      Client: <span className="font-medium text-foreground">{selectedWorkstream.company.name}</span>
-                    </p>
-                  ) : (
+                  {!selectedWorkstream && (
                     <p className="text-xs text-muted-foreground">
                       Only Services already attached to the selected Project appear here. Configure this Project&apos;s
                       Services from Project &gt; Services first.
@@ -465,7 +531,7 @@ export function TaskFormDialog({
                 </div>
 
                 <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="task-activity">{activityRequired ? "Activity for this Task" : "Activity for this Task (optional)"}</Label>
+                  <Label htmlFor="task-activity">Activity</Label>
                   {activityLocked ? (
                     <p className="rounded-md border bg-muted/40 px-3 py-2 text-sm">
                       {selectedActivityLabel ?? "Activity"}
@@ -474,7 +540,7 @@ export function TaskFormDialog({
                     <>
                       <Select
                         items={{
-                          [NO_ACTIVITY]: "No tag",
+                          [NO_ACTIVITY]: "None",
                           ...Object.fromEntries(
                             departments.flatMap((d) => d.activities.map((a) => [a.id, `${d.name}: ${a.name}`]))
                           ),
@@ -484,10 +550,10 @@ export function TaskFormDialog({
                         disabled={!form.workstreamId || departments.length === 0}
                       >
                         <SelectTrigger id="task-activity" className="w-full">
-                          <SelectValue />
+                          <SelectValue placeholder="Select Activity…" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value={NO_ACTIVITY}>No tag</SelectItem>
+                          <SelectItem value={NO_ACTIVITY}>None</SelectItem>
                           {departments.map((d) => (
                             <div key={d.id}>
                               {d.activities.map((a) => (
@@ -510,29 +576,6 @@ export function TaskFormDialog({
                         </p>
                       )}
                     </>
-                  )}
-
-                  {/* The Service's own full set of already-enabled Activities, always visible
-                      regardless of which one is currently selected above. Read-only context — this
-                      form only ever consumes the existing Project > Service > Activity hierarchy,
-                      never extends it. */}
-                  {selectedWorkstream && departments.length > 0 && (
-                    <div className="flex flex-col gap-1 rounded-lg border bg-muted/20 p-2.5 text-xs">
-                      <span className="font-mono text-[10px] tracking-wide text-muted-foreground uppercase">
-                        Activities in this Service
-                      </span>
-                      {departments.flatMap((d) =>
-                        d.activities.map((a) => (
-                          <div key={a.id} className="flex items-center justify-between gap-2">
-                            <span className="flex items-center gap-1.5">
-                              <Check className="size-3 shrink-0 text-success" aria-hidden="true" />
-                              {d.name}: {a.name}
-                            </span>
-                            {a.id === form.activityId && <span className="shrink-0 text-muted-foreground">Selected for Task</span>}
-                          </div>
-                        ))
-                      )}
-                    </div>
                   )}
 
                   {showSuggestion && suggestion && (
@@ -612,24 +655,25 @@ export function TaskFormDialog({
                 />
               </FormDrawerField>
             </FormDrawerPropertyGrid>
-
-            {/* Phase 12B final correction — Employee assignment is always self, automatically,
-                regardless of what this form shows or doesn't; a read-only "you" chip added no
-                information an Employee didn't already know, so this is dropped for them entirely.
-                Supervisor/Superadmin keep full Assignees, unchanged. */}
-            {!employeeView && (
-              <FormDrawerField label="Assignees">
-                <MultiSelect
-                  options={assignableStaff.map((s) => ({ id: s.id, label: s.fullName, sublabel: s.email }))}
-                  value={form.assigneeIds}
-                  onChange={(ids) => setForm((p) => ({ ...p, assigneeIds: ids }))}
-                  placeholder="No assignees"
-                  searchPlaceholder="Search people…"
-                  aria-label="Task assignees"
-                />
-              </FormDrawerField>
-            )}
           </FormDrawerSection>
+          </FormDialogColumns>
+
+          {/* Phase 12B final correction — Employee assignment is always self, automatically,
+              regardless of what this form shows or doesn't; a read-only "you" chip added no
+              information an Employee didn't already know, so this is dropped for them entirely.
+              Supervisor/Superadmin keep full Assignees, unchanged. */}
+          {!employeeView && (
+            <FormDrawerSection label="Assignees">
+              <MultiSelect
+                options={assignableStaff.map((s) => ({ id: s.id, label: s.fullName, sublabel: s.email }))}
+                value={form.assigneeIds}
+                onChange={(ids) => setForm((p) => ({ ...p, assigneeIds: ids }))}
+                placeholder="No assignees"
+                searchPlaceholder="Search people…"
+                aria-label="Task assignees"
+              />
+            </FormDrawerSection>
+          )}
 
           <FormDrawerSection label="Checklist">
             <ChecklistBuilder
@@ -667,6 +711,6 @@ export function TaskFormDialog({
           onSelect={handleUseReuseCandidate}
         />
       )}
-    </FormDrawer>
+    </FormDialog>
   );
 }

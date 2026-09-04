@@ -34,6 +34,28 @@ interface WorkstreamRow {
   updated_at: string;
 }
 
+interface ServiceLineRow {
+  id: string;
+  name: string;
+  description: string | null;
+  is_active: boolean;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+function toServiceLine(row: ServiceLineRow): ServiceLine {
+  return {
+    id: row.id,
+    name: row.name,
+    description: row.description,
+    isActive: row.is_active,
+    createdById: row.created_by,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
 function toWorkstream(row: WorkstreamRow): Workstream {
   return {
     id: row.id,
@@ -69,12 +91,13 @@ async function hydrate(workstreams: Workstream[]): Promise<WorkstreamWithRelatio
   const brandIds = Array.from(new Set(workstreams.map((w) => w.brandId)));
   const serviceLineIds = Array.from(new Set(workstreams.map((w) => w.serviceLineId).filter((x): x is string => x != null)));
   const leadIds = Array.from(new Set(workstreams.map((w) => w.leadUserId)));
+  const createdByIds = Array.from(new Set(workstreams.map((w) => w.createdById)));
 
   const [companiesRes, brandsRes, serviceLinesRes, membersRes, activityLinksRes, tasksRes, timeEntriesRes, successorsRes] =
     await Promise.all([
       supabase.from("companies").select("*").in("id", companyIds),
       supabase.from("brands").select("id, name").in("id", brandIds),
-      serviceLineIds.length ? supabase.from("service_lines").select("id, name").in("id", serviceLineIds) : Promise.resolve({ data: [] }),
+      serviceLineIds.length ? supabase.from("service_lines").select("*").in("id", serviceLineIds) : Promise.resolve({ data: [] }),
       supabase.from("workstream_members").select("workstream_id, user_id").in("workstream_id", ids),
       supabase.from("workstream_activities").select("workstream_id, activity_id").in("workstream_id", ids),
       supabase.from("tasks").select("id, workstream_id, status, expected_minutes").in("workstream_id", ids),
@@ -87,10 +110,10 @@ async function hydrate(workstreams: Workstream[]): Promise<WorkstreamWithRelatio
     contract_start_date: string | null; renewal_date: string | null; active: boolean; created_at: string;
   }[];
   const brands = (brandsRes.data ?? []) as Brand[];
-  const serviceLines = (serviceLinesRes.data ?? []) as ServiceLine[];
+  const serviceLines = ((serviceLinesRes.data ?? []) as ServiceLineRow[]).map(toServiceLine);
   const members = (membersRes.data ?? []) as { workstream_id: string; user_id: string }[];
   const memberIds = Array.from(new Set(members.map((m) => m.user_id)));
-  const allUserIds = Array.from(new Set([...leadIds, ...memberIds]));
+  const allUserIds = Array.from(new Set([...leadIds, ...memberIds, ...createdByIds]));
   // Not a plain `profiles` select — `profiles_select` RLS only ever exposes self/your own direct
   // reports, which is too narrow here (e.g. an Employee viewing a Workstream their Supervisor
   // leads). See profile-directory.ts for the real access boundary.
@@ -134,6 +157,8 @@ async function hydrate(workstreams: Workstream[]): Promise<WorkstreamWithRelatio
     const serviceLine = workstream.serviceLineId ? (serviceLines.find((sl) => sl.id === workstream.serviceLineId) ?? null) : null;
     const lead = users.find((u) => u.id === workstream.leadUserId);
     if (!lead) throw new Error(`Workstream ${workstream.id} references unknown lead ${workstream.leadUserId}`);
+    const createdBy = users.find((u) => u.id === workstream.createdById);
+    if (!createdBy) throw new Error(`Workstream ${workstream.id} references unknown creator ${workstream.createdById}`);
     const teamIds = members.filter((m) => m.workstream_id === workstream.id).map((m) => m.user_id);
     const team = users.filter((u) => teamIds.includes(u.id));
     const enabledActivityIds = activityLinks.filter((l) => l.workstream_id === workstream.id).map((l) => l.activity_id);
@@ -179,6 +204,7 @@ async function hydrate(workstreams: Workstream[]): Promise<WorkstreamWithRelatio
       brand,
       lead,
       team,
+      createdBy,
       activities: workstreamActivities,
       taskCount,
       doneTaskCount,

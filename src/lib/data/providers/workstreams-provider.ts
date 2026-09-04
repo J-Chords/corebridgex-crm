@@ -7,8 +7,17 @@ export interface WorkstreamWithRelations extends Workstream {
   company: Company;
   serviceLine: ServiceLine | null;
   brand: Brand;
+  /** The Project Service Lead — one explicit operational lead for THIS Service within THIS Project.
+   * Distinct from `createdBy` (historical creator) and from a Service Line's Global Team Leads
+   * (org-wide responsibility for the catalog definition, resolved separately via
+   * `useServiceLineStaffing`) — see docs/current-project-state.md's Service Level notes. */
   lead: User;
+  /** Project Service Team — this Project Service's own staffing, distinct from a Service Line's
+   * Global "Works In Services" membership. */
   team: User[];
+  /** The historical creator, hydrated from `createdById`. Never derive "who created this" from
+   * `lead`/Global Team Leads/the current viewer — this is the only truthful source. */
+  createdBy: User;
   /**
    * The Activity Catalog entries explicitly enabled for this workstream (via the `WorkstreamActivity`
    * join, resolved here the same way `team` resolves `WorkstreamMember`) — empty for a workstream with

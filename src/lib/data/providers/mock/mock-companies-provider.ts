@@ -171,7 +171,7 @@ export const mockCompaniesProvider: CompaniesProvider = {
   },
 
   async listServiceLines() {
-    return db.serviceLines;
+    return db.serviceLines.filter((sl) => sl.isActive);
   },
 
   async listAssignableStaff(viewer) {

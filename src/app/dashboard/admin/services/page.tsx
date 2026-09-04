@@ -3,15 +3,20 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Search } from "lucide-react";
+import { ArrowLeft, Pencil, Plus, Search, Trash2 } from "lucide-react";
 import { useAuth } from "@/lib/auth/auth-context";
 import { useServiceStaffing } from "@/lib/data/hooks/use-service-membership";
+import { useServiceLineCatalog } from "@/lib/data/hooks/use-service-lines";
 import { useAdminUsers } from "@/lib/data/hooks/use-admin-users";
-import { useCompanyLookups } from "@/lib/data/hooks/use-companies";
+import { useActivityCatalog } from "@/lib/data/hooks/use-activity-catalog";
 import { canManageAdminUsers } from "@/lib/data/permissions";
-import { serviceMembershipProvider } from "@/lib/data/providers";
+import { serviceMembershipProvider, serviceLinesProvider } from "@/lib/data/providers";
+import type { ServiceLine } from "@/lib/data/types";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
+import { Badge } from "@/components/ui/badge";
 import {
   Table,
   TableBody,
@@ -23,6 +28,9 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { MultiSelect } from "@/components/ui/multi-select";
 import { useToastManager } from "@/components/ui/toast";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { ServiceLineFormDialog } from "@/components/admin/service-line-form-dialog";
+import { ManageServiceActivitiesDialog } from "@/components/admin/manage-service-activities-dialog";
 
 type StaffingFilter = "all" | "no-team-lead" | "no-employees" | "fully-unstaffed";
 
@@ -45,13 +53,31 @@ export default function AdminServicesPage() {
   const router = useRouter();
   const { staffing, isLoading, refresh } = useServiceStaffing();
   const { users } = useAdminUsers();
-  const { serviceLines } = useCompanyLookups();
+  const { serviceLines, refresh: refreshCatalog } = useServiceLineCatalog();
+  // Unscoped fetch (no brand/service filter) — the full cross-brand Department tree, used only to
+  // derive a per-Service Activity count for this table; the "Manage Activities" dialog itself scopes
+  // its own fetch to one Service Line.
+  const { departments: allDepartments, refresh: refreshAllDepartments } = useActivityCatalog();
   const toastManager = useToastManager();
   const [search, setSearch] = useState("");
   const [teamLeadFilter, setTeamLeadFilter] = useState<string>("all");
   const [employeeFilter, setEmployeeFilter] = useState<string>("all");
   const [staffingFilter, setStaffingFilter] = useState<StaffingFilter>("all");
   const [pendingServiceId, setPendingServiceId] = useState<string | null>(null);
+  const [pendingCatalogId, setPendingCatalogId] = useState<string | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [editingServiceLine, setEditingServiceLine] = useState<ServiceLine | null>(null);
+  const [managingActivitiesFor, setManagingActivitiesFor] = useState<ServiceLine | null>(null);
+  const [deleteCandidate, setDeleteCandidate] = useState<ServiceLine | null>(null);
+
+  const activityCountByServiceLine = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const dept of allDepartments) {
+      if (!dept.serviceLineId) continue;
+      counts.set(dept.serviceLineId, (counts.get(dept.serviceLineId) ?? 0) + dept.activities.length);
+    }
+    return counts;
+  }, [allDepartments]);
 
   useEffect(() => {
     if (user && !canManageAdminUsers(user)) {
@@ -118,17 +144,54 @@ export default function AdminServicesPage() {
     }
   }
 
+  async function handleSetActive(serviceLine: ServiceLine, isActive: boolean) {
+    if (!user) return;
+    setPendingCatalogId(serviceLine.id);
+    try {
+      await serviceLinesProvider.setActive(user, serviceLine.id, isActive);
+      await refreshCatalog();
+    } catch (err) {
+      toastManager.add({ description: err instanceof Error ? err.message : "Couldn't update this Service." });
+    } finally {
+      setPendingCatalogId(null);
+    }
+  }
+
+  async function handleDelete(serviceLine: ServiceLine) {
+    if (!user) return;
+    setPendingCatalogId(serviceLine.id);
+    try {
+      await serviceLinesProvider.delete(user, serviceLine.id);
+      await refreshCatalog();
+    } catch (err) {
+      toastManager.add({ description: err instanceof Error ? err.message : "Couldn't delete this Service." });
+    } finally {
+      setPendingCatalogId(null);
+    }
+  }
+
+  function createdByLabel(serviceLine: ServiceLine): string {
+    if (!serviceLine.createdById) return "Legacy — not recorded";
+    return users.find((u) => u.id === serviceLine.createdById)?.fullName ?? "Unknown";
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <Link href="/dashboard" className="w-fit text-sm text-muted-foreground hover:underline">
         <ArrowLeft className="mr-1 inline size-3.5" aria-hidden="true" />
         Back to dashboard
       </Link>
-      <div>
-        <h1 className="font-heading text-2xl font-semibold">Service staffing</h1>
-        <p className="text-sm text-muted-foreground">
-          These Team Lead and Employee assignments apply across all Projects that use each Service.
-        </p>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="font-heading text-2xl font-semibold">Services</h1>
+          <p className="text-sm text-muted-foreground">
+            The global Service catalog — name, description, active status, Activities, and org-wide Team Lead/Employee
+            staffing. Deactivate a Service to stop it appearing as a new Project Service choice without losing history.
+          </p>
+        </div>
+        <Button type="button" onClick={() => setCreateOpen(true)}>
+          <Plus /> New Service
+        </Button>
       </div>
 
       <Card className="min-w-0 overflow-hidden py-0">
@@ -201,24 +264,54 @@ export default function AdminServicesPage() {
           <TableHeader>
             <TableRow>
               <TableHead className="font-mono text-xs tracking-wide text-muted-foreground uppercase">Service</TableHead>
+              <TableHead className="font-mono text-xs tracking-wide text-muted-foreground uppercase">Active</TableHead>
+              <TableHead className="font-mono text-xs tracking-wide text-muted-foreground uppercase">Activities</TableHead>
+              <TableHead className="font-mono text-xs tracking-wide text-muted-foreground uppercase">Created By</TableHead>
               <TableHead className="font-mono text-xs tracking-wide text-muted-foreground uppercase">Team Leads</TableHead>
               <TableHead className="font-mono text-xs tracking-wide text-muted-foreground uppercase">Employees</TableHead>
+              <TableHead className="font-mono text-xs tracking-wide text-muted-foreground uppercase">
+                <span className="sr-only">Actions</span>
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {!isLoading && filteredLines.length === 0 && (
               <TableRow>
-                <TableCell colSpan={3} className="py-10 text-center text-sm text-muted-foreground">
+                <TableCell colSpan={7} className="py-10 text-center text-sm text-muted-foreground">
                   No Services match your filters.
                 </TableCell>
               </TableRow>
             )}
             {filteredLines.map((line) => {
               const row = staffing.find((s) => s.serviceLineId === line.id);
+              const activityCount = activityCountByServiceLine.get(line.id) ?? 0;
+              const catalogBusy = pendingCatalogId === line.id;
               return (
                 <TableRow key={line.id}>
-                  <TableCell className="w-48 font-medium align-top pt-4">{line.name}</TableCell>
-                  <TableCell className="w-80 align-top">
+                  <TableCell className="w-56 align-top pt-4">
+                    <div className="flex flex-col gap-1">
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-medium">{line.name}</span>
+                        {!line.isActive && <Badge variant="secondary">Inactive</Badge>}
+                      </div>
+                      {line.description && <p className="text-xs text-muted-foreground">{line.description}</p>}
+                    </div>
+                  </TableCell>
+                  <TableCell className="align-top pt-4">
+                    <Switch
+                      checked={line.isActive}
+                      onCheckedChange={(checked) => void handleSetActive(line, checked)}
+                      disabled={catalogBusy}
+                      aria-label={`${line.isActive ? "Deactivate" : "Activate"} ${line.name}`}
+                    />
+                  </TableCell>
+                  <TableCell className="align-top pt-4">
+                    <Button type="button" variant="outline" size="sm" onClick={() => setManagingActivitiesFor(line)}>
+                      {activityCount} configured
+                    </Button>
+                  </TableCell>
+                  <TableCell className="w-40 align-top pt-4 text-sm text-muted-foreground">{createdByLabel(line)}</TableCell>
+                  <TableCell className="w-72 align-top">
                     <MultiSelect
                       options={teamLeadOptions}
                       value={row?.teamLeadUserIds ?? []}
@@ -229,7 +322,7 @@ export default function AdminServicesPage() {
                       aria-label={`Team Leads for ${line.name}`}
                     />
                   </TableCell>
-                  <TableCell className="w-80 align-top">
+                  <TableCell className="w-72 align-top">
                     <MultiSelect
                       options={employeeOptions}
                       value={row?.employeeUserIds ?? []}
@@ -240,12 +333,77 @@ export default function AdminServicesPage() {
                       aria-label={`Employees for ${line.name}`}
                     />
                   </TableCell>
+                  <TableCell className="align-top pt-3">
+                    <div className="flex items-center gap-1">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-sm"
+                        aria-label={`Edit ${line.name}`}
+                        onClick={() => setEditingServiceLine(line)}
+                      >
+                        <Pencil />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-sm"
+                        aria-label={`Delete ${line.name}`}
+                        disabled={catalogBusy}
+                        onClick={() => setDeleteCandidate(line)}
+                      >
+                        <Trash2 />
+                      </Button>
+                    </div>
+                  </TableCell>
                 </TableRow>
               );
             })}
           </TableBody>
         </Table>
       </Card>
+
+      <ServiceLineFormDialog
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        onSaved={refreshCatalog}
+        onCreatedAndConfigure={(created) => {
+          refreshCatalog();
+          setManagingActivitiesFor(created);
+        }}
+      />
+      {editingServiceLine && (
+        <ServiceLineFormDialog
+          open={Boolean(editingServiceLine)}
+          onOpenChange={(open) => !open && setEditingServiceLine(null)}
+          serviceLine={editingServiceLine}
+          onSaved={refreshCatalog}
+        />
+      )}
+      {managingActivitiesFor && (
+        <ManageServiceActivitiesDialog
+          open={Boolean(managingActivitiesFor)}
+          onOpenChange={(open) => {
+            if (!open) {
+              setManagingActivitiesFor(null);
+              // The dialog's own catalog fetch is scoped to one Service Line — this page's
+              // separate unscoped fetch (used only for the "N configured" counts) doesn't see
+              // that change on its own, so refresh it here rather than showing a stale count.
+              void refreshAllDepartments();
+            }
+          }}
+          serviceLine={managingActivitiesFor}
+        />
+      )}
+      <ConfirmDialog
+        open={Boolean(deleteCandidate)}
+        onOpenChange={(open) => !open && setDeleteCandidate(null)}
+        title={`Delete "${deleteCandidate?.name ?? ""}"?`}
+        description="This only succeeds if the Service has never been used by a Project, Template, Activity, or staffing assignment — otherwise deactivate it instead."
+        confirmLabel="Delete"
+        confirmVariant="destructive"
+        onConfirm={() => deleteCandidate && void handleDelete(deleteCandidate)}
+      />
     </div>
   );
 }

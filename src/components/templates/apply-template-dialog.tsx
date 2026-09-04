@@ -149,7 +149,7 @@ export function ApplyTemplateDialog({ open, onOpenChange, company, onApplied }: 
           <DialogTitle>Apply template</DialogTitle>
           <DialogDescription>
             {step === "form"
-              ? `Create a new workstream for ${company.name} from a standard template.`
+              ? `Create a new service for ${company.name} from a standard template.`
               : "Review what this will create before it commits."}
           </DialogDescription>
         </DialogHeader>
@@ -184,7 +184,7 @@ export function ApplyTemplateDialog({ open, onOpenChange, company, onApplied }: 
               </div>
 
               <FloatingLabelInput
-                label="Workstream name"
+                label="Service name"
                 required
                 value={form.name}
                 onChange={(e) => {
@@ -276,7 +276,7 @@ export function ApplyTemplateDialog({ open, onOpenChange, company, onApplied }: 
                 <div>
                   <p className="mb-2 text-sm font-medium">
                     {template.tasks.length} task{template.tasks.length === 1 ? "" : "s"} will be created (unassigned
-                    — assign owners from the workstream afterward)
+                    — assign owners from the service afterward)
                   </p>
                   <div className="flex flex-col gap-1">
                     {template.tasks.map((tt, i) => (
@@ -315,7 +315,7 @@ export function ApplyTemplateDialog({ open, onOpenChange, company, onApplied }: 
                   Back
                 </Button>
                 <Button type="button" disabled={isSubmitting} onClick={handleConfirm}>
-                  {isSubmitting ? "Creating…" : `Create workstream & ${template.tasks.length} tasks`}
+                  {isSubmitting ? "Creating…" : `Create service & ${template.tasks.length} tasks`}
                 </Button>
               </DialogFooter>
             </>

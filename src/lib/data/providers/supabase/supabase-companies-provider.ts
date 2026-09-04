@@ -40,6 +40,28 @@ function toCompany(row: CompanyRow): Company {
   };
 }
 
+interface ServiceLineRow {
+  id: string;
+  name: string;
+  description: string | null;
+  is_active: boolean;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+function toServiceLine(row: ServiceLineRow): ServiceLine {
+  return {
+    id: row.id,
+    name: row.name,
+    description: row.description,
+    isActive: row.is_active,
+    createdById: row.created_by,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
 function toContact(row: {
   id: string;
   company_id: string;
@@ -73,7 +95,7 @@ async function hydrateCompanies(companies: Company[]): Promise<CompanyWithRelati
     supabase.from("client_contacts").select("*").in("company_id", companyIds),
     supabase
       .from("company_service_lines")
-      .select("company_id, service_line:service_lines(id, name)")
+      .select("company_id, service_line:service_lines(*)")
       .in("company_id", companyIds),
     supabase.from("user_companies").select("company_id, user_id").in("company_id", companyIds),
     supabase.from("workstreams").select("id, company_id, status, updated_at").in("company_id", companyIds),
@@ -84,7 +106,7 @@ async function hydrateCompanies(companies: Company[]): Promise<CompanyWithRelati
   const allContacts = (contactsRes.data ?? []).map(toContact);
   const csl = (cslRes.data ?? []) as {
     company_id: string;
-    service_line: { id: string; name: string } | { id: string; name: string }[] | null;
+    service_line: ServiceLineRow | ServiceLineRow[] | null;
   }[];
   const userCompanies = (ucRes.data ?? []) as { company_id: string; user_id: string }[];
   const assignedUserIds = Array.from(new Set(userCompanies.map((r) => r.user_id)));
@@ -116,8 +138,9 @@ async function hydrateCompanies(companies: Company[]): Promise<CompanyWithRelati
     }
     const serviceLines = csl
       .filter((r) => r.company_id === company.id && r.service_line)
-      .map((r) => (Array.isArray(r.service_line) ? r.service_line[0] : r.service_line) as ServiceLine)
-      .filter((sl): sl is ServiceLine => sl != null);
+      .map((r) => (Array.isArray(r.service_line) ? r.service_line[0] : r.service_line))
+      .filter((sl): sl is ServiceLineRow => sl != null)
+      .map(toServiceLine);
     const primaryContact = company.primaryContactId
       ? (allContacts.find((c) => c.id === company.primaryContactId) ?? null)
       : null;
@@ -311,9 +334,13 @@ export const supabaseCompaniesProvider: CompaniesProvider = {
 
   async listServiceLines() {
     const supabase = createClient();
-    const { data, error } = await supabase.from("service_lines").select("id, name").order("name");
+    const { data, error } = await supabase
+      .from("service_lines")
+      .select("*")
+      .eq("is_active", true)
+      .order("name");
     if (error) throw new Error(error.message);
-    return (data ?? []) as ServiceLine[];
+    return (data ?? []).map(toServiceLine);
   },
 
   async listAssignableStaff(viewer) {

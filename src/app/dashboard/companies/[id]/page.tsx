@@ -209,21 +209,21 @@ export default function CompanyDetailPage({ params }: { params: Promise<{ id: st
 
       <Card>
         <CardHeader className="flex items-center justify-between">
-          <CardTitle className="text-base">Workstreams</CardTitle>
+          <CardTitle className="text-base">Services</CardTitle>
           {canManageWorkstreams(user) && (
             <div className="flex items-center gap-2">
               <Button size="sm" variant="outline" onClick={() => setApplyTemplateOpen(true)}>
                 <Sparkles /> Apply template
               </Button>
               <Button size="sm" variant="outline" onClick={() => setWorkstreamDialogOpen(true)}>
-                <Plus /> Add workstream
+                <Plus /> Add Service
               </Button>
             </div>
           )}
         </CardHeader>
         <CardContent className="flex flex-col gap-1">
           {!workstreamsLoading && workstreams.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No workstreams set up for this company yet.</p>
+            <p className="text-sm text-muted-foreground">No Services set up for this company yet.</p>
           ) : (
             workstreams.map((workstream, i) => (
               <div key={workstream.id}>
@@ -256,13 +256,13 @@ export default function CompanyDetailPage({ params }: { params: Promise<{ id: st
       {workstreams.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Time vs. Budget — All Workstreams</CardTitle>
+            <CardTitle className="text-base">Time vs. Budget — All Services</CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col gap-2">
             <BudgetBar budget={budgetRollup} />
             {budgetRollup.workstreamsWithBudget < budgetRollup.totalWorkstreams && (
               <p className="text-xs text-muted-foreground">
-                {budgetRollup.workstreamsWithBudget} of {budgetRollup.totalWorkstreams} workstreams have a budget set
+                {budgetRollup.workstreamsWithBudget} of {budgetRollup.totalWorkstreams} services have a budget set
                 — expected hours above only totals those.
               </p>
             )}
@@ -325,7 +325,7 @@ export default function CompanyDetailPage({ params }: { params: Promise<{ id: st
             variant="outline"
             onClick={() => setTaskDialogOpen(true)}
             disabled={workstreams.length === 0}
-            title={workstreams.length === 0 ? "Add a workstream first to be able to add tasks." : undefined}
+            title={workstreams.length === 0 ? "Add a Service first to be able to add tasks." : undefined}
             data-shortcut="new-task"
           >
             <Plus /> Add task
@@ -334,7 +334,7 @@ export default function CompanyDetailPage({ params }: { params: Promise<{ id: st
         <CardContent>
           {workstreams.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              No workstreams yet — add one above before creating tasks for this company.
+              No Services yet — add one above before creating tasks for this company.
             </p>
           ) : (
             <TaskRowList tasks={tasks} isLoading={tasksLoading} emptyMessage="No tasks for this company yet." />

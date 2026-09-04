@@ -48,6 +48,9 @@ export interface CompaniesProvider {
   updateContact(viewer: User, contactId: string, input: ClientContactInput): Promise<ClientContact>;
 
   listBrands(): Promise<Brand[]>;
+  /** Active Services only — the ordinary "pick a Service" lookup used by every Company/Project/
+   * Workstream picker. Inactive Services must not appear as a new choice (Service Level Phase B,
+   * Section 12); the Admin catalog itself uses `serviceLinesProvider.listAll` to see everything. */
   listServiceLines(): Promise<ServiceLine[]>;
   /** Staff this viewer is allowed to assign to a company (their own team, or everyone for superadmin). */
   listAssignableStaff(viewer: User): Promise<User[]>;

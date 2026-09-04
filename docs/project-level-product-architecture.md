@@ -1,12 +1,14 @@
 # Project Level — Product Architecture
 
-**Status: PROJECT LEVEL — IMPLEMENTATION COMPLETE / FINAL MANUAL ACCEPTANCE PENDING.** Built
-forward from the Admin Foundation final checkpoint (`5fa92448d716996dee6589abeb00bcc28748a1e6`).
-Implementation is deliberately left **uncommitted** pending manual UI testing and explicit
-acceptance. One intentional, permanent limitation: automatic Trash purge stays disabled by design —
-see "Trash retention" below; correct given this schema's FK delete rules, not a placeholder for
-later work in this phase. The prior Brand business decision is now resolved (Brand is optional, per
-the product owner) — see "Company relationship" below for exactly how.
+**Status: PROJECT LEVEL — FINAL ACCEPTED / CHECKPOINTED.** Built forward from the Admin Foundation
+final checkpoint (`5fa92448d716996dee6589abeb00bcc28748a1e6`). Manual UI acceptance passed; committed
+and pushed as checkpoint `099f7eac508eff7163eb72ff30370b48128e2147` — see the git log for the full
+commit message. The Service Level module (see `docs/current-project-state.md`'s "Service Level —
+Terminology & Authority" section) builds forward from this checkpoint. One intentional, permanent
+limitation: automatic Trash purge stays disabled by design — see "Trash retention" below; correct
+given this schema's FK delete rules, not a placeholder for later work in this phase. The prior Brand
+business decision is now resolved (Brand is optional, per the product owner) — see "Company
+relationship" below for exactly how.
 
 **Correction pass — the visible "Project Template" bundle layer has been retired; the reusable
 templates ARE the global Services and their Activities.** The product owner clarified that the

@@ -87,7 +87,7 @@ export function QuickAddFromActivityDialog({ open, onOpenChange, workstream, onA
         <DialogHeader>
           <DialogTitle>Add from activity</DialogTitle>
           <DialogDescription>
-            Pick one of this workstream&apos;s own activities to see its curated quick-start tasks — click one to add it here, unassigned and ready to be picked up.
+            Pick one of this service&apos;s own activities to see its curated quick-start tasks — click one to add it here, unassigned and ready to be picked up.
           </DialogDescription>
         </DialogHeader>
 

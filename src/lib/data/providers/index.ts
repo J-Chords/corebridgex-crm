@@ -39,6 +39,8 @@ import { mockAdminUsersProvider } from "./mock/mock-admin-users-provider";
 import { supabaseAdminUsersProvider } from "./supabase/supabase-admin-users-provider";
 import { mockServiceMembershipProvider } from "./mock/mock-service-membership-provider";
 import { supabaseServiceMembershipProvider } from "./supabase/supabase-service-membership-provider";
+import { mockServiceLinesProvider } from "./mock/mock-service-lines-provider";
+import { supabaseServiceLinesProvider } from "./supabase/supabase-service-lines-provider";
 import { mockProjectCommentsProvider } from "./mock/mock-project-comments-provider";
 import { supabaseProjectCommentsProvider } from "./supabase/supabase-project-comments-provider";
 import { mockProjectIssuesProvider } from "./mock/mock-project-issues-provider";
@@ -101,6 +103,9 @@ export const adminUsersProvider = usesSupabaseData ? supabaseAdminUsersProvider 
 export const serviceMembershipProvider = usesSupabaseData
   ? supabaseServiceMembershipProvider
   : mockServiceMembershipProvider;
+// Service Level Phase B — the Admin global Service catalog's own CRUD surface, same precedent as
+// Service Membership: real only under full "supabase".
+export const serviceLinesProvider = usesSupabaseData ? supabaseServiceLinesProvider : mockServiceLinesProvider;
 // Project Level Stage C — same precedent as Documents/Admin Users: real only under full "supabase".
 export const projectCommentsProvider = usesSupabaseData ? supabaseProjectCommentsProvider : mockProjectCommentsProvider;
 export const projectIssuesProvider = usesSupabaseData ? supabaseProjectIssuesProvider : mockProjectIssuesProvider;

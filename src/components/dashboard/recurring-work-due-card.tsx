@@ -76,7 +76,7 @@ export function RecurringWorkDueCard({ workstreams }: RecurringWorkDueCardProps)
         )}
       </CardContent>
 
-      <DashboardWidgetFocusDialog open={drawerOpen} onOpenChange={setDrawerOpen} title="Recurring Work Due" description={`${due.length} workstream${due.length === 1 ? "" : "s"}`}>
+      <DashboardWidgetFocusDialog open={drawerOpen} onOpenChange={setDrawerOpen} title="Recurring Work Due" description={`${due.length} service${due.length === 1 ? "" : "s"}`}>
         {due.length === 0 ? (
           <p className="text-sm text-muted-foreground">Nothing due for regeneration right now.</p>
         ) : (

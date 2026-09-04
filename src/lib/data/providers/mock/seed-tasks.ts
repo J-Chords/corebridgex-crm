@@ -119,8 +119,8 @@ export const seedTasks: Task[] = [
   },
   {
     id: "task-6",
-    title: "Prepare workstream proposal",
-    description: "Draft the tax advisory workstream proposal for sign-off.",
+    title: "Prepare service proposal",
+    description: "Draft the tax advisory service proposal for sign-off.",
     companyId: "company-4",
     workstreamId: "workstream-5",
     parentTaskId: null,

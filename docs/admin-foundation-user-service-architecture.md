@@ -149,9 +149,14 @@ unhandled promise rejection); `MultiSelect` now uses `useId()` instead of a hard
   Not reproduced live (see the deactivation section above): the actual "last remaining Admin is
   refused" negative case, since the real production Admin always counts toward the trigger's live
   total.
-- **Still deferred**: Workstream `lead_user_id`/"Created By" correction, the Project-Service
-  mutation entry point, and Service-based Team Lead authority all remain reserved for the upcoming
-  Service-level correction, per Stage 0 Corrections 1/2/5 — untouched in this pass.
+- **Still deferred (at the time of this document)**: Workstream `lead_user_id`/"Created By"
+  correction, the Project-Service mutation entry point, and Service-based Team Lead authority all
+  remained reserved for the upcoming Service-level correction, per Stage 0 Corrections 1/2/5 —
+  untouched in this pass. **Resolved by the Service Level Manual Acceptance pass** (see
+  `docs/current-project-state.md`'s "Service Level — Terminology & Authority" section): Lead stays
+  distinct from Created By (both now surfaced), lead reassignment is now security-hardened to the
+  same eligibility as creation, and Service-based Team Lead/Employee authority remains explicitly
+  non-widening — the safe staging rule in Section 15 below was reaffirmed, not changed.
 
 ## Stage 0 corrections (accepted amendments to the original audit)
 

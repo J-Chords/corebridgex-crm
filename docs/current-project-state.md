@@ -117,6 +117,98 @@ Company
 - The inline "+ New Workstream" action from Task creation works, creates the Workstream under the selected Client without leaving the Task form, and auto-selects the new Workstream back on the Task.
 - Workstream has **no** manual expected-time field. Its Time-vs-Budget figure is a roll-up: expected = sum of its own Tasks' `expectedMinutes`; actual = sum of completed time entries against those Tasks.
 
+## Service Level — FINAL ACCEPTED
+
+**Status: SERVICE LEVEL — FINAL ACCEPTED.** Manual UI acceptance has passed across several
+correction rounds (terminology, Service workspace/edit UX, New Service → Activities flow, Task
+Service-identity display in the New/Edit Task dialog). Checkpointed and pushed — see the git log for
+the exact commit hash. Builds forward from the Project Level checkpoint
+(`099f7eac508eff7163eb72ff30370b48128e2147`). The Activity Level module builds forward from this
+checkpoint next (see "Activity Level" below once that phase begins).
+
+**Locked product hierarchy**: `Project → Service → Activity → Task` — visible product term is
+**Service** at every level a signed-in user can see it.
+
+**Product term is Service, everywhere visible.** "Workstream" is the legacy internal implementation
+name only — the `workstreams` table, RPC names, RLS helper names, provider files
+(`workstreams-provider.ts`, `use-workstreams.ts`, `workstream-form-dialog.tsx`, etc.), and code
+comments may keep it; no normal user-facing text may. A repo-wide sweep (multiple passes, including
+the legacy `/dashboard/companies/[id]` page's own visible terminology — its route/functionality was
+never redesigned, only its wording corrected) confirmed zero remaining visible matches anywhere in
+the app.
+
+**Five distinct concepts, never merged:**
+- **Global Service** — the Admin-managed catalog definition (`service_lines`: name, description,
+  active/inactive, `created_by`). Only Admin creates/edits these, from `/dashboard/admin/services`.
+- **Project Service** — one operational Workstream instance inside one Project, pointing at a Global
+  Service.
+- **Global Team Leads** (`service_team_leads`) / **Works In Services** (`service_employees`) —
+  org-wide responsibility/membership for a Global Service. Grants **zero** automatic Project/Task/
+  Time/Report access — a safe staging rule (see `docs/admin-foundation-user-service-architecture.md`
+  Section 15), reaffirmed and left unchanged by this pass. Shown as read-only context (Admin →
+  Services, a Project's Services tab, and the Service workspace's own Team tab) and as annotated,
+  non-binding preferred candidates when picking a Project Service Lead — never auto-assigned.
+- **Project Service Lead** (`workstreams.lead_user_id`) — the one explicit operational lead for one
+  Project Service. Kept as a distinct, real authorization field, not renamed to "Created By."
+  Reassigning it now requires the same eligibility as creating a new Service (a Supervisor may only
+  name themselves or a direct report; Superadmin unrestricted) — closes a gap where editing an
+  existing Service could reassign Lead to anyone with access. Global Team Lead status is shown as
+  a hint when picking a Lead, never auto-selected or auto-authorizing.
+- **Created By** (`workstreams.created_by`) — the true historical creator, now surfaced in the UI
+  (Service workspace Overview/Team tabs). Never derived from Lead/Global Team Lead/Owner/viewer.
+
+**Global Service/Activity catalog creation is Admin-only.** A Team Lead or Employee may select and
+configure existing catalog Services/Activities onto a Project (unchanged), but the RPC that mints a
+brand-new global Activity (`create_activity_for_workstream`) is now gated to Superadmin; the Admin
+Service catalog has its own equivalent (`admin_create_activity_for_service_line`) for the "Manage
+Activities" surface. The full Activity-level workflow redesign remains deferred to the next
+hierarchy phase (Service → Activity → Task); this pass was catalog CRUD/configuration only.
+
+**Service delete/deactivate**: Admin can hard-delete a Global Service only when it's genuinely never
+been referenced anywhere (Postgres's own FK RESTRICT is the proof — the delete simply fails
+otherwise with a friendly "deactivate instead" message); a historically-used Service can always be
+deactivated instead, which keeps it referentially intact and visible in historical records while
+excluding it from new "Add Service" choices until reactivated.
+
+**Service workspace** (`/dashboard/workstreams/[id]`) is a tabbed workspace (Overview / Activities /
+Team / Schedule), not a giant edit drawer — clicking a Project Service opens this page directly. The
+old narrow right-side "Edit Service" Sheet was replaced by a large centered responsive dialog
+(~960px, two-column where useful, full-width Team/Activities), matching the same shell now also used
+for Task create/edit. Primary Service identity is always the Global Service name (e.g. "Accounting"),
+never the Project Service's own reference/qualifier (e.g. "Accounting 2026"), which stays secondary
+metadata.
+
+**Task business/status redesign remains fully deferred** — this pass only corrected the Task
+dialog's visual shell (large centered dialog, Service/Project/Activity terminology, removed the
+permanent "Activities in this Service" dump list) and preserved the existing scalable searchable
+Assignee `MultiSelect` unchanged. No new Task status, Canceled, Waiting/Blocked-reason redesign,
+Handoff changes, or new Task authorization model were implemented.
+
+**New Service → Activities flow**: `/dashboard/admin/services`' "New Service" dialog stays minimal
+(Name + Description only; a Service may legitimately exist with zero Activities). A second footer
+action, "Create & Add Activities," creates the Service then immediately opens the same, single
+`ManageServiceActivitiesDialog` used everywhere else for Activity configuration — no second Activity
+management surface was built.
+
+**TASK SERVICE IDENTITY DISPLAY FOLLOW-UP — explicitly deferred to Activity/Task Level.** The
+New/Edit Task dialog now shows the global Service name as the primary identity (e.g. "Accounting"),
+with the Project Service's own reference/qualifier ("Accounting 2026") as secondary context only,
+grouped/disambiguated by Project when more than one Project's Services are listed together. Several
+OTHER Task surfaces — the Task detail page's own breadcrumb, Task list rows, Task grid cards, the
+Task timeline, Task summaries, dashboard Task-context strings, and Project completed-work Task
+context — still show the Project Service instance name instead, because `TaskWithRelations.workstream`
+is a deliberately lightweight shape (`{id, name, projectId, projectName}` — no `serviceLineId`/
+`serviceLine`). Applying the same global-Service-name-primary rule there requires widening that
+relation/provider shape (mock + Supabase) — explicitly reserved for Activity/Task Level, not done in
+the Service Level pass. Never lose the Project Service's own identity/historical reference when that
+work happens — qualifier stays available as secondary context, same as the Task dialog already does.
+
+**Activity Level is NEXT** — the full Activity-level workflow (Activity detail/workspace, rename/edit
+architecture, delete/archive rules, default-Task-title/template redesign, Creator/lifecycle, final
+role matrix) was deliberately not started during Service Level; only catalog CRUD/configuration
+(create a new global Activity, list existing ones per Service) was built, on the existing Activity
+Catalog architecture (`departments`/`activities`), never a competing model.
+
 ## Roles and access
 
 Exactly **three roles**: `superadmin`, `supervisor`, `employee`. No configurable permission matrix.

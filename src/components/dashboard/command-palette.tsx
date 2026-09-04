@@ -253,7 +253,7 @@ function CommandPaletteBody({ onClose }: { onClose: () => void }) {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={handleInputKeyDown}
-          placeholder="Search projects, tasks, workstreams, reports, people…"
+          placeholder="Search projects, tasks, services, reports, people…"
           aria-label="Search"
           className="h-12 rounded-none border-0 pl-11 text-base focus-visible:ring-0"
         />

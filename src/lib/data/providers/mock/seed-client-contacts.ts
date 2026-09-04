@@ -59,7 +59,7 @@ export const seedClientContacts: ClientContact[] = [
     phone: "+1 (212) 555-0166",
     title: "Managing Partner",
     isPrimary: true,
-    notes: "Still evaluating — awaiting signed workstream letter.",
+    notes: "Still evaluating — awaiting signed service letter.",
   },
   {
     id: "contact-5a",

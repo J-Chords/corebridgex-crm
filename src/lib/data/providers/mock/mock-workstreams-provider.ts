@@ -7,6 +7,8 @@ import {
   canCreateWorkstreamInProject,
   canManageWorkstreams,
   isEmployee,
+  isSuperadmin,
+  managesUser,
 } from "../../permissions";
 import { computeWorkstreamBudget } from "../../time-budget";
 import { computeWorkstreamRecurrence } from "../../recurrence";
@@ -70,6 +72,10 @@ function toWorkstreamWithRelations(workstream: Workstream): WorkstreamWithRelati
   if (!lead) {
     throw new Error(`Workstream ${workstream.id} references unknown lead ${workstream.leadUserId}`);
   }
+  const createdBy = db.users.find((u) => u.id === workstream.createdById);
+  if (!createdBy) {
+    throw new Error(`Workstream ${workstream.id} references unknown creator ${workstream.createdById}`);
+  }
   const team = db.users.filter((u) => workstreamTeamIds(workstream.id).includes(u.id));
   const activityIds = workstreamActivityIds(workstream.id);
   const activities = db.activities
@@ -103,6 +109,7 @@ function toWorkstreamWithRelations(workstream: Workstream): WorkstreamWithRelati
     brand,
     lead,
     team,
+    createdBy,
     activities,
     taskCount,
     doneTaskCount,
@@ -140,12 +147,12 @@ function requireAccess(viewer: User, workstream: Workstream) {
     { leadUserId: workstream.leadUserId, teamUserIds: workstreamTeamIds(workstream.id), companyId: workstream.companyId },
     db.users
   );
-  if (!accessible) throw new Error("You don't have access to this workstream.");
+  if (!accessible) throw new Error("You don't have access to this service.");
 }
 
 function requireManage(viewer: User, workstream?: Workstream) {
   if (!canManageWorkstreams(viewer)) {
-    throw new Error("Only supervisors and superadmins can manage workstreams.");
+    throw new Error("Only supervisors and superadmins can manage services.");
   }
   if (workstream) requireAccess(viewer, workstream);
 }
@@ -178,7 +185,7 @@ function requireActivitiesBelongToService(activityIds: string[], serviceLineId: 
     const activity = db.activities.find((a) => a.id === activityId);
     const department = activity ? db.departments.find((d) => d.id === activity.departmentId) : undefined;
     if (!department || department.serviceLineId !== serviceLineId) {
-      throw new Error("One of the selected activities doesn't belong to this workstream's service.");
+      throw new Error("One of the selected activities doesn't belong to this service.");
     }
   }
 }
@@ -222,14 +229,14 @@ export const mockWorkstreamsProvider: WorkstreamsProvider = {
         throw new Error("You don't have access to create a service in that project.");
       }
     } else if (!canCreateWorkstream(viewer, resolved.companyId, db.users)) {
-      throw new Error("You don't have access to create a workstream for that company.");
+      throw new Error("You don't have access to create a service for that company.");
     }
     if (isEmployee(viewer) && input.leadUserId !== viewer.id) {
       // Mirrors the real workstreams_insert RLS check exactly — an Employee may only ever create
       // a workstream they themselves lead, never one assigned to someone else. This is what makes
       // the new workstream visible to them afterward (canAccessWorkstream's own lead/self check),
       // without granting any broader staff-assignment power.
-      throw new Error("You can only create a workstream you lead yourself.");
+      throw new Error("You can only create a service you lead yourself.");
     }
     const company = db.companies.find((c) => c.id === resolved.companyId);
     if (!company) throw new Error("Company not found.");
@@ -270,10 +277,18 @@ export const mockWorkstreamsProvider: WorkstreamsProvider = {
 
   async updateWorkstream(viewer, id, input) {
     const existing = db.workstreams.find((e) => e.id === id);
-    if (!existing) throw new Error("Workstream not found.");
+    if (!existing) throw new Error("Service not found.");
     requireManage(viewer, existing);
     if (!canAccessCompany(viewer, input.companyId, db.users)) {
       throw new Error("You don't have access to that company.");
+    }
+    // Security correction — reassigning the Project Service Lead must follow the same eligibility
+    // as creation (a Supervisor may only name themselves or a direct report; Superadmin is
+    // unrestricted). Mirrors the hosted `manages_user(lead_user_id)` WITH CHECK added to
+    // `workstreams_update` — see 20260904*_workstream_lead_reassignment_hardening.sql.
+    const newLead = db.users.find((u) => u.id === input.leadUserId);
+    if (!newLead || !managesUser(viewer, newLead)) {
+      throw new Error("You can only assign yourself or one of your own direct reports as Project Service Lead.");
     }
     requireActivitiesBelongToService(input.activityIds, input.serviceLineId);
 
@@ -301,20 +316,15 @@ export const mockWorkstreamsProvider: WorkstreamsProvider = {
 
   async createActivityForWorkstream(viewer, workstreamId, name) {
     const workstream = db.workstreams.find((w) => w.id === workstreamId);
-    if (!workstream) throw new Error("Workstream not found.");
+    if (!workstream) throw new Error("Service not found.");
 
-    // Pre-apply correction — the exact same boundary `createTask`'s own `requireWorkstreamAccess`
-    // uses to decide "may this caller create a Task in this Workstream," reused directly rather than
-    // a narrower lead-only approximation. `canAccessWorkstream`'s own final branch already lets any
-    // legitimate team MEMBER (not just the lead) through for an Employee — matching the real product
-    // rule: if you may create a normal Task here, you may create the Activity a Task needs too.
-    const accessible = canAccessWorkstream(
-      viewer,
-      { leadUserId: workstream.leadUserId, teamUserIds: workstreamTeamIds(workstreamId), companyId: workstream.companyId },
-      db.users
-    );
-    if (!accessible) {
-      throw new Error("You don't have permission to add an activity to this service.");
+    // Service Level Phase B, Section 9 — creating a new GLOBAL Activity catalog entry is Admin-only;
+    // a Project Service Lead/team member may still SELECT/CONFIGURE existing catalog Activities onto
+    // this Workstream, just never mint a new one. Previously scoped to `canAccessWorkstream` (any
+    // Employee-as-lead or Supervisor-in-scope), which conflicted with the locked "Team Lead/Employee
+    // do not create global Service/Activity definitions" rule — narrowed to Superadmin only.
+    if (!isSuperadmin(viewer)) {
+      throw new Error("Only an admin can create a new Activity — pick an existing one instead.");
     }
     if (!workstream.serviceLineId) {
       throw new Error("This service has no service line — an activity can't be created for it.");

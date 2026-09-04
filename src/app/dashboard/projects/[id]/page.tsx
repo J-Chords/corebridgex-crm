@@ -816,7 +816,7 @@ function LoadedProjectDetailPage({
                           {workstreamDisplayHeading(workstream.name, workstream.serviceLine?.name ?? null)}
                         </span>
                         <span className="text-xs text-muted-foreground">
-                          Service Lead (this Project): {workstream.lead.fullName} · {workstream.activities.length} activit
+                          Project Service Lead: {workstream.lead.fullName} · {workstream.activities.length} activit
                           {workstream.activities.length === 1 ? "y" : "ies"}
                         </span>
                       </div>

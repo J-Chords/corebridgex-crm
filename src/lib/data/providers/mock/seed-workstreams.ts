@@ -117,7 +117,7 @@ const rawSeedWorkstreams: Omit<Workstream, "projectId">[] = [
   },
   {
     id: "workstream-5",
-    name: "Tax Advisory Workstream Proposal",
+    name: "Tax Advisory Service Proposal",
     description: "Scoping proposal for ongoing tax advisory work — pending client sign-off before it converts to a recurring engagement.",
     companyId: "company-4",
     serviceLineId: "svc-tax",

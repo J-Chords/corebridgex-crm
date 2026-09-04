@@ -222,9 +222,9 @@ export function WorkstreamActivityTasks({ departments, catalogLoading, tasks, is
   if (!catalogLoading && activities.length === 0) {
     return (
       <div className="flex flex-col gap-3">
-        <p className="text-sm text-muted-foreground">No activities are configured for this workstream.</p>
+        <p className="text-sm text-muted-foreground">No activities are configured for this service.</p>
         {tasks.length === 0 ? (
-          !isLoading && <p className="text-sm text-muted-foreground">No tasks on this workstream yet.</p>
+          !isLoading && <p className="text-sm text-muted-foreground">No tasks on this service yet.</p>
         ) : (
           <ActivityTaskRows
             tasks={tasks}

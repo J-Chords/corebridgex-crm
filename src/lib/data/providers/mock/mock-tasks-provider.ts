@@ -51,7 +51,7 @@ function requireWorkstreamAccess(viewer: User, workstream: Workstream) {
     { leadUserId: workstream.leadUserId, teamUserIds: workstreamTeamIds(workstream.id), companyId: workstream.companyId },
     db.users
   );
-  if (!accessible) throw new Error("You don't have access to that workstream.");
+  if (!accessible) throw new Error("You don't have access to that service.");
 }
 
 /**
@@ -69,7 +69,7 @@ function requireActivityEnabledOnWorkstream(workstreamId: string, activityId: st
     .map((wa) => wa.activityId);
   if (enabledIds.length === 0) return;
   if (!enabledIds.includes(activityId)) {
-    throw new Error("That activity isn't enabled for this workstream.");
+    throw new Error("That activity isn't enabled for this service.");
   }
 }
 
@@ -340,7 +340,7 @@ export const mockTasksProvider: TasksProvider = {
 
   async createTask(viewer, input) {
     const workstream = db.workstreams.find((e) => e.id === input.workstreamId);
-    if (!workstream) throw new Error("Workstream not found.");
+    if (!workstream) throw new Error("Service not found.");
     requireWorkstreamAccess(viewer, workstream);
     resolveActivityForTaskCreation(viewer, workstream, input.activityId);
 
@@ -404,14 +404,14 @@ export const mockTasksProvider: TasksProvider = {
     // Workstream/Activity away from its parent's own.
     if (existing.parentTaskId) {
       if (input.workstreamId !== existing.workstreamId || nextActivityId !== existing.activityId) {
-        throw new Error("A Subtask's Service/Workstream/Activity is inherited from its parent Task and cannot be changed independently.");
+        throw new Error("A Subtask's Service/Activity is inherited from its parent Task and cannot be changed independently.");
       }
     }
     // Phase 10 — a top-level Task with existing Subtasks can't change context out from under them
     // (Section 8's safe V1 rule: block, never silently leave children in a stale context).
     if (db.tasks.some((t) => t.parentTaskId === id)) {
       if (input.workstreamId !== existing.workstreamId) {
-        throw new Error("This Task has Subtasks — its Service/Workstream cannot be changed. Remove or reassign the Subtasks first.");
+        throw new Error("This Task has Subtasks — its Service cannot be changed. Remove or reassign the Subtasks first.");
       }
       if (nextActivityId !== existing.activityId) {
         throw new Error("This Task has Subtasks — its Activity cannot be changed. Remove or reassign the Subtasks first.");
@@ -419,7 +419,7 @@ export const mockTasksProvider: TasksProvider = {
     }
 
     const workstream = db.workstreams.find((e) => e.id === input.workstreamId);
-    if (!workstream) throw new Error("Workstream not found.");
+    if (!workstream) throw new Error("Service not found.");
     requireWorkstreamAccess(viewer, workstream);
     requireActivityEnabledOnWorkstream(workstream.id, input.activityId);
 

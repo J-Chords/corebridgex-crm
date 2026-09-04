@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/lib/auth/auth-context";
 import { useCompanyLookups } from "@/lib/data/hooks/use-companies";
 import { useActivityCatalog } from "@/lib/data/hooks/use-activity-catalog";
+import { useServiceLineStaffing } from "@/lib/data/hooks/use-service-membership";
 import { isEmployee, isSupervisor } from "@/lib/data/permissions";
 import { INTERNAL_COMPANY_ID } from "@/lib/data/constants";
 import { workstreamsProvider } from "@/lib/data/providers";
@@ -13,9 +14,8 @@ import type { RecurrenceFrequency, WorkstreamStatus } from "@/lib/data/types";
 import { FREQUENCY_LABEL } from "@/lib/data/recurrence";
 import { deriveWorkstreamName, splitWorkstreamQualifier } from "@/lib/data/workstream-name";
 import { WorkstreamStatusPicker } from "@/components/workstreams/workstream-status-picker";
-import { TaskAssigneeChips } from "@/components/tasks/task-assignee-chips";
+import { MultiSelect } from "@/components/ui/multi-select";
 import {
-  FormDrawer,
   FormDrawerHeader,
   FormDrawerBody,
   FormDrawerSection,
@@ -23,11 +23,11 @@ import {
   FormDrawerField,
   FormDrawerFooter,
 } from "@/components/ui/form-drawer";
+import { FormDialog, FormDialogColumns } from "@/components/ui/form-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Alert, AlertTitle } from "@/components/ui/alert";
 import { AlertCircle } from "lucide-react";
 import {
@@ -90,7 +90,14 @@ export function WorkstreamFormDialog({
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const selectedServiceLine = serviceLines.find((sl) => sl.id === form.serviceLineId) ?? null;
+  // A Service deactivated after this Workstream already picked it must stay visible/selected here
+  // (editing shouldn't silently blank it out) even though it's excluded from `serviceLines` (active-
+  // only) as a new choice for everyone else.
+  const selectableServiceLines =
+    workstream?.serviceLine && !serviceLines.some((sl) => sl.id === workstream.serviceLine!.id)
+      ? [...serviceLines, workstream.serviceLine]
+      : serviceLines;
+  const selectedServiceLine = selectableServiceLines.find((sl) => sl.id === form.serviceLineId) ?? null;
   // Only fetch a real, service-scoped catalog once a service is actually picked — while "None" is
   // selected the Activities section below is hidden entirely, so an unscoped fetch here would never
   // be shown, just wasted.
@@ -98,6 +105,15 @@ export function WorkstreamFormDialog({
     selectedServiceLine ? company.brand?.id : undefined,
     selectedServiceLine ? selectedServiceLine.id : undefined
   );
+  // Global Team Leads for the selected Service — surfaced as preferred/contextual candidates when
+  // picking a Project Service Lead, never auto-selected or auto-authorized (Service Level Phase B,
+  // Section 5 — a global Team Lead relationship grants no automatic Project authority in V1).
+  const staffingServiceLineIds = useMemo(
+    () => (selectedServiceLine ? [selectedServiceLine.id] : []),
+    [selectedServiceLine]
+  );
+  const { staffing: serviceStaffing } = useServiceLineStaffing(staffingServiceLineIds);
+  const globalTeamLeadIds = new Set(serviceStaffing[0]?.teamLeadUserIds ?? []);
 
   useEffect(() => {
     if (!open || !user) return;
@@ -172,20 +188,6 @@ export function WorkstreamFormDialog({
     setForm((prev) => ({ ...prev, leadUserId: id }));
   }
 
-  function toggleTeamMember(id: string, checked: boolean) {
-    setForm((prev) => ({
-      ...prev,
-      teamUserIds: checked ? [...prev.teamUserIds, id] : prev.teamUserIds.filter((uid) => uid !== id),
-    }));
-  }
-
-  function toggleActivity(id: string, checked: boolean) {
-    setForm((prev) => ({
-      ...prev,
-      activityIds: checked ? [...prev.activityIds, id] : prev.activityIds.filter((aid) => aid !== id),
-    }));
-  }
-
   /** Picking a different service starts activity selection fresh — the old service's activities never carry over as a stale, invisible selection. */
   function handleServiceLineChange(next: string) {
     setForm((prev) => (prev.serviceLineId === next ? prev : { ...prev, serviceLineId: next, activityIds: [] }));
@@ -227,7 +229,7 @@ export function WorkstreamFormDialog({
         onOpenChange(false);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to save workstream.");
+      setError(err instanceof Error ? err.message : "Unable to save service.");
     } finally {
       setIsSubmitting(false);
     }
@@ -239,7 +241,7 @@ export function WorkstreamFormDialog({
   }
 
   return (
-    <FormDrawer
+    <FormDialog
       open={open}
       onOpenChange={onOpenChange}
       srTitle={mode === "create" ? `New service for ${company.name}` : `Editing "${workstream?.name ?? "this service"}"`}
@@ -256,7 +258,7 @@ export function WorkstreamFormDialog({
               <Select
                 items={{
                   ...(allowNoService ? { [NO_SERVICE_LINE]: "Select a service…" } : {}),
-                  ...Object.fromEntries(serviceLines.map((sl) => [sl.id, sl.name])),
+                  ...Object.fromEntries(selectableServiceLines.map((sl) => [sl.id, sl.name])),
                 }}
                 value={form.serviceLineId}
                 onValueChange={(v) => handleServiceLineChange(v ?? NO_SERVICE_LINE)}
@@ -264,22 +266,23 @@ export function WorkstreamFormDialog({
                 <SelectTrigger
                   autoFocus
                   id="workstream-service-line"
-                  aria-label="Service / Workstream"
+                  aria-label="Service"
                   className="h-auto w-full justify-start gap-2 rounded-none border-0 bg-transparent p-0 text-xl font-semibold tracking-tight shadow-none focus-visible:ring-0"
                 >
                   <SelectValue placeholder="Select a service…" />
                 </SelectTrigger>
                 <SelectContent>
                   {allowNoService && <SelectItem value={NO_SERVICE_LINE}>None</SelectItem>}
-                  {serviceLines.map((sl) => (
+                  {selectableServiceLines.map((sl) => (
                     <SelectItem key={sl.id} value={sl.id}>
                       {sl.name}
+                      {!sl.isActive ? " (inactive)" : ""}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
               {!serviceSatisfied && (
-                <p className="text-xs text-warning">Required — every client workstream represents one service.</p>
+                <p className="text-xs text-warning">Required — every client Service must be tied to a Service Line.</p>
               )}
             </div>
 
@@ -301,16 +304,21 @@ export function WorkstreamFormDialog({
             />
           </FormDrawerSection>
 
-          <FormDrawerSection label="Ownership">
-            {isEmployee(user) ? (
-              <FormDrawerField label="Lead">
-                <p className="text-sm text-muted-foreground">You — Services you create are always your own.</p>
-              </FormDrawerField>
-            ) : (
-              <>
-                <FormDrawerField label="Lead" htmlFor="workstream-lead">
+          <FormDialogColumns>
+            <FormDrawerSection label="Ownership">
+              {isEmployee(user) ? (
+                <FormDrawerField label="Project Service Lead">
+                  <p className="text-sm text-muted-foreground">You — Services you create are always your own.</p>
+                </FormDrawerField>
+              ) : (
+                <FormDrawerField label="Project Service Lead" htmlFor="workstream-lead">
                   <Select
-                    items={Object.fromEntries(assignableStaff.map((s) => [s.id, s.fullName]))}
+                    items={Object.fromEntries(
+                      assignableStaff.map((s) => [
+                        s.id,
+                        globalTeamLeadIds.has(s.id) ? `${s.fullName} — Global Team Lead` : s.fullName,
+                      ])
+                    )}
                     value={form.leadUserId}
                     onValueChange={(v) => setLead(v ?? "")}
                   >
@@ -321,25 +329,23 @@ export function WorkstreamFormDialog({
                       {assignableStaff.map((staff) => (
                         <SelectItem key={staff.id} value={staff.id}>
                           {staff.fullName}
+                          {globalTeamLeadIds.has(staff.id) ? " — Global Team Lead" : ""}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
+                  <p className="text-xs text-muted-foreground">
+                    The operational owner of this Service within this Project — distinct from a Global Team Lead&apos;s
+                    org-wide responsibility for the Service itself.
+                  </p>
                 </FormDrawerField>
+              )}
+            </FormDrawerSection>
 
-                <FormDrawerField label="Team">
-                  <TaskAssigneeChips staff={assignableStaff} selectedIds={form.teamUserIds} onToggle={toggleTeamMember} />
-                </FormDrawerField>
-              </>
-            )}
-          </FormDrawerSection>
-
-          <FormDrawerSection label="Schedule">
-            <FormDrawerPropertyGrid>
+            <FormDrawerSection label="Schedule">
               <FormDrawerField label="Status">
                 <WorkstreamStatusPicker value={form.status} onChange={(status) => setForm((p) => ({ ...p, status }))} />
               </FormDrawerField>
-              <div />
               <FormDrawerField label="Start date" htmlFor="workstream-start-date">
                 <Input
                   id="workstream-start-date"
@@ -356,11 +362,13 @@ export function WorkstreamFormDialog({
                   onChange={(e) => setForm((p) => ({ ...p, endDate: e.target.value }))}
                 />
               </FormDrawerField>
-            </FormDrawerPropertyGrid>
-            <p className="text-xs text-muted-foreground">
-              Start/end are both optional — an ongoing service doesn&apos;t need a fixed end date.
-            </p>
+              <p className="text-xs text-muted-foreground">
+                Start/end are both optional — an ongoing service doesn&apos;t need a fixed end date.
+              </p>
+            </FormDrawerSection>
+          </FormDialogColumns>
 
+          <FormDrawerSection label="Recurrence">
             <label className="flex items-center justify-between gap-4 rounded-lg border bg-muted/20 p-3">
               <div className="flex flex-col gap-0.5">
                 <span className="text-sm font-medium">This service recurs</span>
@@ -433,36 +441,51 @@ export function WorkstreamFormDialog({
             )}
           </FormDrawerSection>
 
-          <FormDrawerSection label={selectedServiceLine ? `${selectedServiceLine.name} Activities` : "Activities"}>
+          {!isEmployee(user) && (
+            <FormDrawerSection label="Project Service Team">
+              <MultiSelect
+                options={assignableStaff.map((s) => ({ id: s.id, label: s.fullName, sublabel: s.email }))}
+                value={form.teamUserIds}
+                onChange={(ids) => setForm((p) => ({ ...p, teamUserIds: ids }))}
+                placeholder="No team members"
+                searchPlaceholder="Search people…"
+                aria-label="Project Service Team"
+              />
+              <p className="text-xs text-muted-foreground">
+                This Project&apos;s own staffing for this Service — separate from org-wide &quot;Works In Services&quot;
+                membership.
+              </p>
+            </FormDrawerSection>
+          )}
+
+          <FormDrawerSection
+            label={
+              selectedServiceLine
+                ? `${selectedServiceLine.name} Activities — ${form.activityIds.length} configured`
+                : "Activities"
+            }
+          >
             {form.serviceLineId === NO_SERVICE_LINE ? (
               <p className="text-sm text-muted-foreground">Select a service to configure its activities.</p>
             ) : activityDepartments.length === 0 ? (
               <p className="text-sm text-muted-foreground">No activities set up for this service yet.</p>
             ) : (
               <>
-                <p className="text-xs text-muted-foreground">
-                  Select the Activities this Project will use for this Service.
-                </p>
-                <div className="flex max-h-64 flex-col gap-3 overflow-y-auto pr-1">
-                  {activityDepartments.map((dept) => (
-                    <div key={dept.id} className="flex flex-col gap-1.5">
-                      {activityDepartments.length > 1 && (
-                        <span className="text-xs font-medium text-muted-foreground">{dept.name}</span>
-                      )}
-                      <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
-                        {dept.activities.map((activity) => (
-                          <label key={activity.id} className="flex items-center gap-2 text-sm">
-                            <Checkbox
-                              checked={form.activityIds.includes(activity.id)}
-                              onCheckedChange={(checked) => toggleActivity(activity.id, checked === true)}
-                            />
-                            {activity.name}
-                          </label>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                <MultiSelect
+                  options={activityDepartments.flatMap((dept) =>
+                    dept.activities.map((activity) => ({
+                      id: activity.id,
+                      label: activity.name,
+                      sublabel: activityDepartments.length > 1 ? dept.name : undefined,
+                    }))
+                  )}
+                  value={form.activityIds}
+                  onChange={(ids) => setForm((p) => ({ ...p, activityIds: ids }))}
+                  placeholder="No activities selected"
+                  searchPlaceholder="Search activities…"
+                  emptyText="All available Activities are configured."
+                  aria-label="Activities for this Service"
+                />
                 {!activitiesSatisfied && (
                   <p className="text-xs text-warning">Select at least one activity to continue.</p>
                 )}
@@ -487,6 +510,6 @@ export function WorkstreamFormDialog({
           </Button>
         </FormDrawerFooter>
       </form>
-    </FormDrawer>
+    </FormDialog>
   );
 }

@@ -11,7 +11,7 @@ const QUALIFIER_SEPARATOR = " — ";
 /** Builds the stored `name` from a service line's name (if any) and an optional qualifier. */
 export function deriveWorkstreamName(serviceLineName: string | null, qualifier: string): string {
   const trimmedQualifier = qualifier.trim();
-  if (!serviceLineName) return trimmedQualifier || "Untitled workstream";
+  if (!serviceLineName) return trimmedQualifier || "Untitled service";
   return trimmedQualifier ? `${serviceLineName}${QUALIFIER_SEPARATOR}${trimmedQualifier}` : serviceLineName;
 }
 
