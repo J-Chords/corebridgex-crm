@@ -8,8 +8,8 @@ import { cn } from "@/lib/utils";
  * Phase 13 Form Drawer redesign — shared primitives for a right-side CREATE/EDIT form Sheet, a
  * distinct family from `DetailDrawer` (`detail-drawer.tsx`, view/inspect only) rather than an
  * overload of it: a form has real inputs, a sticky action footer, and a wider desktop measure than
- * a compact inspector needs. Built for Task/Service create-edit; Activity's own create flow stays a
- * small, focused dialog (see `create-activity-dialog.tsx`) — never opened as a second stacked
+ * a compact inspector needs. Built for Task/Service create-edit; Activity's own catalog management
+ * (Admin → Services → Activities) stays a small, focused dialog — never opened as a second stacked
  * Drawer while a Task/Service `FormDrawer` is already open (the locked "no nested drawer chaos"
  * rule).
  *

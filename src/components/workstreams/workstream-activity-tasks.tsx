@@ -125,16 +125,25 @@ function ActivityCard({
       )}
     >
       <div className="flex items-center justify-between gap-2">
-        <span className={cn("text-sm font-medium", isEmpty && "text-muted-foreground")}>{activity.name}</span>
-        <Button
-          type="button"
-          size="sm"
-          variant="ghost"
-          className="h-auto py-1 text-xs"
-          onClick={() => onAddTask(activity.id)}
-        >
-          <Plus className="size-3" /> Add Task
-        </Button>
+        <span className={cn("text-sm font-medium", isEmpty && "text-muted-foreground")}>
+          {activity.name}
+          {!activity.isActive && " (Inactive)"}
+        </span>
+        {/* Inactive Activities stay visible with their historical tasks (Activity Level, Section 22)
+            but must never be offered as a new choice for brand-new work — this shortcut always
+            pre-fills+locks the Task form's Activity, so it needs its own isActive gate rather than
+            relying on the generic New Task picker's filter. */}
+        {activity.isActive && (
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            className="h-auto py-1 text-xs"
+            onClick={() => onAddTask(activity.id)}
+          >
+            <Plus className="size-3" /> Add Task
+          </Button>
+        )}
       </div>
       {isEmpty ? (
         <p className="text-sm text-muted-foreground">No tasks yet under this activity.</p>

@@ -36,7 +36,13 @@ interface QuickAddFromActivityDialogProps {
  */
 export function QuickAddFromActivityDialog({ open, onOpenChange, workstream, onAdded }: QuickAddFromActivityDialogProps) {
   const { user } = useAuth();
-  const { departments } = useWorkstreamActivities(workstream);
+  const { departments: allDepartments } = useWorkstreamActivities(workstream);
+  // Quick Add only ever creates NEW Tasks — never offer an inactive Activity here (Activity Level,
+  // Section 23), unlike the Task form's own Activity picker, which must still preserve one already
+  // selected on an existing Task.
+  const departments = allDepartments
+    .map((d) => ({ ...d, activities: d.activities.filter((a) => a.isActive) }))
+    .filter((d) => d.activities.length > 0);
   const [activityId, setActivityId] = useState(NO_ACTIVITY);
   const [addedTitles, setAddedTitles] = useState<Set<string>>(new Set());
   const [pendingTitle, setPendingTitle] = useState<string | null>(null);

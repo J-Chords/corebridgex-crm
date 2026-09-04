@@ -114,12 +114,18 @@ export const mockServiceLinesProvider: ServiceLinesProvider = {
     );
     if (existingActivity) return existingActivity;
 
+    const now = new Date().toISOString();
     const activity: Activity = {
       id: crypto.randomUUID(),
       departmentId: department.id,
       name: trimmedName,
+      description: null,
       position: db.activities.filter((a) => a.departmentId === department!.id).length,
       defaultTaskTitles: [],
+      isActive: true,
+      createdById: viewer.id,
+      createdAt: now,
+      updatedAt: now,
     };
     db.activities = [...db.activities, activity];
     return activity;

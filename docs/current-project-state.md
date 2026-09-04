@@ -2450,6 +2450,30 @@ Read the Current phase and Next roadmap sections before proposing changes.
 
 ## Last updated
 
+- Date: 2026-09-04 (Hierarchy status marker — **Admin Foundation: ACCEPTED/CHECKPOINTED.
+  Project Level: ACCEPTED/CHECKPOINTED (`099f7eac508eff7163eb72ff30370b48128e2147`). Service Level:
+  ACCEPTED/CHECKPOINTED (`95053cfce49130c3b097ce75624b94818f824cb7` — current safe baseline).
+  Activity Level: IMPLEMENTATION COMPLETE, all automated proof passed, PENDING FINAL PRODUCT OWNER
+  ACCEPTANCE.** Activity Level V1 implemented on top of the Service checkpoint: Activity gained
+  `description`/`is_active`/`created_by`/timestamps (3 new forward-only migrations, all applied and
+  live-read-back-verified hosted, none edited); Admin's existing `ManageServiceActivitiesDialog` was
+  upgraded in place (no competing module) with Active/Inactive, Suggested-Task count, Created By,
+  Edit/Delete; a new `ActivityEditDialog` covers Name/Description/read-only Service+Brand/Active-
+  Inactive/Suggested Tasks/read-only Created By; safe delete proves zero references across all four
+  referencing tables before allowing a hard delete (deactivate offered otherwise); Department/Activity-
+  name uniqueness added only after a clean hosted duplicate audit; a new narrow
+  `setWorkstreamActivities`/`canConfigureWorkstreamActivities` capability lets an Employee who is a
+  specific Project Service's own Lead configure that Service's existing Activities without gaining
+  full Service-edit authority (closing the gap the Project Final Integration Correction below had
+  explicitly flagged as deferred); Task/Workstream/Quick-Add/Project-Service Activity pickers all now
+  correctly exclude inactive Activities as new choices while preserving already-selected ones. One
+  genuine defect found and fixed during final acceptance testing: the Workstream detail page's own
+  inline per-Activity "Add Task" shortcut had no inactive gate (`workstream-activity-tasks.tsx`) — now
+  hidden for an inactive Activity, matching every other entry point. Global Activity catalog creation/
+  edit/lifecycle stays Admin-only everywhere; Suggested Tasks stays explicitly distinct from Templates
+  (untouched). Full detail in `docs/project-level-product-architecture.md`'s new "Activity Level — V1"
+  section. All 4 provider builds clean, `tsc`/`eslint` clean. Uncommitted, pending final Product Owner
+  Activity-level acceptance and checkpoint — do not begin Task Level until that happens.)
 - Date: 2026-09-04 (Project Level — Final Integration Correction, last pass before Project checkpoint: Project list's status experience consolidated into ONE system — a 6-tile KPI strip (Admin: Active/On Hold/Completed/Canceled/Archived/Trash) or 4-tile (Team Lead/Employee — Archived/Trash stay Admin-only, same restriction the prior toggle already had) plus a matching "Status" dropdown, replacing the old separate Active/Archived/Trash toggle; clicking a tile filters, clicking it again returns to "All Statuses." Global Service/Activity catalog creation locked to Admin everywhere: `TaskFormDialog` lost its inline "+ New service"/"+ Add existing activities"/"+ Create Activity" catalog-admin escape hatches (guidance text points to Project > Services instead); a new "Configure Activities" action on the Project Services tab reuses the pre-existing `AddServiceActivitiesDialog` (previously reachable only from the now-removed Task-form flow) to add remaining not-yet-enabled Activities to an already-attached Service, with no duplicate association possible. Task Assignees is now a searchable `MultiSelect` (same component as Project Members), replacing the permanent assignee chip wall. No new migration; no authorization/RLS change; one narrow, explicitly-flagged consequence — an Employee Service-lead can no longer silently extend their Service's Activity catalog as a side effect of Task creation (ask Team Lead/Admin instead), deferred to the Service-level phase. Uncommitted, pending final Product Owner Project-level acceptance and checkpoint.)
 - Date: 2026-09-03 (Project Level — Manual Acceptance Step 4, final Project use-case validation pass: removed "Renew" from the normal Project header, keeping the underlying renewal backend/dialog dormant; relabeled Administrative Details' Company status "Account Status" to stop it reading as a duplicate of the Project's own lifecycle status; Next Due now shows the actual Task's title plus date; Project Details made compact, showing only fields with real values; Related Projects removed from normal Overview; the Shared Notes composer removed from Overview entirely — Comments is now the one normal Project discussion surface, with historical Notes preserved read-only as "Legacy Notes" on the Comments tab. Audited Services/Tasks/Members/Comments/Documents/Time/Issues/Reports against management's requirements — all already compliant, no rebuild needed. No new migration, no authorization change. Uncommitted, pending one final Product Owner Project-level acceptance pass and checkpoint.)
 - Date: 2026-09-03 (Project Level — Manual Acceptance Step 3: Project Overview redesigned as one role-aware shared component — Admin/Team Lead/Employee each see a different, appropriately-scoped subset of the same panels (compact summary strip, grouped Work-needing-attention, Services summary, Team, and Admin-only Administrative Details renamed from "Client Information"); the former always-visible 5-status-badge strip above every tab is removed, its figures folded into Overview's own panels; new shared `PeopleInline`/`serviceLineDisplayName` helpers extracted and reused by the Project list too (Step 1 behavior unchanged). No new migration, no authorization change. Uncommitted, manual acceptance pending.)

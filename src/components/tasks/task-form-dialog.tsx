@@ -193,6 +193,12 @@ export function TaskFormDialog({
   // Scoped to what THIS workstream actually enabled — falls back to the full service catalog for a
   // legacy workstream with no persisted Activity selections yet (see the hook's own doc comment).
   const { departments } = useWorkstreamActivities(selectedWorkstream);
+  // Activity Level, Section 22 — inactive Activities are never a new choice, but an existing Task
+  // that already carries one must keep showing/preserving it (never force a silent retag).
+  const selectableDepartments = departments.map((d) => ({
+    ...d,
+    activities: d.activities.filter((a) => a.isActive || a.id === form.activityId),
+  }));
 
   // A task prefilled from a workstream (a workstream detail page's own "Add task") knows its project
   // already but can't set `projectId` synchronously — the workstream list is still loading when the
@@ -542,7 +548,9 @@ export function TaskFormDialog({
                         items={{
                           [NO_ACTIVITY]: "None",
                           ...Object.fromEntries(
-                            departments.flatMap((d) => d.activities.map((a) => [a.id, `${d.name}: ${a.name}`]))
+                            selectableDepartments.flatMap((d) =>
+                              d.activities.map((a) => [a.id, a.isActive ? `${d.name}: ${a.name}` : `${d.name}: ${a.name} (Inactive)`])
+                            )
                           ),
                         }}
                         value={form.activityId}
@@ -554,11 +562,12 @@ export function TaskFormDialog({
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value={NO_ACTIVITY}>None</SelectItem>
-                          {departments.map((d) => (
+                          {selectableDepartments.map((d) => (
                             <div key={d.id}>
                               {d.activities.map((a) => (
                                 <SelectItem key={a.id} value={a.id}>
                                   {d.name}: {a.name}
+                                  {!a.isActive ? " (Inactive)" : ""}
                                 </SelectItem>
                               ))}
                             </div>

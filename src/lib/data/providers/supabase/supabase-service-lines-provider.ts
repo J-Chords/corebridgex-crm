@@ -81,13 +81,29 @@ export const supabaseServiceLinesProvider: ServiceLinesProvider = {
       p_name: name,
     });
     if (error) throw new Error(error.message);
-    const row = data as { id: string; department_id: string; name: string; position: number; default_task_titles: string[] };
+    const row = data as {
+      id: string;
+      department_id: string;
+      name: string;
+      description: string | null;
+      position: number;
+      default_task_titles: string[];
+      is_active: boolean;
+      created_by: string | null;
+      created_at: string;
+      updated_at: string;
+    };
     return {
       id: row.id,
       departmentId: row.department_id,
       name: row.name,
+      description: row.description,
       position: row.position,
       defaultTaskTitles: row.default_task_titles,
+      isActive: row.is_active,
+      createdById: row.created_by,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
     } satisfies Activity;
   },
 };

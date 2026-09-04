@@ -1,7 +1,11 @@
 import type { Activity } from "../../types";
 
-/** Seeded word-for-word from Sparing Consulting's standard activity list. */
-export const seedActivities: Activity[] = [
+const SEED_TIMESTAMP = "2026-08-14T00:00:00.000Z";
+
+/** Seeded word-for-word from Sparing Consulting's standard activity list. Legacy rows predate the
+ * Activity Level catalog metadata — createdById stays null (truthful "creator not recorded" state,
+ * never fabricated); a newly Admin-created Activity always gets a real createdById. */
+const rawSeedActivities: Omit<Activity, "description" | "isActive" | "createdById" | "createdAt" | "updatedAt">[] = [
   // Human Resources
   { id: "activity-sparing-hr-new-hire", departmentId: "dept-sparing-hr", name: "New Hire", position: 0, defaultTaskTitles: ["Collect I-9 and W-4", "Set up payroll profile", "Send welcome email and handbook"] },
   { id: "activity-sparing-hr-handbook-policy-update", departmentId: "dept-sparing-hr", name: "Employee Handbook policy update", position: 1, defaultTaskTitles: [] },
@@ -90,3 +94,12 @@ export const seedActivities: Activity[] = [
   { id: "activity-sparing-filemgmt-contractor-folders", departmentId: "dept-sparing-file-management", name: "Contractor folders", position: 8, defaultTaskTitles: [] },
   { id: "activity-sparing-filemgmt-other", departmentId: "dept-sparing-file-management", name: "Other", position: 9, defaultTaskTitles: [] },
 ];
+
+export const seedActivities: Activity[] = rawSeedActivities.map((a) => ({
+  ...a,
+  description: null,
+  isActive: true,
+  createdById: null,
+  createdAt: SEED_TIMESTAMP,
+  updatedAt: SEED_TIMESTAMP,
+}));

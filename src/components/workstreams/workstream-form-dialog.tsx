@@ -473,11 +473,16 @@ export function WorkstreamFormDialog({
               <>
                 <MultiSelect
                   options={activityDepartments.flatMap((dept) =>
-                    dept.activities.map((activity) => ({
-                      id: activity.id,
-                      label: activity.name,
-                      sublabel: activityDepartments.length > 1 ? dept.name : undefined,
-                    }))
+                    dept.activities
+                      // Inactive Activities never appear as a new choice — an already-selected one
+                      // that's since gone inactive stays visible/removable via `form.activityIds`
+                      // below, it just won't be re-offered to anyone starting fresh.
+                      .filter((activity) => activity.isActive || form.activityIds.includes(activity.id))
+                      .map((activity) => ({
+                        id: activity.id,
+                        label: activity.isActive ? activity.name : `${activity.name} (Inactive)`,
+                        sublabel: activityDepartments.length > 1 ? dept.name : undefined,
+                      }))
                   )}
                   value={form.activityIds}
                   onChange={(ids) => setForm((p) => ({ ...p, activityIds: ids }))}

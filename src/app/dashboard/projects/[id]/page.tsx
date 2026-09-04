@@ -21,7 +21,7 @@ import { projectsProvider, projectIssuesProvider } from "@/lib/data/providers";
 import { DEFAULT_TASK_FILTERS, filterTasks, groupTasksBy } from "@/lib/data/hooks/use-task-filters";
 import { isAssigneeColumnRedundantForViewer } from "@/lib/data/task-display";
 import { operationalProjectIdentity, serviceLineDisplayName } from "@/lib/data/project-display";
-import { canCreateWorkstreamInProject, canManageProjects, canManageWorkstreams, isEmployee, isSupervisor } from "@/lib/data/permissions";
+import { canConfigureWorkstreamActivities, canCreateWorkstreamInProject, canManageProjects, isEmployee, isSupervisor } from "@/lib/data/permissions";
 import { AddServiceActivitiesDialog } from "@/components/workstreams/add-service-activities-dialog";
 import type { WorkstreamWithRelations } from "@/lib/data/providers/workstreams-provider";
 import { PeopleInline } from "@/components/projects/people-inline";
@@ -823,7 +823,12 @@ function LoadedProjectDetailPage({
                       <div className="flex items-center gap-3">
                         <span className="text-xs text-muted-foreground">{openTaskCount} open</span>
                         <WorkstreamStatusBadge status={workstream.status} />
-                        {canManageWorkstreams(user) && (
+                        {canConfigureWorkstreamActivities(
+                          user,
+                          { leadUserId: workstream.leadUserId },
+                          project.members,
+                          { companyId: project.companyId, ownerId: project.ownerId, memberUserIds: project.members.map((m) => m.id) }
+                        ) && (
                           <button
                             type="button"
                             onClick={(e) => {

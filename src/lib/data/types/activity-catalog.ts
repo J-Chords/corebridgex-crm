@@ -24,8 +24,20 @@ export interface Activity {
   id: string;
   departmentId: string;
   name: string;
+  /** Catalog metadata (Activity Level) — null description is a valid "not written yet" state. */
+  description: string | null;
   /** Display order within the department. */
   position: number;
   /** Quick-start task titles an admin curated for this activity — offered as one-click adds from the workstream detail page. Title-only by design, same "dead simple" precedent as the keyword-suggestion feature; not a full Template. */
   defaultTaskTitles: string[];
+  /** Inactive Activities stay referentially intact (historical Tasks/Project Services keep
+   * pointing at them) but must not be offered as a new configuration/Task choice — see callers,
+   * which filter to active-only for new-choice pickers while preserving an already-selected
+   * inactive Activity wherever it's already attached. */
+  isActive: boolean;
+  /** Null only for an Activity that predates this column (seed/legacy data) — never fabricate a
+   * creator for those; show a truthful "legacy — creator not recorded" state instead. */
+  createdById: string | null;
+  createdAt: string;
+  updatedAt: string;
 }

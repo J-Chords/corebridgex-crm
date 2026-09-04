@@ -82,14 +82,27 @@ export interface WorkstreamsProvider {
   createWorkstream(viewer: User, input: WorkstreamInput): Promise<WorkstreamWithRelations>;
   updateWorkstream(viewer: User, id: string, input: WorkstreamInput): Promise<WorkstreamWithRelations>;
   /**
-   * Phase 13B final boss-feedback pass — creates a genuinely new, reusable Activity Catalog entry
-   * (auto-resolving/creating its Department from this Workstream's own brand+serviceLine, the same
-   * 1:1 convention every other Department already follows) and associates it with this Workstream in
-   * one call. Same authorization scope as the existing "+ Add another activity to this service"
-   * mechanism (`canExtendServiceActivities`'s real server-side counterpart): Employee only for a
-   * Workstream they themselves lead; Supervisor only for one led by someone they manage, within a
-   * Project they can access; Superadmin unconditionally. Reuses (never duplicates) an existing
-   * Activity in the same Department whose name matches case-insensitively.
+   * Creates a genuinely new, reusable Activity Catalog entry (auto-resolving/creating its
+   * Department from this Workstream's own brand+serviceLine, the same 1:1 convention every other
+   * Department already follows) and associates it with this Workstream in one call. **Admin-only**
+   * (Service Level correction — global Activity/Service definition creation is Superadmin-only
+   * everywhere; a Team Lead or Employee may select/configure existing catalog Activities but never
+   * mint a new one). The legacy per-user-facing "extend activities from Task creation" concept this
+   * doc comment used to describe was retired at the same time — see `canExtendServiceActivities`'s
+   * own comment in `permissions.ts`, kept only as documented dead code. Reuses (never duplicates) an
+   * existing Activity in the same Department whose name matches case-insensitively.
    */
   createActivityForWorkstream(viewer: User, workstreamId: string, name: string): Promise<Activity>;
+  /**
+   * Activity Level, Section 19 — the narrow "configure which existing catalog Activities this
+   * Project Service uses" capability, deliberately separate from `updateWorkstream`: it can ONLY
+   * change this Workstream's `workstream_activities` associations, never Service/Lead/Team/Schedule/
+   * Status/Project/Brand. This is what lets an Employee who is this specific Workstream's own
+   * `leadUserId` configure its Activities without being granted the broader `updateWorkstream`
+   * authority (Supervisor/Superadmin only) — mirrors the real `workstream_activities_write` RLS
+   * policy exactly: Superadmin unconditionally; Employee only if they lead this Workstream;
+   * Supervisor only if they manage the lead and can access the Project. Never creates a new global
+   * Activity — every id passed must already exist and belong to this Workstream's own service line.
+   */
+  setWorkstreamActivities(viewer: User, workstreamId: string, activityIds: string[]): Promise<void>;
 }

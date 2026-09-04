@@ -715,13 +715,13 @@ export function canAccessWorkstream(
 
 /**
  * Phase 8C — gates the "+ Add another Activity to this Service" contextual control shown during
- * global Task creation. Mirrors the real `create_task`/`workstream_activities_write` server-side
- * rule exactly, using only data the Task form already has loaded (no extra fetch): an Employee may
- * only ever extend a Service they themselves lead; Supervisor/Superadmin may extend one led by
- * anyone in `assignableStaff` (self + direct reports for Supervisor, every active user for
- * Superadmin — the exact same scope `assignableStaffFor` already computes for staff assignment).
- * This is a UI-only convenience gate — the RPC re-derives and enforces this itself regardless of
- * what the client sends, so this can never be the real security boundary.
+ * global Task creation. **Confirmed dead code as of the Activity Level audit** — no component
+ * anywhere calls this (the Task form's Activity picker only ever selects among already-enabled
+ * Activities, never extends the set); kept only as documented legacy/compatibility, matching the
+ * Product Owner's instruction not to remove it merely for cleanup. If a future "extend Activities
+ * from Task creation" surface is ever rebuilt, use `canConfigureWorkstreamActivities` below instead
+ * — it correctly mirrors the real `workstream_activities_write` RLS (including the Supervisor
+ * Project-access check this older helper never had), not this one.
  */
 export function canExtendServiceActivities(
   viewer: User,
@@ -730,6 +730,31 @@ export function canExtendServiceActivities(
 ): boolean {
   if (isEmployee(viewer)) return workstream.leadUserId === viewer.id;
   return assignableStaff.some((s) => s.id === workstream.leadUserId);
+}
+
+/**
+ * Activity Level, Sections 18-20 — the real narrow boundary for "may this viewer configure which
+ * existing catalog Activities this Project Service uses," mirroring the hosted
+ * `workstream_activities_write` RLS policy exactly (not `canManageWorkstreams`, which is broader —
+ * full Service edit — and not what actually gates this specific junction table). Superadmin always;
+ * Employee only if they are this Workstream's own Project Service Lead; Supervisor only if they
+ * manage that Lead AND can access the Workstream's own Project. Global Team Lead/"Works In Services"
+ * status is never checked here — it grants no Project-level authority (locked Service Level rule).
+ */
+export function canConfigureWorkstreamActivities(
+  viewer: User,
+  workstream: { leadUserId: string },
+  allUsers: User[],
+  project: { companyId: string; ownerId: string; memberUserIds: string[] } | null
+): boolean {
+  if (isSuperadmin(viewer)) return true;
+  if (isEmployee(viewer)) return workstream.leadUserId === viewer.id;
+  if (isSupervisor(viewer)) {
+    const lead = allUsers.find((u) => u.id === workstream.leadUserId);
+    if (!lead || !managesUser(viewer, lead)) return false;
+    return project != null && canAccessProject(viewer, project, allUsers);
+  }
+  return false;
 }
 
 /**

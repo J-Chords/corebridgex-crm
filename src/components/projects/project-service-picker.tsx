@@ -45,7 +45,10 @@ function ServiceActivityFields({ brandId, serviceLineId, activityIds, onChange }
         <div key={dept.id} className="flex flex-col gap-1">
           {departments.length > 1 && <span className="text-xs font-medium text-muted-foreground">{dept.name}</span>}
           <div className="grid grid-cols-1 gap-1 sm:grid-cols-2">
-            {dept.activities.map((activity) => (
+            {/* This is always a brand-new configuration (freshly-added Service, activityIds starts
+                empty) — never offer an inactive Activity as a new choice here (Activity Level,
+                Section 21). */}
+            {dept.activities.filter((activity) => activity.isActive).map((activity) => (
               <label key={activity.id} className="flex items-center gap-2 text-sm">
                 <Checkbox
                   checked={activityIds.includes(activity.id)}

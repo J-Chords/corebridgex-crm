@@ -474,25 +474,34 @@ retired (see "Task form is no longer a catalog-administration surface" below).
 `ProjectServicePicker`/`AddProjectServiceDialog` are new, narrower components that replace only the
 Project Services tab's own "Add Service" trigger.
 
-### Configure Activities on an existing Project Service (Project Final Integration Correction)
+### Configure Activities on an existing Project Service (updated — Activity Level narrow capability)
 
 `Project → Services → [Service] → "Configure Activities"` reuses the already-existing
-`AddServiceActivitiesDialog` (`src/components/workstreams/add-service-activities-dialog.tsx`, built
-in an earlier phase but until now only reachable from the Task form's own now-removed inline flow —
-AUDIT → REUSE, no new component). It shows only that Service's **remaining, not-yet-enabled**
-catalog Activities (identity via Activity id, never display-name comparison) — offering
+`AddServiceActivitiesDialog` (`src/components/workstreams/add-service-activities-dialog.tsx` —
+AUDIT → REUSE, no new component). It shows only that Service's **remaining, not-yet-enabled, active**
+catalog Activities (identity via Activity id, never display-name comparison; an inactive Activity is
+never offered as a new choice regardless of whether it's already enabled) — offering
 "Bookkeeping"/"Bank Reconciliation" again once they're already enabled is impossible by construction
-since they're filtered out of the list entirely; if every catalog Activity is already enabled, it
-shows "Every catalog activity for this service is already enabled." instead of an empty picker. It
-persists via the existing `updateWorkstream` (a full replace-all sync, `[...alreadyEnabled,
-...newlyChecked]` — never a partial/duplicate-prone write), the same call `WorkstreamFormDialog`'s
-own Activities checklist already uses — no new RPC, no new migration. Gated `canManageWorkstreams`
-(Supervisor/Superadmin, unchanged, pre-existing RLS boundary on `updateWorkstream`) — an Employee who
-leads a Service can no longer silently extend its Activity catalog as a side effect of creating a
-Task (that narrow capability rode along inside `create_task`'s own atomic RPC and had no standalone
-equivalent); they ask their Team Lead/Admin, or create the Task untagged and retag it later. This is
-a deliberate, narrow, explicitly-flagged consequence of retiring the Task form's catalog-admin
-surface (below), not an oversight — resolving it durably belongs to the Service-level phase.
+since they're filtered out of the list entirely; if every eligible catalog Activity is already
+enabled, it shows "Every catalog activity for this service is already enabled." instead of an empty
+picker.
+
+**Persistence — narrowed in Activity Level.** This dialog originally persisted through
+`updateWorkstream`, gated by the broad `canManageWorkstreams` (Supervisor/Superadmin only) — the
+exact gap flagged above as "resolving it durably belongs to the Service-level phase." Activity Level
+closed it: the dialog now saves through a new, narrow provider method,
+`workstreamsProvider.setWorkstreamActivities(viewer, workstreamId, activityIds)`, which can ONLY
+replace this one Workstream's `workstream_activities` associations — never Service/Lead/Team/
+Schedule/Status/Project/Brand. It is gated by a new permission helper, `canConfigureWorkstreamActivities`
+(`src/lib/data/permissions.ts`), which mirrors the hosted `workstream_activities_write` RLS policy
+exactly (this RLS policy already existed pre-Activity-Level; the gap was purely that no narrow-enough
+client entry point reached it): Superadmin always; Supervisor if they manage the Workstream's own Lead
+AND can access the Workstream's Project (unchanged from before); and now, new this phase, an
+**Employee who is this specific Workstream's own Project Service Lead** — closing the previously-flagged
+gap without widening that Employee's authority to full Service edit. Global "Works In Services"/Team
+Lead staffing status is never checked here — it grants no Project-level authority (locked Service
+Level rule, re-verified unchanged). The Project page's own "Configure Activities" visibility gate uses
+this same helper, never the broader `canManageWorkstreams`.
 
 ### Task form is no longer a catalog-administration surface (Project Final Integration Correction)
 
@@ -517,6 +526,103 @@ assignable staff member) with the same `MultiSelect` already used for Project Me
 by name/email, selected people shown as compact removable chips, never an unbounded wall regardless
 of organization size. Feeds it the exact same `assignableStaff` list the old chip list already used
 — no widened assignability, no authorization change.
+
+## Activity Level — V1 (catalog lifecycle, immutable scope, narrow configuration)
+
+**Activity model.** An Activity is a reusable, Admin-managed catalog item offered by a Service under
+one Brand (e.g. Service "Accounting" → Activities "Receipts," "Bank Reconciliation," under Brand
+"Sparing Consulting") — **not** a Task, a Template, a Department, or a 5th visible hierarchy level.
+The visible product hierarchy stays exactly `Project → Service → Activity → Task`. "Global Activity
+catalog" means centrally Admin-managed, not one universal row shared across every Brand — see
+"Cross-brand identity" below.
+
+**Department stays a technical container, never a visible level.** `departments` (Brand × Service
+Line, 1:1 via a new partial unique index — see "Duplicate/integrity protection" below) exists purely
+to scope Activities; it is never added to Project navigation, never shown as a management module, and
+never becomes a normal hierarchy label. Admin's Activity catalog manager (below) may group Activities
+by Brand for readability — that's a Brand grouping, not a Department page.
+
+**Scope is immutable once created.** Admin may edit an Activity's name/description/Active-Inactive/
+Suggested Tasks in place, but can never move it between Brands or Service Lines — historical Tasks
+and Project Service configurations already reference its id. If an Activity genuinely belongs
+elsewhere, Admin creates a new one there and deactivates the old one; the Edit Activity dialog shows
+Service/Brand as read-only context with no reassignment control.
+
+**Cross-brand identity.** Activities remain Brand-scoped (via Department) in V1 — the same-named
+Activity under two different Brands is two separate, undeduplicated rows by design (no cross-brand
+canonical identity system in V1). Proven live: creating "Reconciliation" under Brand B when Brand A
+already has one leaves both as distinct rows.
+
+**Lifecycle — Active/Inactive (simple binary).** Active = available for new configuration/use.
+Inactive = stays fully visible/intact everywhere it's already referenced (Admin catalog, already-
+configured Project Services, already-tagged Tasks) but is never offered as a **new** choice: excluded
+from "Configure Activities"' not-yet-enabled picker, excluded from a brand-new Project Service's
+Activity checkboxes, excluded from the New Task Activity picker and from its own inline per-Activity
+"Add Task" shortcut on the Workstream detail page, and excluded from Quick Add's activity list. An
+already-selected inactive Activity is always preserved — on a Workstream's own Edit form (labeled
+`Name (Inactive)` in its multi-select), on an existing Task's Edit form (same `(Inactive)` suffix,
+Activity never silently cleared, unaffected by editing an unrelated field), and on the Workstream
+detail page's own Activities tab (the group stays visible with its historical Tasks, just without a
+new "Add Task" affordance). Reactivating restores full new-choice eligibility everywhere.
+
+**Created By — immutable historical provenance.** Captured automatically on Admin-create, never
+derived from a Service Lead/Team Lead/Project Service Lead/current editor, and unaffected by a later
+rename. Every legacy (pre-Activity-Level) Activity shows "Legacy — not recorded" rather than a
+fabricated creator.
+
+**Admin Activity catalog manager.** `ManageServiceActivitiesDialog`
+(`src/components/admin/manage-service-activities-dialog.tsx`, reused/upgraded from its prior create-
+only form — no competing global Activity page/module was built) is reached from
+`Admin → Services → [Service] → "N configured"`. Each row shows name, Active/Inactive, a Suggested-
+Task count, Created By, and Edit/Delete actions, grouped by Brand; a new `ActivityEditDialog`
+(`src/components/admin/activity-edit-dialog.tsx`) provides Name/Description, read-only Service+Brand
+context, an Active/Inactive toggle, a Suggested Tasks list editor, and read-only Created By.
+
+**Suggested Tasks vs. Templates — kept distinct, not merged.** `Activity.defaultTaskTitles`
+("Suggested Tasks" in the UI) stays the existing simple, title-only list consumed by
+`QuickAddFromActivityDialog` — add/remove/edit through the Edit Activity dialog, one Activity at a
+time, no checklist/offset/ownership. This is deliberately **not** unified with the separate
+`templates`/`template_tasks`/`template_checklist_items`/`apply_template` architecture (a broader
+recipe with checklists, day-offsets, and its own historical materialization path) — Templates were
+not touched or redesigned this phase.
+
+**Safe delete vs. deactivate.** New Admin-only RPCs (`admin_update_activity`,
+`admin_set_activity_active`, `admin_delete_activity`) each re-check `is_superadmin()` server-side.
+Delete explicitly proves zero references across all four known referencing tables
+(`workstream_activities`, `tasks`, `project_issues`, `project_template_activities`) via `EXISTS`
+checks — **not** FK-failure inference, since two of those four relationships are `ON DELETE CASCADE`
+in the real schema and would otherwise silently destroy history. Any reference blocks the delete with
+a friendly "This Activity has historical usage and cannot be deleted — deactivate it instead."
+message; only a genuinely unused Activity hard-deletes. Verified live for an unused Activity
+(deletes), a Task-referenced Activity (blocked), and a `workstream_activities`-only-referenced
+Activity with zero Tasks (blocked) — the `project_issues`/`project_template_activities` branches were
+verified by direct code/migration inspection (identical `EXISTS`/`.some()` shape) rather than a live
+reproduction, since neither table has any seed data to reference an Activity through today.
+
+**Duplicate/integrity protection.** Before adding constraints, a read-only hosted audit confirmed zero
+existing duplicates for (a) Departments per `(brand_id, service_line_id)` and (b) Activities per
+`(department_id, lower(btrim(name)))` — the migration adding both unique indexes (partial on
+Departments, to preserve the legitimate all-`service_line_id`-null legacy case) applied cleanly as
+further live proof nothing collided. The two existing find-or-create RPCs
+(`create_activity_for_workstream`, `admin_create_activity_for_service_line`) were made race-safe
+under the new indexes (`ON CONFLICT ... DO NOTHING` + a `FOUND`-guarded re-select). Verified live:
+creating "reconciliation"/"RECONCILIATION" where "Reconciliation" already exists in the same
+Department reuses the existing row rather than erroring or duplicating; the same name under a
+different Brand creates a genuinely separate row.
+
+**Migrations (forward-only, all applied and read-back verified against the hosted project):**
+`20260904150000_activity_catalog_metadata.sql` (description/is_active/created_by/timestamps on
+`activities`), `20260904160000_activity_catalog_uniqueness.sql` (the two unique indexes above),
+`20260904170000_activity_catalog_lifecycle_rpcs.sql` (the three new lifecycle RPCs plus the two
+race-safety updates). No hosted migration was ever edited.
+
+**Deferred to Task Level (explicitly not touched this phase).** The pre-existing "Task Service
+identity display follow-up" (some Task surfaces show the Workstream's own instance name, e.g.
+"Accounting 2026," rather than the global Service name "Accounting," primary) remains outstanding —
+some surfaces (the Workstream detail page's own header) already show Service name primary with the
+instance name as a secondary "Reference / qualifier" line; a full sweep is Task Level's job. No Task
+status/business redesign (Canceled status, Waiting/Blocked reason rework, Handoff changes, Subtask
+redesign, Task authorization redesign) was implemented or attempted this phase.
 
 ## Brand dependency — audited, Case A confirmed
 

@@ -56,6 +56,34 @@ function toServiceLine(row: ServiceLineRow): ServiceLine {
   };
 }
 
+interface ActivityRow {
+  id: string;
+  department_id: string;
+  name: string;
+  description: string | null;
+  position: number;
+  default_task_titles: string[];
+  is_active: boolean;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+function toActivity(row: ActivityRow): Activity {
+  return {
+    id: row.id,
+    departmentId: row.department_id,
+    name: row.name,
+    description: row.description,
+    position: row.position,
+    defaultTaskTitles: row.default_task_titles,
+    isActive: row.is_active,
+    createdById: row.created_by,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
 function toWorkstream(row: WorkstreamRow): Workstream {
   return {
     id: row.id,
@@ -123,10 +151,8 @@ async function hydrate(workstreams: Workstream[]): Promise<WorkstreamWithRelatio
   const activityIds = Array.from(new Set(activityLinks.map((l) => l.activity_id)));
   const activitiesRes = activityIds.length
     ? await supabase.from("activities").select("*").in("id", activityIds)
-    : { data: [] as { id: string; department_id: string; name: string; position: number; default_task_titles: string[] }[] };
-  const activities = ((activitiesRes.data ?? []) as { id: string; department_id: string; name: string; position: number; default_task_titles: string[] }[]).map(
-    (a): Activity => ({ id: a.id, departmentId: a.department_id, name: a.name, position: a.position, defaultTaskTitles: a.default_task_titles })
-  );
+    : { data: [] as ActivityRow[] };
+  const activities = ((activitiesRes.data ?? []) as ActivityRow[]).map(toActivity);
 
   const tasks = (tasksRes.data ?? []) as { id: string; workstream_id: string; status: string; expected_minutes: number | null }[];
   const taskIds = tasks.map((t) => t.id);
@@ -319,6 +345,15 @@ export const supabaseWorkstreamsProvider: WorkstreamsProvider = {
     return hydrated;
   },
 
+  async setWorkstreamActivities(_viewer, workstreamId, activityIds) {
+    // Deliberately never touches the `workstreams` row itself (that's `workstreams_update` RLS,
+    // Supervisor/Superadmin only) — only `workstream_activities`, whose own RLS
+    // (`workstream_activities_write`) already correctly allows an Employee who leads this specific
+    // Workstream. `enforce_workstream_activity_service_match` (a trigger on that table) is the real
+    // "activities belong to this service" enforcement, same as `updateWorkstream`'s own path.
+    await syncActivities(workstreamId, activityIds);
+  },
+
   async createActivityForWorkstream(_viewer, workstreamId, name) {
     const supabase = createClient();
     const { data, error } = await supabase.rpc("create_activity_for_workstream", {
@@ -326,13 +361,6 @@ export const supabaseWorkstreamsProvider: WorkstreamsProvider = {
       p_name: name,
     });
     if (error) throw new Error(error.message);
-    const row = data as { id: string; department_id: string; name: string; position: number; default_task_titles: string[] };
-    return {
-      id: row.id,
-      departmentId: row.department_id,
-      name: row.name,
-      position: row.position,
-      defaultTaskTitles: row.default_task_titles,
-    };
+    return toActivity(data as ActivityRow);
   },
 };

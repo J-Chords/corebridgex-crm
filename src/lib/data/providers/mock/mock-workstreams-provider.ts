@@ -3,6 +3,7 @@ import type { Activity, Workstream, User } from "../../types";
 import {
   canAccessCompany,
   canAccessWorkstream,
+  canConfigureWorkstreamActivities,
   canCreateWorkstream,
   canCreateWorkstreamInProject,
   canManageWorkstreams,
@@ -314,6 +315,23 @@ export const mockWorkstreamsProvider: WorkstreamsProvider = {
     return toWorkstreamWithRelations(updated);
   },
 
+  async setWorkstreamActivities(viewer, workstreamId, activityIds) {
+    const workstream = db.workstreams.find((w) => w.id === workstreamId);
+    if (!workstream) throw new Error("Service not found.");
+    const project = workstream.projectId ? (db.projects.find((p) => p.id === workstream.projectId) ?? null) : null;
+    const allowed = canConfigureWorkstreamActivities(
+      viewer,
+      { leadUserId: workstream.leadUserId },
+      db.users,
+      project ? { companyId: project.companyId, ownerId: project.ownerId, memberUserIds: projectMemberIds(project.id) } : null
+    );
+    if (!allowed) {
+      throw new Error("You don't have permission to configure this service's activities.");
+    }
+    requireActivitiesBelongToService(activityIds, workstream.serviceLineId);
+    syncWorkstreamActivities(workstreamId, activityIds);
+  },
+
   async createActivityForWorkstream(viewer, workstreamId, name) {
     const workstream = db.workstreams.find((w) => w.id === workstreamId);
     if (!workstream) throw new Error("Service not found.");
@@ -359,12 +377,18 @@ export const mockWorkstreamsProvider: WorkstreamsProvider = {
     if (existingActivity) {
       activity = existingActivity;
     } else {
+      const now = new Date().toISOString();
       activity = {
         id: crypto.randomUUID(),
         departmentId: department.id,
         name: trimmedName,
+        description: null,
         position: db.activities.filter((a) => a.departmentId === department!.id).length,
         defaultTaskTitles: [],
+        isActive: true,
+        createdById: viewer.id,
+        createdAt: now,
+        updatedAt: now,
       };
       db.activities = [...db.activities, activity];
     }

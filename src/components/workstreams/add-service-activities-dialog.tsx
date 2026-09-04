@@ -21,26 +21,28 @@ interface AddServiceActivitiesDialogProps {
 }
 
 /**
- * Phase 13B final polish (Part H) — lets a Service's existing catalog Activities be enabled for
- * this Workstream, multiple at once, from a compact picker rather than one-at-a-time. Reuses the
- * exact capability `WorkstreamFormDialog`'s own "Available Activities" checklist already has
- * (`updateWorkstream`'s `activityIds`, a full replace-all sync server-side) — no new RPC/RLS. Since
- * it's a replace-all, submit always sends the FULL desired set: every already-enabled Activity plus
- * whatever's newly checked here, reconstructed from this `WorkstreamWithRelations` object (never
- * only the new ids, which would silently drop the existing ones).
+ * Activity Level, Sections 18-20 — lets a Service's existing catalog Activities be enabled for
+ * this Workstream, multiple at once, from a compact picker rather than one-at-a-time. Saves through
+ * `setWorkstreamActivities` — the narrow capability that can ONLY change this Workstream's Activity
+ * associations (never Service/Lead/Team/Schedule/Status/Project/Brand), mirroring the real
+ * `workstream_activities_write` RLS exactly. Since it's a replace-all, submit always sends the FULL
+ * desired set: every already-enabled Activity plus whatever's newly checked here, reconstructed
+ * from this `WorkstreamWithRelations` object (never only the new ids, which would silently drop the
+ * existing ones). Inactive Activities are excluded from the "not yet configured" picker — Section
+ * 21's "never offer inactive as a new choice" rule — but an already-enabled one that's since gone
+ * inactive stays visible via `workstream.activities` (read-only elsewhere), untouched by this dialog.
  *
- * Supervisor/Superadmin only — `updateWorkstream` is gated by the `workstreams_update` RLS policy
- * (Supervisor/Superadmin unconditionally; an Employee, even one who leads this very Workstream,
- * cannot call it — a deliberate, locked boundary, see `20260814120001_employee_workstream_creation
- * .sql`'s own comment). The caller is responsible for only rendering this for a viewer who passes
- * `canManageWorkstreams` — an Employee keeps the existing single-activity "stage it, persists when
- * the Task saves" flow instead, unchanged.
+ * Visible to Superadmin/Supervisor (existing "current authorization" — unchanged) and, new this
+ * phase, to the Employee who is this specific Workstream's own Project Service Lead — the caller
+ * gates visibility with `canConfigureWorkstreamActivities`, never the broader `canManageWorkstreams`.
  */
 export function AddServiceActivitiesDialog({ open, onOpenChange, workstream, onSaved }: AddServiceActivitiesDialogProps) {
   const { user } = useAuth();
   const { departments: fullCatalog } = useActivityCatalog(workstream.brand.id, workstream.serviceLineId ?? undefined);
   const enabledIds = new Set(workstream.activities.map((a) => a.id));
-  const unconfigured = fullCatalog.flatMap((d) => d.activities.filter((a) => !enabledIds.has(a.id)).map((a) => ({ ...a, departmentName: d.name })));
+  const unconfigured = fullCatalog.flatMap((d) =>
+    d.activities.filter((a) => !enabledIds.has(a.id) && a.isActive).map((a) => ({ ...a, departmentName: d.name }))
+  );
 
   const [checked, setChecked] = useState<Set<string>>(new Set());
   const [isSaving, setIsSaving] = useState(false);
@@ -71,22 +73,7 @@ export function AddServiceActivitiesDialog({ open, onOpenChange, workstream, onS
     setIsSaving(true);
     setError(null);
     try {
-      await workstreamsProvider.updateWorkstream(user, workstream.id, {
-        name: workstream.name,
-        description: workstream.description,
-        companyId: workstream.companyId,
-        projectId: workstream.projectId,
-        serviceLineId: workstream.serviceLineId,
-        leadUserId: workstream.leadUserId,
-        teamUserIds: workstream.team.map((u) => u.id),
-        status: workstream.status,
-        startDate: workstream.startDate,
-        endDate: workstream.endDate,
-        recurrenceFrequency: workstream.recurrenceFrequency,
-        recurrenceAnchorDate: workstream.recurrenceAnchorDate,
-        recurrenceCustomIntervalDays: workstream.recurrenceCustomIntervalDays,
-        activityIds: [...enabledIds, ...checked],
-      });
+      await workstreamsProvider.setWorkstreamActivities(user, workstream.id, [...enabledIds, ...checked]);
       onSaved();
       handleOpenChange(false);
     } catch (e) {
