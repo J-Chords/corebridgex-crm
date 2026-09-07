@@ -656,11 +656,16 @@ export function canCorrectTimeEntry(viewer: User, targetUserId: string, allUsers
   return !!target && managesUser(viewer, target);
 }
 
-/** Editing an EXISTING workstream (status/dates/lead/team reassignment) stays supervisor +
- * superadmin only — no employee self-service. Creating a new one is broader; see
- * `canCreateWorkstream`. */
+/** Boss Feedback Alignment — Project Service role correction: editing an EXISTING workstream's
+ * general fields (Lead/Team/recurrence/schedule/status/Service Line identity) is now Admin
+ * (superadmin) only — Team Lead lost the general "Edit Service" authority a Supervisor previously
+ * had here. Team Lead/Employee keep only the narrower, already-separate capabilities: attaching an
+ * existing Service to a Project they can access (`canCreateWorkstreamInProject`) and configuring an
+ * already-enabled Service's existing Activities (`canConfigureWorkstreamActivities`). Mirrored
+ * server-side by the `workstreams_update` RLS policy (Superadmin-only, no more `is_supervisor()`
+ * branch). Creating a new one is a different, broader rule; see `canCreateWorkstream`. */
 export function canManageWorkstreams(user: User): boolean {
-  return isSupervisor(user) || isSuperadmin(user);
+  return isSuperadmin(user);
 }
 
 /**

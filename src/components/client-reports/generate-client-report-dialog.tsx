@@ -24,6 +24,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 interface GenerateClientReportDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Boss Feedback Alignment, Section 9 — when opened from inside a Project's own Reports tab,
+   * pre-scope (and lock) generation to that Project/Client instead of asking the user to re-pick it;
+   * omitted entirely on the global Reports page, whose own Client-first flow is unchanged. */
+  defaultProjectId?: string;
 }
 
 function todayDateString() {
@@ -48,10 +52,10 @@ const RANGE_LABEL_ITEMS: Record<ReportRangeLabel, string> = {
   custom: "Custom range",
 };
 
-function emptyForm() {
+function emptyForm(defaultCompanyId?: string, defaultProjectId?: string) {
   return {
-    companyId: "",
-    projectId: "",
+    companyId: defaultCompanyId ?? "",
+    projectId: defaultProjectId ?? "",
     rangeLabel: "this-week" as ReportRangeLabel,
     customStart: todayDateString(),
     customEnd: todayDateString(),
@@ -71,12 +75,13 @@ function emptyForm() {
  * Projects' Clients, never the full Company directory. No Person/Client toggle like the internal
  * report's dialog, since this report is always Client-scoped.
  */
-export function GenerateClientReportDialog({ open, onOpenChange }: GenerateClientReportDialogProps) {
+export function GenerateClientReportDialog({ open, onOpenChange, defaultProjectId }: GenerateClientReportDialogProps) {
   const { user } = useAuth();
   const { projects } = useProjects();
   const router = useRouter();
+  const lockedProject = defaultProjectId ? (projects.find((p) => p.id === defaultProjectId) ?? null) : null;
 
-  const [form, setForm] = useState(emptyForm);
+  const [form, setForm] = useState(() => emptyForm(lockedProject?.companyId, lockedProject?.id));
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -104,13 +109,15 @@ export function GenerateClientReportDialog({ open, onOpenChange }: GenerateClien
   useEffect(() => {
     if (!open) return;
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setForm(emptyForm());
+    setForm(emptyForm(lockedProject?.companyId, lockedProject?.id));
     setError(null);
-  }, [open]);
+  }, [open, lockedProject]);
 
   // Auto-select the Project the moment exactly one legitimate option exists for the chosen
-  // Client; clear it (forcing an explicit choice) whenever there's more than one, or none.
+  // Client; clear it (forcing an explicit choice) whenever there's more than one, or none. Skipped
+  // entirely when a Project is already locked in (Section 9) — there's nothing to disambiguate.
   useEffect(() => {
+    if (lockedProject) return;
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setForm((prev) => {
       if (projectsForCompany.length === 1) {
@@ -119,7 +126,7 @@ export function GenerateClientReportDialog({ open, onOpenChange }: GenerateClien
       if (projectsForCompany.some((p) => p.id === prev.projectId)) return prev;
       return prev.projectId === "" ? prev : { ...prev, projectId: "" };
     });
-  }, [projectsForCompany]);
+  }, [projectsForCompany, lockedProject]);
 
   if (!user) return null;
 
@@ -170,32 +177,39 @@ export function GenerateClientReportDialog({ open, onOpenChange }: GenerateClien
         </DialogHeader>
 
         <div className="flex flex-col gap-4">
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="client-report-company">Client</Label>
-            <Select
-              items={Object.fromEntries(companies.map((c) => [c.id, c.name]))}
-              value={form.companyId}
-              onValueChange={(v) => setForm((p) => ({ ...p, companyId: v ?? "", projectId: "" }))}
-            >
-              <SelectTrigger id="client-report-company" className="w-full">
-                <SelectValue placeholder="Select a client" />
-              </SelectTrigger>
-              <SelectContent>
-                {companies.map((c) => (
-                  <SelectItem key={c.id} value={c.id}>
-                    {c.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {companies.length === 0 && (
-              <p className="text-xs text-muted-foreground">
-                No accessible client yet — ask your team lead if you need access to report against one.
-              </p>
-            )}
-          </div>
+          {lockedProject ? (
+            <div className="flex flex-col gap-0.5">
+              <span className="font-mono text-[10px] tracking-wide text-muted-foreground uppercase">Client</span>
+              <span className="text-sm">{lockedProject.companyName}</span>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="client-report-company">Client</Label>
+              <Select
+                items={Object.fromEntries(companies.map((c) => [c.id, c.name]))}
+                value={form.companyId}
+                onValueChange={(v) => setForm((p) => ({ ...p, companyId: v ?? "", projectId: "" }))}
+              >
+                <SelectTrigger id="client-report-company" className="w-full">
+                  <SelectValue placeholder="Select a client" />
+                </SelectTrigger>
+                <SelectContent>
+                  {companies.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {c.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {companies.length === 0 && (
+                <p className="text-xs text-muted-foreground">
+                  No accessible client yet — ask your team lead if you need access to report against one.
+                </p>
+              )}
+            </div>
+          )}
 
-          {form.companyId && projectsForCompany.length > 1 && (
+          {!lockedProject && form.companyId && projectsForCompany.length > 1 && (
             <div className="flex flex-col gap-1.5">
               <p className="text-xs text-muted-foreground">
                 This client has more than one active engagement — pick which one this report covers.

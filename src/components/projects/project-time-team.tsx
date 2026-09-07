@@ -102,6 +102,30 @@ export function ProjectTimeTeam({ user, tasks }: ProjectTimeTeamProps) {
     return Array.from(totals, ([label, minutes]) => ({ label, minutes })).sort((a, b) => b.minutes - a.minutes);
   }, [inRange, taskMap]);
 
+  // Boss Feedback Alignment, Section 10 — "combine it with what we have built": Employee and Task
+  // breakdowns, plus the billable/non-billable split Team Time's own per-person view already shows
+  // (`team-time-detail.tsx`). All three read fields `entries` already carries (`.user`, `.task`,
+  // `.billable`) — no new fetch, no new TimeEntry model, nothing that could show anyone more than the
+  // exact same already-scoped `entries` this component always had.
+  const billableMinutes = inRange.filter((e) => e.billable).reduce((sum, e) => sum + (e.durationMinutes ?? 0), 0);
+  const nonBillableMinutes = totalMinutes - billableMinutes;
+
+  const byEmployee = useMemo(() => {
+    const totals = new Map<string, number>();
+    for (const e of inRange) {
+      totals.set(e.user.fullName, (totals.get(e.user.fullName) ?? 0) + (e.durationMinutes ?? 0));
+    }
+    return Array.from(totals, ([label, minutes]) => ({ label, minutes })).sort((a, b) => b.minutes - a.minutes);
+  }, [inRange]);
+
+  const byTask = useMemo(() => {
+    const totals = new Map<string, number>();
+    for (const e of inRange) {
+      totals.set(e.task.title, (totals.get(e.task.title) ?? 0) + (e.durationMinutes ?? 0));
+    }
+    return Array.from(totals, ([label, minutes]) => ({ label, minutes })).sort((a, b) => b.minutes - a.minutes);
+  }, [inRange]);
+
   // Team snapshot — operational context only (open/completed-in-range counts per visible assignee),
   // never a ranking. Derived from Task assignee visibility (already correctly scoped by the
   // Project's own Task fetch), a separate axis from TimeEntry visibility above. Employee never sees
@@ -165,7 +189,15 @@ export function ProjectTimeTeam({ user, tasks }: ProjectTimeTeamProps) {
             <CardHeader>
               <CardTitle className="text-sm text-muted-foreground">{totalLabel}</CardTitle>
             </CardHeader>
-            <CardContent className="text-2xl font-semibold">{formatMinutes(totalMinutes)}</CardContent>
+            <CardContent className="flex flex-col gap-0.5">
+              <span className="text-2xl font-semibold">{formatMinutes(totalMinutes)}</span>
+              {totalMinutes > 0 && (
+                <span className="text-xs text-muted-foreground">
+                  {formatMinutes(billableMinutes)} billable
+                  {nonBillableMinutes > 0 ? `, ${formatMinutes(nonBillableMinutes)} non-billable` : ""}
+                </span>
+              )}
+            </CardContent>
           </Card>
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -197,6 +229,38 @@ export function ProjectTimeTeam({ user, tasks }: ProjectTimeTeamProps) {
                   <p className="text-sm text-muted-foreground">No time logged in this period.</p>
                 ) : (
                   byActivity.map((row) => (
+                    <div key={row.label} className="flex items-center justify-between text-sm">
+                      <span className="truncate">{row.label}</span>
+                      <span className="shrink-0 text-muted-foreground">{formatMinutes(row.minutes)}</span>
+                    </div>
+                  ))
+                )}
+              </CardContent>
+            </Card>
+
+            <Card size="sm">
+              <CardHeader><CardTitle className="text-sm">By Employee</CardTitle></CardHeader>
+              <CardContent className="flex flex-col gap-2">
+                {byEmployee.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No time logged in this period.</p>
+                ) : (
+                  byEmployee.map((row) => (
+                    <div key={row.label} className="flex items-center justify-between text-sm">
+                      <span className="truncate">{row.label}</span>
+                      <span className="shrink-0 text-muted-foreground">{formatMinutes(row.minutes)}</span>
+                    </div>
+                  ))
+                )}
+              </CardContent>
+            </Card>
+
+            <Card size="sm">
+              <CardHeader><CardTitle className="text-sm">By Task</CardTitle></CardHeader>
+              <CardContent className="flex flex-col gap-2">
+                {byTask.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No time logged in this period.</p>
+                ) : (
+                  byTask.map((row) => (
                     <div key={row.label} className="flex items-center justify-between text-sm">
                       <span className="truncate">{row.label}</span>
                       <span className="shrink-0 text-muted-foreground">{formatMinutes(row.minutes)}</span>

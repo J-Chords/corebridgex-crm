@@ -2450,6 +2450,35 @@ Read the Current phase and Next roadmap sections before proposing changes.
 
 ## Last updated
 
+- Date: 2026-09-07 (**Boss Feedback Alignment** — a management-demo-driven correction pass on top of
+  the Activity Level checkpoint (`5dfcf80fc2326143bfad377d17690626a881bf57`), not yet committed. Project
+  Overview's KPI shell unified into one 4-tile structure (Services/Open Work/Attention/Next Due) for
+  Admin/Team Lead/Employee alike, sourced from this page's own already-viewer-scoped Task data — fixed
+  a real pre-existing bug where Team Lead's Attention/Open-Work tiles read an unscoped, org-wide count
+  instead of their own managed scope. Documents corrected to a generated/completed Client Report
+  library (primary content), with the old upload CTA removed from the normal tab (upload
+  provider/RPC/table left completely intact for future reuse) and any historical manually-uploaded
+  files demoted to a secondary, read-oriented "Historical Files" section. Reports corrected to a
+  pre-scoped "Generate a Client Report" workspace (no duplicate list). Project Time gained By
+  Employee/By Task/billable-split dimensions, still a pure aggregation over the existing shared
+  `time_entries` — no second time system. Team Lead lost general "Edit Service" authority — both the
+  app gate and the hosted `workstreams_update` RLS policy (migration
+  `20260907090000_workstream_edit_superadmin_only.sql`, applied and hosted-read-back-confirmed:
+  `is_superadmin() and can_access_workstream(id)`, the separate `workstream_activities_write` policy
+  unaffected). Add Service's Project Service Lead assignment made an honest, visible choice instead of
+  a silent default: an Employee sees a locked explanation that they'll become the Lead themselves (the
+  only option `create_workstream` allows them); a Team Lead/Admin gets a real Lead picker reusing the
+  same viewer-scoped `assignableStaff` eligibility list `WorkstreamFormDialog` already uses (self +
+  direct reports for Supervisor, any active user for Superadmin) — Created By stays entirely separate
+  from Project Service Lead throughout. Admin Users' create/edit dialog migrated from a cramped
+  512px-wide `Dialog` (which needed its own internal scroll workaround) onto the same large `FormDialog`
+  shell (~960px) Task/Service already use. `tsc`/`eslint`/`git diff --check` clean, all 4 provider
+  builds clean. Task Level decisions recorded (not implemented): Subtasks fully removed (read-only
+  hosted-count-first migration discipline specified), Handoff retired, Task Notes authoring retired
+  (Comments canonical), Task Timeline retained for a lightweight List/Board/Timeline redesign. See
+  `docs/project-level-product-architecture.md`'s updated Documents/Reports/Time/Services sections and
+  its new "Task Level — locked decisions carried forward" section. Uncommitted, pending final Product
+  Owner visual acceptance.)
 - Date: 2026-09-04 (Hierarchy status marker — **Admin Foundation: ACCEPTED/CHECKPOINTED.
   Project Level: ACCEPTED/CHECKPOINTED (`099f7eac508eff7163eb72ff30370b48128e2147`). Service Level:
   ACCEPTED/CHECKPOINTED (`95053cfce49130c3b097ce75624b94818f824cb7` — current safe baseline).

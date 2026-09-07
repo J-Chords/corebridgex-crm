@@ -1,16 +1,14 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   Download,
   FileText,
   MessageSquare,
   Pencil,
-  Plus,
   RotateCcw,
   Search,
   Trash2,
-  Upload,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth/auth-context";
 import { useProjectDocuments } from "@/lib/data/hooks/use-project-documents";
@@ -24,7 +22,6 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { Alert, AlertTitle } from "@/components/ui/alert";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
@@ -33,13 +30,8 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogDescription,
 } from "@/components/ui/dialog";
 import { useToastManager } from "@/components/ui/toast";
-
-/** Part 15 — mirrors the hosted `reserve_document_upload` extension allowlist exactly. */
-const ALLOWED_EXTENSIONS = ["pdf", "doc", "docx", "xls", "xlsx", "csv", "txt", "png", "jpg", "jpeg"];
-const MAX_SIZE_BYTES = 25 * 1024 * 1024;
 
 const CATEGORY_LABELS: Record<DocumentCategory, string> = {
   engagement_letter: "Engagement Letter",
@@ -58,166 +50,6 @@ function formatBytes(bytes: number): string {
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-}
-
-function extensionOf(filename: string): string {
-  const match = /\.([a-zA-Z0-9]+)$/.exec(filename);
-  return match ? match[1].toLowerCase() : "";
-}
-
-interface UploadDialogProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  onUploaded: () => void;
-  projectId: string;
-}
-
-function UploadDocumentDialog({ open, onOpenChange, onUploaded, projectId }: UploadDialogProps) {
-  const { user } = useAuth();
-  const toastManager = useToastManager();
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [file, setFile] = useState<File | null>(null);
-  const [displayName, setDisplayName] = useState("");
-  const [description, setDescription] = useState("");
-  const [category, setCategory] = useState<DocumentCategory>("other");
-  const [error, setError] = useState<string | null>(null);
-  const [isUploading, setIsUploading] = useState(false);
-
-  function reset() {
-    setFile(null);
-    setDisplayName("");
-    setDescription("");
-    setCategory("other");
-    setError(null);
-    setIsUploading(false);
-    if (fileInputRef.current) fileInputRef.current.value = "";
-  }
-
-  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    setError(null);
-    const picked = e.target.files?.[0] ?? null;
-    if (!picked) {
-      setFile(null);
-      return;
-    }
-    const ext = extensionOf(picked.name);
-    if (!ALLOWED_EXTENSIONS.includes(ext)) {
-      setError(`"${ext || "unknown"}" files aren't allowed. Allowed: ${ALLOWED_EXTENSIONS.join(", ")}.`);
-      setFile(null);
-      e.target.value = "";
-      return;
-    }
-    if (picked.size > MAX_SIZE_BYTES) {
-      setError("File is larger than the 25MB limit.");
-      setFile(null);
-      e.target.value = "";
-      return;
-    }
-    setFile(picked);
-    if (!displayName) setDisplayName(picked.name.replace(/\.[^.]+$/, ""));
-  }
-
-  async function handleUpload() {
-    if (!user || !file) return;
-    setIsUploading(true);
-    setError(null);
-    try {
-      await documentsProvider.uploadDocument(user, {
-        file,
-        projectId,
-        displayName: displayName.trim() || undefined,
-        description: description.trim() || undefined,
-        category,
-      });
-      toastManager.add({ description: "Document uploaded." });
-      reset();
-      onOpenChange(false);
-      onUploaded();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Upload failed.");
-      setIsUploading(false);
-    }
-  }
-
-  return (
-    <Dialog
-      open={open}
-      onOpenChange={(next) => {
-        if (!isUploading) {
-          if (!next) reset();
-          onOpenChange(next);
-        }
-      }}
-    >
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Upload document</DialogTitle>
-          <DialogDescription>PDF, Word, Excel, CSV, text, or image — up to 25MB.</DialogDescription>
-        </DialogHeader>
-        <div className="flex flex-col gap-4">
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="doc-file">File</Label>
-            <Input id="doc-file" ref={fileInputRef} type="file" onChange={handleFileChange} disabled={isUploading} />
-            {file && (
-              <p className="text-xs text-muted-foreground">
-                {file.name} · {formatBytes(file.size)}
-              </p>
-            )}
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="doc-name">Display name</Label>
-            <Input id="doc-name" value={displayName} onChange={(e) => setDisplayName(e.target.value)} disabled={isUploading} />
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="doc-description">Description</Label>
-            <Textarea
-              id="doc-description"
-              rows={2}
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              disabled={isUploading}
-            />
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="doc-category">Category</Label>
-            <Select
-              items={CATEGORY_LABELS}
-              value={category}
-              onValueChange={(v) => v && setCategory(v as DocumentCategory)}
-            >
-              <SelectTrigger id="doc-category" className="w-full" disabled={isUploading}>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {Object.entries(CATEGORY_LABELS).map(([value, label]) => (
-                  <SelectItem key={value} value={value}>
-                    {label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          {error && (
-            <Alert variant="destructive">
-              <AlertTitle>{error}</AlertTitle>
-            </Alert>
-          )}
-        </div>
-        <DialogFooter>
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isUploading}>
-            Cancel
-          </Button>
-          <Button type="button" onClick={handleUpload} disabled={!file || isUploading}>
-            {isUploading ? "Uploading…" : (
-              <>
-                <Upload /> Upload
-              </>
-            )}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
 }
 
 function EditDocumentDialog({
@@ -302,11 +134,15 @@ function EditDocumentDialog({
 }
 
 /**
- * Project Level Parts 14/15/17 — the full Documents surface: upload (reserve → authenticated
- * upload → finalize, entirely inside `documentsProvider.uploadDocument`), list, metadata edit,
- * signed download, soft-delete/Trash view/restore, and per-Document threaded Comments via the one
- * reusable `ProjectCommentsSection` (never a second Comments implementation). No public URLs, no
- * service-role key anywhere in this component — every Storage call stays inside the provider.
+ * Project Level Parts 14/15/17, demoted to a secondary section under the Documents tab's own
+ * generated-Report library (Boss Feedback Alignment, Section 8 — Documents' primary meaning is now
+ * "reports already produced," not "a generic upload center"). The full surface — upload (reserve →
+ * authenticated upload → finalize, entirely inside `documentsProvider.uploadDocument`), list,
+ * metadata edit, signed download, soft-delete/Trash view/restore, and per-Document threaded Comments
+ * via the one reusable `ProjectCommentsSection` — is untouched and fully preserved; only the header's
+ * framing/prominence changed, never the underlying `documents` table/infrastructure or any historical
+ * file. No public URLs, no service-role key anywhere in this component — every Storage call stays
+ * inside the provider.
  */
 export function ProjectDocumentsSection({ projectId }: { projectId: string }) {
   const { user } = useAuth();
@@ -314,7 +150,6 @@ export function ProjectDocumentsSection({ projectId }: { projectId: string }) {
   const { documents, trashedDocuments, isLoading, refresh } = useProjectDocuments(projectId);
   const [view, setView] = useState<"active" | "trash">("active");
   const [search, setSearch] = useState("");
-  const [uploadOpen, setUploadOpen] = useState(false);
   const [editingDoc, setEditingDoc] = useState<Document | null>(null);
   const [trashingDoc, setTrashingDoc] = useState<Document | null>(null);
   const [commentsDoc, setCommentsDoc] = useState<Document | null>(null);
@@ -380,14 +215,9 @@ export function ProjectDocumentsSection({ projectId }: { projectId: string }) {
 
   return (
     <Card>
-      <CardHeader className="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <CardTitle className="text-base">Documents</CardTitle>
-          <CardDescription>Uploaded files for this Project.</CardDescription>
-        </div>
-        <Button size="sm" onClick={() => setUploadOpen(true)}>
-          <Plus /> Upload
-        </Button>
+      <CardHeader>
+        <CardTitle className="text-base">Historical Files</CardTitle>
+        <CardDescription>Other files on record for this Project — contracts, working papers, client-provided files.</CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
         <div className="flex flex-wrap items-center gap-3">
@@ -421,7 +251,7 @@ export function ProjectDocumentsSection({ projectId }: { projectId: string }) {
 
         {!isLoading && filtered.length === 0 && (
           <p className="text-sm text-muted-foreground">
-            {view === "trash" ? "Trash is empty." : "No documents uploaded for this project yet."}
+            {view === "trash" ? "Trash is empty." : "No other files on record for this project."}
           </p>
         )}
 
@@ -484,8 +314,6 @@ export function ProjectDocumentsSection({ projectId }: { projectId: string }) {
           })}
         </div>
       </CardContent>
-
-      <UploadDocumentDialog open={uploadOpen} onOpenChange={setUploadOpen} onUploaded={refresh} projectId={projectId} />
 
       {editingDoc && (
         <EditDocumentDialog doc={editingDoc} onOpenChange={(open) => !open && setEditingDoc(null)} onSaved={refresh} />

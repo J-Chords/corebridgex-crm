@@ -7,16 +7,15 @@ import { adminUsersProvider } from "@/lib/data/providers";
 import type { AdminUserRow } from "@/lib/data/providers/admin-users-provider";
 import type { Role, ServiceLine } from "@/lib/data/types";
 import { ROLE_LABELS } from "@/lib/data/role-labels";
+import { FormDialog, FormDialogColumns } from "@/components/ui/form-dialog";
 import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from "@/components/ui/dialog";
+  FormDrawerHeader,
+  FormDrawerBody,
+  FormDrawerSection,
+  FormDrawerField,
+  FormDrawerFooter,
+} from "@/components/ui/form-drawer";
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
 import { FloatingLabelInput } from "@/components/ui/floating-label-input";
 import { PasswordInput } from "@/components/ui/password-input";
 import { Alert, AlertTitle } from "@/components/ui/alert";
@@ -57,6 +56,11 @@ const EMPTY_FORM = {
  * Team Lead shows both "Leads Services" and "Services" (a Team Lead may also be a plain member of a
  * different Service); Employee shows only "Services". Email is read-only in edit mode (Stage 0
  * Correction 6) — never editable here.
+ *
+ * Boss Feedback Alignment, Section 16 — rebuilt on the large centered `FormDialog` shell (~960px),
+ * the same one Task/Service create-edit already uses, replacing the old cramped `sm:max-w-lg` (512px)
+ * `Dialog` that needed its own `max-h-[65vh]` internal-scroll workaround to fit this form's content —
+ * the densest of any Admin form. Shell/layout only; no field, validation, or permission changed.
  */
 export function UserFormDialog({ open, onOpenChange, mode, targetUser, serviceLines, onSaved }: UserFormDialogProps) {
   const { user } = useAuth();
@@ -174,140 +178,145 @@ export function UserFormDialog({ open, onOpenChange, mode, targetUser, serviceLi
 
   return (
     <>
-      <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="sm:max-w-lg">
-          <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-            <DialogHeader>
-              <DialogTitle>{mode === "create" ? "New user" : "Edit user"}</DialogTitle>
-              <DialogDescription>
-                {mode === "create"
-                  ? "Create an account. The user must change this password before normal access."
-                  : `Update ${targetUser?.fullName ?? "this user"}'s details.`}
-              </DialogDescription>
-            </DialogHeader>
+      <FormDialog open={open} onOpenChange={onOpenChange} srTitle={mode === "create" ? "New user" : "Edit user"}>
+        <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
+          <FormDrawerHeader
+            title={mode === "create" ? "New user" : "Edit user"}
+            context={
+              mode === "create"
+                ? "Create an account. The user must change this password before normal access."
+                : `Update ${targetUser?.fullName ?? "this user"}'s details.`
+            }
+          />
 
-            <div className="flex max-h-[65vh] flex-col gap-4 overflow-y-auto pr-1">
-              <FloatingLabelInput
-                label="Full name"
-                required
-                value={form.fullName}
-                onChange={(e) => setForm((p) => ({ ...p, fullName: e.target.value }))}
-              />
-              {mode === "create" ? (
+          <FormDrawerBody>
+            <FormDialogColumns>
+              <FormDrawerSection label="Identity">
                 <FloatingLabelInput
-                  label="Email"
-                  type="email"
+                  label="Full name"
                   required
-                  value={form.email}
-                  onChange={(e) => setForm((p) => ({ ...p, email: e.target.value }))}
+                  value={form.fullName}
+                  onChange={(e) => setForm((p) => ({ ...p, fullName: e.target.value }))}
                 />
-              ) : (
-                <div className="flex flex-col gap-1">
-                  <FloatingLabelInput label="Email" value={form.email} disabled readOnly />
-                  <p className="text-xs text-muted-foreground">Email changes are not available yet.</p>
-                </div>
-              )}
-              {mode === "create" && (
-                <PasswordInput
-                  label="Initial password"
-                  required
-                  autoComplete="new-password"
-                  value={form.initialPassword}
-                  onChange={(e) => setForm((p) => ({ ...p, initialPassword: e.target.value }))}
-                />
-              )}
-
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="user-role">Role</Label>
-                <Select
-                  items={ROLE_ITEMS}
-                  value={form.role}
-                  onValueChange={(v) => setForm((p) => ({ ...p, role: (v ?? "employee") as Role }))}
-                >
-                  <SelectTrigger id="user-role" className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="employee">{ROLE_LABELS.employee}</SelectItem>
-                    <SelectItem value="supervisor">{ROLE_LABELS.supervisor}</SelectItem>
-                    <SelectItem value="superadmin">{ROLE_LABELS.superadmin}</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {form.role === "supervisor" && (
-                <div className="flex flex-col gap-1.5">
-                  <Label>Services Led</Label>
-                  <p className="text-xs text-muted-foreground">
-                    Services this Team Lead is responsible for across all Projects.
-                  </p>
-                  <MultiSelect
-                    options={serviceOptions}
-                    value={form.serviceLeadershipIds}
-                    onChange={(ids) => setForm((p) => ({ ...p, serviceLeadershipIds: ids }))}
-                    placeholder="Leads no Services"
-                    searchPlaceholder="Search Services…"
-                    aria-label="Services Led"
+                {mode === "create" ? (
+                  <FloatingLabelInput
+                    label="Email"
+                    type="email"
+                    required
+                    value={form.email}
+                    onChange={(e) => setForm((p) => ({ ...p, email: e.target.value }))}
                   />
-                </div>
-              )}
-              {(form.role === "employee" || form.role === "supervisor") && (
-                <div className="flex flex-col gap-1.5">
-                  <Label>Works In Services</Label>
-                  <p className="text-xs text-muted-foreground">
-                    Services where this user participates as an operational team member.
-                  </p>
-                  <MultiSelect
-                    options={serviceOptions}
-                    value={form.serviceMembershipIds}
-                    onChange={(ids) => setForm((p) => ({ ...p, serviceMembershipIds: ids }))}
-                    placeholder="Works in no Services"
-                    searchPlaceholder="Search Services…"
-                    aria-label="Works In Services"
-                  />
-                </div>
-              )}
-
-              {mode === "edit" && targetUser && (
-                <div className="flex items-center justify-between rounded-md border px-3 py-2">
-                  <div className="flex flex-col">
-                    <span className="text-sm font-medium">Active</span>
-                    <span className="text-xs text-muted-foreground">
-                      Inactive users lose all data access immediately.
-                    </span>
+                ) : (
+                  <div className="flex flex-col gap-1">
+                    <FloatingLabelInput label="Email" value={form.email} disabled readOnly />
+                    <p className="text-xs text-muted-foreground">Email changes are not available yet.</p>
                   </div>
-                  <Switch
-                    checked={form.active}
-                    onCheckedChange={(checked) => setForm((p) => ({ ...p, active: checked }))}
+                )}
+                {mode === "create" && (
+                  <PasswordInput
+                    label="Initial password"
+                    required
+                    autoComplete="new-password"
+                    value={form.initialPassword}
+                    onChange={(e) => setForm((p) => ({ ...p, initialPassword: e.target.value }))}
                   />
-                </div>
-              )}
+                )}
+              </FormDrawerSection>
 
-              {mode === "edit" && targetUser && (
-                <Button type="button" variant="outline" onClick={() => setResetPasswordOpen(true)}>
-                  Reset password
-                </Button>
-              )}
+              <FormDrawerSection label="Access">
+                <FormDrawerField label="Role" htmlFor="user-role">
+                  <Select
+                    items={ROLE_ITEMS}
+                    value={form.role}
+                    onValueChange={(v) => setForm((p) => ({ ...p, role: (v ?? "employee") as Role }))}
+                  >
+                    <SelectTrigger id="user-role" className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="employee">{ROLE_LABELS.employee}</SelectItem>
+                      <SelectItem value="supervisor">{ROLE_LABELS.supervisor}</SelectItem>
+                      <SelectItem value="superadmin">{ROLE_LABELS.superadmin}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </FormDrawerField>
 
-              {error && (
-                <Alert variant="destructive">
-                  <AlertCircle aria-hidden="true" />
-                  <AlertTitle>{error}</AlertTitle>
-                </Alert>
-              )}
-            </div>
+                {mode === "edit" && targetUser && (
+                  <div className="flex items-center justify-between rounded-md border px-3 py-2">
+                    <div className="flex flex-col">
+                      <span className="text-sm font-medium">Active</span>
+                      <span className="text-xs text-muted-foreground">
+                        Inactive users lose all data access immediately.
+                      </span>
+                    </div>
+                    <Switch
+                      checked={form.active}
+                      onCheckedChange={(checked) => setForm((p) => ({ ...p, active: checked }))}
+                    />
+                  </div>
+                )}
 
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-                Cancel
-              </Button>
-              <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting ? "Saving…" : "Save"}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+                {mode === "edit" && targetUser && (
+                  <Button type="button" variant="outline" onClick={() => setResetPasswordOpen(true)}>
+                    Reset password
+                  </Button>
+                )}
+              </FormDrawerSection>
+            </FormDialogColumns>
+
+            {(form.role === "supervisor" || form.role === "employee") && (
+              <FormDrawerSection label="Service Staffing">
+                <FormDialogColumns>
+                  {form.role === "supervisor" && (
+                    <FormDrawerField label="Services Led">
+                      <p className="text-xs text-muted-foreground">
+                        Services this Team Lead is responsible for across all Projects.
+                      </p>
+                      <MultiSelect
+                        options={serviceOptions}
+                        value={form.serviceLeadershipIds}
+                        onChange={(ids) => setForm((p) => ({ ...p, serviceLeadershipIds: ids }))}
+                        placeholder="Leads no Services"
+                        searchPlaceholder="Search Services…"
+                        aria-label="Services Led"
+                      />
+                    </FormDrawerField>
+                  )}
+                  <FormDrawerField label="Works In Services">
+                    <p className="text-xs text-muted-foreground">
+                      Services where this user participates as an operational team member.
+                    </p>
+                    <MultiSelect
+                      options={serviceOptions}
+                      value={form.serviceMembershipIds}
+                      onChange={(ids) => setForm((p) => ({ ...p, serviceMembershipIds: ids }))}
+                      placeholder="Works in no Services"
+                      searchPlaceholder="Search Services…"
+                      aria-label="Works In Services"
+                    />
+                  </FormDrawerField>
+                </FormDialogColumns>
+              </FormDrawerSection>
+            )}
+
+            {error && (
+              <Alert variant="destructive">
+                <AlertCircle aria-hidden="true" />
+                <AlertTitle>{error}</AlertTitle>
+              </Alert>
+            )}
+          </FormDrawerBody>
+
+          <FormDrawerFooter>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={isSubmitting}>
+              {isSubmitting ? "Saving…" : "Save"}
+            </Button>
+          </FormDrawerFooter>
+        </form>
+      </FormDialog>
 
       <ConfirmDialog
         open={pendingCleanupConfirm}

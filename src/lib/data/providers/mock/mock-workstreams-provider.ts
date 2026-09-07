@@ -9,6 +9,7 @@ import {
   canManageWorkstreams,
   isEmployee,
   isSuperadmin,
+  isSupervisor,
   managesUser,
 } from "../../permissions";
 import { computeWorkstreamBudget } from "../../time-budget";
@@ -153,7 +154,7 @@ function requireAccess(viewer: User, workstream: Workstream) {
 
 function requireManage(viewer: User, workstream?: Workstream) {
   if (!canManageWorkstreams(viewer)) {
-    throw new Error("Only supervisors and superadmins can manage services.");
+    throw new Error("Only an admin can edit a Service's details.");
   }
   if (workstream) requireAccess(viewer, workstream);
 }
@@ -238,6 +239,15 @@ export const mockWorkstreamsProvider: WorkstreamsProvider = {
       // the new workstream visible to them afterward (canAccessWorkstream's own lead/self check),
       // without granting any broader staff-assignment power.
       throw new Error("You can only create a service you lead yourself.");
+    }
+    if (isSupervisor(viewer)) {
+      // Parity fix (Boss Feedback Alignment) — create_workstream's real hosted RPC has always
+      // required a Supervisor's chosen lead to be themselves or a direct report; this mock never
+      // enforced that second half, silently allowing an out-of-team lead that real Supabase rejects.
+      const proposedLead = db.users.find((u) => u.id === input.leadUserId);
+      if (!proposedLead || !managesUser(viewer, proposedLead)) {
+        throw new Error("You can only lead this yourself or assign one of your own direct reports.");
+      }
     }
     const company = db.companies.find((c) => c.id === resolved.companyId);
     if (!company) throw new Error("Company not found.");

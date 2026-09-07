@@ -19,7 +19,7 @@ import { useCompanyNotes } from "@/lib/data/hooks/use-notes";
 import { useRunningTimer } from "@/lib/data/hooks/use-time-entries";
 import { projectsProvider, projectIssuesProvider } from "@/lib/data/providers";
 import { DEFAULT_TASK_FILTERS, filterTasks, groupTasksBy } from "@/lib/data/hooks/use-task-filters";
-import { isAssigneeColumnRedundantForViewer } from "@/lib/data/task-display";
+import { isAssigneeColumnRedundantForViewer, isTaskOverdue } from "@/lib/data/task-display";
 import { operationalProjectIdentity, serviceLineDisplayName } from "@/lib/data/project-display";
 import { canConfigureWorkstreamActivities, canCreateWorkstreamInProject, canManageProjects, isEmployee, isSupervisor } from "@/lib/data/permissions";
 import { AddServiceActivitiesDialog } from "@/components/workstreams/add-service-activities-dialog";
@@ -53,6 +53,7 @@ import { TaskFormDialog } from "@/components/tasks/task-form-dialog";
 import { SharedNotesSection } from "@/components/notes/shared-notes-section";
 import { ProjectTimeTeam } from "@/components/projects/project-time-team";
 import { ClientReportsTable } from "@/components/client-reports/client-reports-table";
+import { GenerateClientReportDialog } from "@/components/client-reports/generate-client-report-dialog";
 import { useClientReports } from "@/lib/data/hooks/use-client-reports";
 import { MultiSelect } from "@/components/ui/multi-select";
 import { useToastManager } from "@/components/ui/toast";
@@ -320,6 +321,7 @@ function LoadedProjectDetailPage({
     return TABS.some((t) => t.key === tabParam) ? (tabParam as TabKey) : "overview";
   });
   const [addServiceOpen, setAddServiceOpen] = useState(false);
+  const [generateReportOpen, setGenerateReportOpen] = useState(false);
   // Project Final Integration Correction — "Configure Activities" on an already-attached Service
   // reuses the existing `AddServiceActivitiesDialog` (previously only reachable from the Task form's
   // now-removed inline flow) — offers only this Service's remaining, not-yet-enabled catalog
@@ -362,6 +364,15 @@ function LoadedProjectDetailPage({
     for (const t of tasks) counts[t.status] += 1;
     return counts;
   }, [tasks]);
+  // Boss Feedback Alignment, Section 3 — `tasks` is already the viewer's own correctly-scoped set
+  // (Superadmin: every Task on this Project; Supervisor: only their managed team's; Employee: only
+  // what canAccessTask already allows them). openCount/overdueCount used to read the raw, UNSCOPED
+  // `project.tasks.openCount`/`overdueCount` (a real data-visibility bug for Team Lead — it silently
+  // showed org-wide counts, not their own scope) — now derived from this same already-fetched,
+  // already-scoped array instead, closing that gap while keeping Admin's number identical (Admin's
+  // scope already covers every Task on the Project either way).
+  const openCount = tasks.length - statusCounts.done;
+  const overdueCount = tasks.filter((t) => isTaskOverdue(t)).length;
 
 // Manual Acceptance Step 3/4 — Overview role-awareness. All derived from Tasks/Services/Members
   // already fetched above; nothing new queried, nothing fabricated (Section 25). Next Due always
@@ -510,29 +521,22 @@ function LoadedProjectDetailPage({
 
       {tab === "overview" && (
         <div className="flex flex-col gap-4">
-          {/* B. Compact operational summary — role-conditional, 3-4 tiles, never a duplicate of the
-              detail panels below (Section 5/9B/10B/11B). */}
+          {/* B. Compact operational summary — Boss Feedback Alignment, Section 3: ONE shared 4-tile
+              KPI structure for every role (Admin/Team Lead/Employee), never a role-branched shell.
+              Only the Employee variant's underlying numbers narrow to "my own work" (`myTasks`) —
+              already the correctly-scoped, most personally-relevant figure for that role; Admin and
+              Team Lead share the identical `openCount`/`overdueCount`/`nextDueTask` computed above
+              from this page's own already-viewer-scoped `tasks`. */}
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-            {(canManageProjects(user)
-              ? [
-                  { label: "Services", value: workstreams.length },
-                  { label: "Open Work", value: project.tasks.openCount },
-                  { label: "Attention", value: project.tasks.overdueCount },
-                  { label: "Team", value: project.members.length },
-                ]
-              : isTeamLead
-                ? [
-                    { label: "Open Tasks", value: project.tasks.openCount },
-                    { label: "Attention", value: project.tasks.overdueCount },
-                    { label: "Next Due", value: formatShortDate(nextDueTask?.dueDate ?? null) },
-                    { label: "Team", value: project.members.length },
-                  ]
-                : [
-                    { label: "My Open Work", value: myTasks.length },
-                    { label: "My Attention", value: myOverdueCount },
-                    { label: "Next Due", value: formatShortDate(myNextDueTask?.dueDate ?? null) },
-                  ]
-            ).map((item) => (
+            {[
+              { label: "Services", value: workstreams.length },
+              { label: "Open Work", value: isEmployee(user) ? myTasks.length : openCount },
+              { label: "Attention", value: isEmployee(user) ? myOverdueCount : overdueCount },
+              {
+                label: "Next Due",
+                value: formatShortDate((isEmployee(user) ? myNextDueTask : nextDueTask)?.dueDate ?? null),
+              },
+            ].map((item) => (
               <Card key={item.label} className="p-3">
                 <span className="font-mono text-[10px] tracking-wide text-muted-foreground uppercase">{item.label}</span>
                 <span className="text-lg leading-tight font-semibold">{item.value}</span>
@@ -543,17 +547,7 @@ function LoadedProjectDetailPage({
           {/* C + D. Work needing attention, and Services — one coherent grouped panel each, side
               by side at desktop width, never split into many equal-weight cards (Section 5/16). */}
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-            {canManageProjects(user) || isTeamLead ? (
-              <AttentionPanel
-                title="Work needing attention"
-                overdueCount={project.tasks.overdueCount}
-                waitingCount={statusCounts["waiting-on-client"]}
-                blockedCount={statusCounts.blocked}
-                openCount={project.tasks.openCount}
-                nextDueTask={nextDueTask}
-                onViewTasks={() => setTab("tasks")}
-              />
-            ) : (
+            {isEmployee(user) ? (
               <AttentionPanel
                 title="My work"
                 overdueCount={myOverdueCount}
@@ -561,6 +555,16 @@ function LoadedProjectDetailPage({
                 blockedCount={myTasks.filter((t) => t.status === "blocked").length}
                 openCount={myTasks.length}
                 nextDueTask={myNextDueTask}
+                onViewTasks={() => setTab("tasks")}
+              />
+            ) : (
+              <AttentionPanel
+                title="Work needing attention"
+                overdueCount={overdueCount}
+                waitingCount={statusCounts["waiting-on-client"]}
+                blockedCount={statusCounts.blocked}
+                openCount={openCount}
+                nextDueTask={nextDueTask}
                 onViewTasks={() => setTab("tasks")}
               />
             )}
@@ -958,7 +962,28 @@ function LoadedProjectDetailPage({
         </div>
       )}
 
-      {tab === "documents" && <ProjectDocumentsSection projectId={project.id} />}
+      {tab === "documents" && (
+        <div className="flex flex-col gap-4">
+          {/* Boss Feedback Alignment, Section 8 — Documents' primary meaning is now "what's already
+              been produced": the generated/completed Client Report library, reusing the exact same
+              `ClientReportsTable`/`projectReports` the Reports tab itself used to show (moved here so
+              the two tabs never duplicate the same list — Reports is now the generation workspace,
+              below). Uploaded files (Section 8's "Task/document attachment infrastructure may still
+              be technically useful") stay fully intact — nothing was deleted — just demoted to a
+              secondary section beneath the report library, with no generic upload CTA promoted here. */}
+          <div className="flex flex-col gap-2">
+            <span className="font-mono text-xs tracking-wider text-muted-foreground uppercase">
+              Reports generated for this Project
+            </span>
+            <ClientReportsTable
+              reports={projectReports}
+              isLoading={false}
+              emptyMessage="No Client Reports generated for this Project yet — use the Reports tab to generate one."
+            />
+          </div>
+          <ProjectDocumentsSection projectId={project.id} />
+        </div>
+      )}
 
       {tab === "time" && <ProjectTimeTeam user={user} tasks={tasks} />}
 
@@ -976,11 +1001,26 @@ function LoadedProjectDetailPage({
       )}
 
       {tab === "reports" && (
-        <ClientReportsTable
-          reports={projectReports}
-          isLoading={false}
-          emptyMessage="No Client Reports generated for this Project yet."
-        />
+        // Boss Feedback Alignment, Section 9 — Reports is the generation workspace ("Report is
+        // where you go to generate reports of a client"), pre-scoped to this Project/Client via
+        // `defaultProjectId` so the user never re-picks what they're already looking at; the
+        // already-generated list now lives on Documents (above), never duplicated here. Generation
+        // authorization is exactly the same, unwidened, unnarrowed `clientReportProvider.generateReport`
+        // path the global Reports page already uses — this button is shown unconditionally there too.
+        <Card className="border-primary/30 bg-primary/5">
+          <CardHeader>
+            <CardTitle className="text-base">Generate a Client Report</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-wrap items-center justify-between gap-4">
+            <p className="max-w-md text-sm text-muted-foreground">
+              Covers {project.companyName}&apos;s tracked work and confirmed Daily Updates for this Project over
+              whichever period you choose. Already-generated reports live on the Documents tab.
+            </p>
+            <Button size="lg" onClick={() => setGenerateReportOpen(true)}>
+              <Plus /> Generate Report
+            </Button>
+          </CardContent>
+        </Card>
       )}
 
       {company && (
@@ -989,7 +1029,6 @@ function LoadedProjectDetailPage({
           onOpenChange={setAddServiceOpen}
           company={company}
           projectId={project.id}
-          ownerId={project.ownerId}
           existingServiceLineIds={serviceLineIds}
           onSaved={() => {
             refreshWorkstreams();
@@ -997,6 +1036,12 @@ function LoadedProjectDetailPage({
           }}
         />
       )}
+
+      <GenerateClientReportDialog
+        open={generateReportOpen}
+        onOpenChange={setGenerateReportOpen}
+        defaultProjectId={project.id}
+      />
 
       {configureActivitiesFor && (
         <AddServiceActivitiesDialog

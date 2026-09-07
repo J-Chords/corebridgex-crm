@@ -393,17 +393,31 @@ Lead"/"Reviewer"/"Contributor" as placeholder examples only) — data only, neve
 authorization role, never consulted by any access helper; editable Admin-only via
 `set_project_member_role`.
 
-## Documents
+## Documents — corrected to a generated-report library (Boss Feedback Alignment)
 
-Reuses the Phase 14B `documents` table/`DocumentsProvider`/private Storage design exactly — no
-second document model. The full surface is built: upload (reserve → authenticated browser upload
-→ finalize, entirely inside `documentsProvider.uploadDocument`), list, metadata edit
-(display name/description/category), signed download (short-lived, minted only for a viewer who
-still passes `can_access_document`), soft delete, a Trash view, and restore — plus per-Document
-threaded Comments via the same reusable Comments panel. No public URLs, no service-role key in any
-client-facing code path. Proven with a real authenticated hosted Storage E2E (disposable Auth user
-+ disposable Document, full lifecycle exercised, fully cleaned up, zero leftovers confirmed by live
-read-back) — not just unit-tested against the mock provider.
+**Locked management semantics**: "Documents is not about uploading documents. It is about viewing
+the reports generated or done." The Documents tab's **primary** content is now the Client Report
+library — `ClientReportsTable` filtered to this Project's own `client_reports` rows (the exact same
+data/query the Reports tab itself used to render, moved here so the two tabs never show the same list
+twice) — under a "Reports generated for this Project" heading, with Client/Reporting Period/Generated/
+Open columns and a "use the Reports tab to generate one" pointer when empty.
+
+Reports = the generation workspace ("Report is where you go to generate reports of a client") — see
+"Reports" below.
+
+**Upload infrastructure preserved, de-emphasized, no longer the normal workflow.** The Phase 14B
+`documents` table/`DocumentsProvider`/private Storage design (reserve → authenticated browser upload
+→ finalize, metadata edit, signed download, soft delete/Trash/restore, per-Document threaded Comments)
+is completely untouched at the data/provider/RPC layer — nothing was deleted, no migration was needed.
+What changed is purely the UI: any manually-uploaded Project file now renders in a secondary,
+read-oriented "Historical Files" card beneath the report library, with **no upload entry point exposed
+in the normal tab** — the "Upload document" dialog/CTA was removed from `ProjectDocumentsSection`
+(the underlying `documentsProvider.uploadDocument` method itself is fully intact and can be re-wired
+from a future surface, e.g. a proper Task-attachment UI at Task Level, without any schema change).
+Existing/historical rows, Trash, restore, edit-metadata, download, and per-document Comments all still
+work exactly as before — only the create-new-upload action was removed, since inviting normal users to
+upload miscellaneous files was the one thing management explicitly said this tab must not do.
+No public URLs, no service-role key in any client-facing code path.
 
 ## Filters
 
@@ -412,12 +426,32 @@ read-back) — not just unit-tested against the mock provider.
 member, Project Group, and Tag. Filtering is always applied after each viewer's own already-scoped
 visible set — it narrows what's already legitimately visible, never widens it.
 
+## Reports — the generation workspace (Boss Feedback Alignment)
+
+`Project → Reports` is no longer a bare read-only list (that list moved to Documents, above) — it's
+now a "Generate a Client Report" card mirroring the global `/dashboard/reports/client` page's own
+prominent generation card, but pre-scoped to this Project's own Client via a new optional
+`defaultProjectId` prop on the existing `GenerateClientReportDialog` (locks the Client/Project choice
+to a read-only line instead of a picker; the global page's own unscoped flow is unaffected — the prop
+is optional). Generation/finalization authorization is exactly the same, unwidened, unnarrowed
+`clientReportProvider.generateReport` path every other Client Report entry point already uses.
+
 ## Time
 
 Audited against the management-required fields (Task, Date, Duration OR Start/End Time, Note): all
 four were already representable before this pass (`time_entries.notes` exists and the manual Log
 Time dialog already exposes a Note field alongside its Time range/Duration modes) — no code change
 was needed here; this is a verified fact, not an assumed one.
+
+**Boss Feedback Alignment**: "Time should follow the time tracking — combine it with what we have
+built." `ProjectTimeTeam` was already a pure aggregation view over the same `time_entries` table every
+other Time surface (Team Time, My Day) reads — no second time system, no second timer, no second
+`TimeEntry` model. Added three dimensions using fields already present on the already-fetched
+`TimeEntryWithUserAndTask[]` array (no new query): a billable/non-billable split (matching Team Time's
+own per-person display), a By Employee breakdown, and a By Task breakdown — alongside the pre-existing
+By Service/By Activity breakdowns and date-range filter. Role-based visibility is unchanged
+(`canViewTimeForUser`: Superadmin sees everyone's; Supervisor sees their own + direct reports'; Employee
+sees only their own).
 
 ## Services & Activities — the V1 configuration model
 
@@ -438,11 +472,12 @@ ACTIVITY (activities, under departments)
 
 PROJECT SERVICE (a Workstream, workstreams.project_id)
   -> one existing Service Line attached to one Project, with a plain, explicit subset of that
-     Service's existing Activities selected (workstream_activities) — created via the same
+     Service's existing Activities selected (workstream_activities), and an explicit Project Service
+     Lead choice (see "Project Service Lead is a real choice" below) — created via the same
      `create_workstream` RPC/provider method every other Service-creation path already uses, with
-     ordinary defaults (lead = Project owner, no team/dates/recurrence) since this is a plain
-     association, not a rich Workstream setup. No new catalog row (Service or Activity) is ever
-     created by this flow — only existing ones are selected.
+     otherwise ordinary defaults (no team/dates/recurrence) since this is a plain association, not a
+     rich Workstream setup. No new catalog row (Service or Activity) is ever created by this flow —
+     only existing ones are selected.
 ```
 
 **Shared picker, two call sites (Section 27).** `ProjectServicePicker`
@@ -473,6 +508,44 @@ lead/team/dates/recurrence). Its third former call site, the Task form's inline 
 retired (see "Task form is no longer a catalog-administration surface" below).
 `ProjectServicePicker`/`AddProjectServiceDialog` are new, narrower components that replace only the
 Project Services tab's own "Add Service" trigger.
+
+### Project Service Lead is a real, visible choice (Boss Feedback Alignment)
+
+Who becomes the new Project Service's `leadUserId` on Add Service is never a silent side effect of who
+clicked the button. `create_workstream`'s own real authorization already fixes exactly who's eligible
+per role (unchanged by this correction): an Employee may only ever lead a Service they create
+themselves; a Supervisor may lead it themselves or hand it to one of their own direct reports; a
+Superadmin may assign any active user. `AddProjectServiceDialog` now surfaces this honestly instead of
+hardcoding a default the caller might not even realize happened:
+
+- **Employee** — no real choice exists, so a locked line states it plainly: "You will be assigned as
+  the Project Service Lead for this Service — the operational owner within this Project."
+- **Team Lead (Supervisor) / Admin (Superadmin)** — a real Lead `Select`, reusing `assignableStaff`
+  (`useCompanyLookups`) — the exact same viewer-scoped eligibility list `WorkstreamFormDialog`'s own
+  Lead field already uses (self + direct reports for a Supervisor, every active user for a
+  Superadmin), so it can never expose a name `create_workstream` would reject, and never widens
+  eligibility via global Team Lead/Works In Services staffing.
+
+**Project Service Lead ≠ Created By.** `createdById` (the actual creator, set automatically) and
+`leadUserId` (the operational owner, explicitly chosen above) remain entirely separate fields — this
+correction only ever sets the latter; historical creator records are never rewritten.
+
+### Team Lead lost general "Edit Service" authority (Boss Feedback Alignment, locked decision)
+
+Management: "Team Lead must NOT generally edit Services." Before this pass, `canManageWorkstreams`
+(gating the Workstream detail page's full "Edit Service" button — Lead/Team/recurrence/schedule/
+status/Service Line identity — and the legacy Company-page's own rich "Add Service"/"Apply Template"
+actions) was `isSupervisor(user) || isSuperadmin(user)`, and the hosted `workstreams_update` RLS policy
+genuinely allowed a Supervisor's direct UPDATE, not just the UI showing a button. Both are now
+Superadmin-only: `canManageWorkstreams` narrowed in `src/lib/data/permissions.ts`, and
+`supabase/migrations/20260907090000_workstream_edit_superadmin_only.sql` drops the `is_supervisor()`
+branch from `workstreams_update` (`using`/`with check` both now `is_superadmin() and
+can_access_workstream(id)`) — applied and read-back-confirmed live on hosted Supabase. This is
+independent of, and does not affect, the separate `workstream_activities_write` policy (a different
+table) that still correctly authorizes narrow Activity configuration (below) for a Supervisor/Employee
+who's the Service's own lead. Team Lead/Employee keep exactly two Service-related capabilities: Add
+Service (above) and Configure Activities (below) — never a path to Lead/Team/recurrence/schedule/
+status/Service Line edits.
 
 ### Configure Activities on an existing Project Service (updated — Activity Level narrow capability)
 
@@ -696,6 +769,30 @@ never creates a new `service_lines` row — the provider layer exposes no create
 for Service Lines at all, only `listServiceLines()`. A full Admin Service Catalog (create/edit
 Services, active/inactive lifecycle, safe delete/archive) is the next, separately-scoped
 Service-level phase.
+
+## Task Level — locked decisions carried forward (not yet implemented)
+
+Recorded here so they survive until Task Level actually begins — none of these were implemented
+during the Task Level audit or the Boss Feedback Alignment correction pass; both were explicitly
+scoped to stop short of any Task business/status redesign.
+
+- **NO SUBTASKS.** Subtasks are being removed from the product entirely at Task Level — new
+  unexpected work becomes another ordinary Task under the correct Activity. Final hierarchy: Project →
+  Service → Activity → Task → Checklist, no Parent Task → Subtask level. Before removing the schema,
+  Task Level must first do a READ-ONLY hosted count of `tasks` where `parent_task_id is not null`; if
+  zero, the legacy architecture may be safely removed via a new forward-only migration; if not zero,
+  those rows must be flattened into ordinary Tasks (preserving title/description/status/priority/
+  dates/assignees/checklist/time/comments/notes/documents/creator/Activity/Service) before the
+  parent/subtask architecture is removed — never deleted outright.
+- **Handoff is being retired.** No future Handoff creation/acknowledgment UX; assignment change +
+  Comment replaces it. Existing historical Handoff records must not be silently destroyed.
+- **Task Notes authoring is being retired.** Comments becomes the canonical Task conversation surface
+  (mirroring the same "old composer made read-only, e.g. 'Legacy Notes'" pattern Project's own Notes
+  already received). Legacy Notes must not be silently destroyed.
+- **Task Timeline/Gantt is retained**, to be redesigned during Task Level as a lightweight schedule
+  view (start→due bars, a clear Today marker, strong Task status colors, shared filters, optional
+  grouping by Service/Activity/Assignee) — explicitly not dependency arrows/critical path/resource
+  leveling. Final Task views: List / Board / Timeline.
 
 ## Remaining gaps (explicit, not hidden)
 

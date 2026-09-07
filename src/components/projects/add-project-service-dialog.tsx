@@ -6,9 +6,12 @@ import { useCompanyLookups } from "@/lib/data/hooks/use-companies";
 import { workstreamsProvider } from "@/lib/data/providers";
 import type { CompanyWithRelations } from "@/lib/data/providers/companies-provider";
 import { deriveWorkstreamName } from "@/lib/data/workstream-name";
+import { isEmployee, isSuperadmin } from "@/lib/data/permissions";
 import { ProjectServicePicker, type ProjectServiceSelection } from "@/components/projects/project-service-picker";
 import { Sheet, SheetContent, SheetFooter, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Alert, AlertTitle } from "@/components/ui/alert";
 import { AlertCircle } from "lucide-react";
 
@@ -17,9 +20,6 @@ interface AddProjectServiceDialogProps {
   onOpenChange: (open: boolean) => void;
   company: CompanyWithRelations;
   projectId: string;
-  /** Defaults each newly-attached Service's lead — the Project's own owner, matching the New Project
-   * "Services" section's same default. */
-  ownerId: string;
   /** Service Lines already attached to this Project — hidden from the picker so this can never create
    * a duplicate Project Service (Section 13); adding more Activities to an existing one happens on
    * that Service's own Edit instead. */
@@ -29,37 +29,51 @@ interface AddProjectServiceDialogProps {
 
 /**
  * Plain "attach an existing Service (+ existing Activities) to this Project" flow — the Project
- * Services tab's "Add Service" action. Reuses the same `ProjectServicePicker` as New Project
- * creation's optional Services section (Section 27) and the same canonical `createWorkstream` call,
- * with sensible defaults (lead = Project owner, no team/dates/recurrence) since this is a plain
- * association, not the richer Workstream form (still reachable via a Service's own Edit for
- * lead/team/schedule/recurrence).
+ * Services tab's "Add Service" action, reachable by any role `canCreateWorkstreamInProject` allows
+ * (Admin/Team Lead always; an Employee who can already access this Project). Reuses the same
+ * `ProjectServicePicker` as New Project creation's optional Services section (Section 27) and the
+ * same canonical `createWorkstream` call — no team/dates/recurrence, not the richer Workstream form
+ * (Admin-only, reachable via a Service's own Edit for lead/team/schedule/recurrence — Boss Feedback
+ * Alignment, Section 6).
+ *
+ * Boss Feedback Alignment, Sections 4-8 — Project Service Lead is a real, visible operational
+ * responsibility here, never a silent side effect of who happened to click the button. An Employee
+ * has no real choice under `create_workstream`'s own authorization (they may only ever lead a Service
+ * they create themselves), so they get a locked, explicit line saying so instead of a picker with one
+ * option. A Team Lead (Supervisor) or Admin (Superadmin) gets a real Lead `Select`, reusing
+ * `assignableStaff` — the exact same viewer-scoped eligibility list (self + direct reports for a
+ * Supervisor, every active user for a Superadmin) `WorkstreamFormDialog`'s own Lead field already
+ * uses, so this never exposes a name `create_workstream` would reject, and never widens eligibility
+ * via global Team Lead/Works In Services staffing. Created By (the actual creator, `createdById`)
+ * stays entirely separate from Project Service Lead (`leadUserId`) — this dialog only ever sets the
+ * latter.
  */
 export function AddProjectServiceDialog({
   open,
   onOpenChange,
   company,
   projectId,
-  ownerId,
   existingServiceLineIds,
   onSaved,
 }: AddProjectServiceDialogProps) {
   const { user } = useAuth();
-  const { serviceLines } = useCompanyLookups();
+  const { serviceLines, assignableStaff } = useCompanyLookups();
   const [services, setServices] = useState<ProjectServiceSelection[]>([]);
+  const [leadUserId, setLeadUserId] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open || !user) return;
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setServices([]);
+    setLeadUserId(user.id);
     setError(null);
-  }, [open]);
+  }, [open, user]);
 
   if (!user) return null;
 
-  const canSubmit = !isSubmitting && services.length > 0;
+  const canSubmit = !isSubmitting && services.length > 0 && Boolean(leadUserId);
 
   async function submitForm() {
     setError(null);
@@ -73,7 +87,7 @@ export function AddProjectServiceDialog({
           companyId: company.id,
           projectId,
           serviceLineId: svc.serviceLineId,
-          leadUserId: ownerId,
+          leadUserId,
           teamUserIds: [],
           status: "active",
           startDate: null,
@@ -119,6 +133,41 @@ export function AddProjectServiceDialog({
                 excludeServiceLineIds={existingServiceLineIds}
                 context="add-service"
               />
+
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="add-service-lead">Project Service Lead</Label>
+                {isEmployee(user) ? (
+                  <p className="text-sm text-muted-foreground">
+                    You will be assigned as the Project Service Lead for this Service — the operational
+                    owner within this Project.
+                  </p>
+                ) : (
+                  <>
+                    <Select
+                      items={Object.fromEntries(assignableStaff.map((s) => [s.id, s.fullName]))}
+                      value={leadUserId}
+                      onValueChange={(v) => setLeadUserId(v ?? "")}
+                    >
+                      <SelectTrigger id="add-service-lead" className="w-full">
+                        <SelectValue placeholder="Select lead" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {assignableStaff.map((staff) => (
+                          <SelectItem key={staff.id} value={staff.id}>
+                            {staff.fullName}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      {isSuperadmin(user)
+                        ? "The operational owner of this Service within this Project — any active team member."
+                        : "The operational owner of this Service within this Project — yourself or one of your own direct reports."}
+                    </p>
+                  </>
+                )}
+              </div>
+
               {error && (
                 <Alert variant="destructive">
                   <AlertCircle aria-hidden="true" />
