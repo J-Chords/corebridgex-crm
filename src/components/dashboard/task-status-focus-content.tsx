@@ -6,7 +6,7 @@ import { TaskStatusDonut } from "@/components/tasks/task-status-donut";
 import { STATUS_META, STATUS_COLOR_VAR } from "@/components/tasks/task-status-badge";
 import { TaskSummaryItem } from "@/components/tasks/task-summary-item";
 
-const STATUS_ORDER: TaskStatus[] = ["todo", "in-progress", "blocked", "waiting-on-client", "done"];
+const STATUS_ORDER: TaskStatus[] = ["not-started", "in-progress", "waiting", "blocked", "completed", "canceled"];
 const MAX_PER_STATUS = 10;
 
 interface TaskStatusFocusContentProps {

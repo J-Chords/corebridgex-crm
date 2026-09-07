@@ -1,8 +1,7 @@
 import { useRouter } from "next/navigation";
-import { Layers, ListChecks, Play } from "lucide-react";
+import { ListChecks, Play } from "lucide-react";
 import type { TaskWithRelations } from "@/lib/data/providers/tasks-provider";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
 import { CompanyProjectAvatar } from "@/components/companies/company-project-avatar";
 import { TaskPriorityBadge } from "@/components/tasks/task-priority-badge";
 import { TaskStatusAvatar } from "@/components/tasks/task-status-avatar";
@@ -83,7 +82,6 @@ export function TaskListHeader({
 interface TaskListRowProps {
   task: TaskWithRelations;
   isRunning?: boolean;
-  subtaskCount?: { total: number; done: number };
   index?: number;
   /** Dashboard/Home's Quick View — every dedicated work surface (Tasks Home included) omits this
    * and keeps the default full-page navigate, per the locked navigation rule. */
@@ -111,7 +109,7 @@ function isLikelyInternal(task: TaskWithRelations, projectIsInternal?: boolean):
   return projectIsInternal !== undefined ? projectIsInternal : isLikelyInternalTask(task);
 }
 
-function TitleCell({ task, isRunning, subtaskCount }: Pick<TaskListRowProps, "task" | "isRunning" | "subtaskCount">) {
+function TitleCell({ task, isRunning }: Pick<TaskListRowProps, "task" | "isRunning">) {
   const checklistTotal = task.checklistItems.length;
   const checklistDone = task.checklistItems.filter((c) => c.isDone).length;
   return (
@@ -124,29 +122,13 @@ function TitleCell({ task, isRunning, subtaskCount }: Pick<TaskListRowProps, "ta
         <span className="flex min-w-0 items-center gap-1.5 font-medium">
           {isRunning && <Play className="size-3 shrink-0" style={{ color: "var(--info)" }} aria-hidden="true" />}
           <span className="truncate" title={task.title}>{task.title}</span>
-          {task.parentTaskId && (
-            <Badge variant="neutral" className="shrink-0 text-[10px]">
-              SUBTASK
-            </Badge>
-          )}
           {checklistTotal > 0 && (
             <span className="flex shrink-0 items-center gap-0.5 text-xs font-normal text-muted-foreground" title="Checklist">
               <ListChecks className="size-3" aria-hidden="true" />
               {checklistDone}/{checklistTotal}
             </span>
           )}
-          {subtaskCount && subtaskCount.total > 0 && (
-            <span className="flex shrink-0 items-center gap-0.5 text-xs font-normal text-muted-foreground" title="Subtasks">
-              <Layers className="size-3" aria-hidden="true" />
-              {subtaskCount.done}/{subtaskCount.total}
-            </span>
-          )}
         </span>
-        {/* "Subtask of X" still needs to be said somewhere — everything else (Company/Project) now
-            lives in the dedicated context cell instead of repeating here. */}
-        {task.parentTask && (
-          <span className="truncate text-xs text-muted-foreground">Subtask of {task.parentTask.title}</span>
-        )}
       </div>
     </div>
   );
@@ -204,13 +186,11 @@ function AssigneeAvatars({ task }: { task: TaskWithRelations }) {
  * `TaskListHeader` so the two can never drift apart); mobile (Part 20) swaps to a compact stacked
  * block instead of forcing the same columns into a narrow viewport. Used only by the Tasks Home
  * List view (and, since Phase 13B's final polish pass, the Project Tasks tab and Service Activity
- * Task lists too, via the `context` prop); Subtasks keep their own separate compact row (`TaskRow`),
- * which still needs to show status explicitly since Subtasks aren't status-grouped.
+ * Task lists too, via the `context` prop).
  */
 export function TaskListRow({
   task,
   isRunning,
-  subtaskCount,
   index = 0,
   onOpen,
   context = "global",
@@ -245,7 +225,7 @@ export function TaskListRow({
       <div className="min-w-0 flex-1">
         {/* Mobile — compact stacked block */}
         <div className="flex flex-col gap-1.5 sm:hidden">
-          <TitleCell task={task} isRunning={isRunning} subtaskCount={subtaskCount} />
+          <TitleCell task={task} isRunning={isRunning} />
           <div className="flex flex-wrap items-center gap-2">
             <TaskPriorityBadge priority={task.priority} />
             {context !== "service" && (
@@ -261,7 +241,7 @@ export function TaskListRow({
         </div>
         {/* Desktop — true aligned grid row, template shared with TaskListHeader */}
         <div className={cn("hidden min-h-7 items-center gap-3 sm:grid", taskListGridCols(context, showAssignee))}>
-          <TitleCell task={task} isRunning={isRunning} subtaskCount={subtaskCount} />
+          <TitleCell task={task} isRunning={isRunning} />
           <div>
             <TaskPriorityBadge priority={task.priority} />
           </div>

@@ -47,7 +47,7 @@ export async function materializeTemplateTasks(viewer: User, templateId: string,
       workstreamId,
       assigneeIds: [],
       allowUnassigned: true,
-      status: "todo",
+      status: "not-started",
       priority: "medium",
       // Templates only define a due-date offset (dueDaysAfterStart), never a separate start
       // offset — no legitimate data exists to populate a Start Date from, so it's left null

@@ -10,8 +10,8 @@ import { textMentionsStaffName } from "./client-report-name-scan";
  * flat-fetch-then-JS-join style) and hand it to `computeWeeklyReportSections` unchanged.
  *
  * LOCKED QUALIFYING-TASK RULE: a Task qualifies for the selected report period when
- * `status === "done"` AND its `statusChangedAt` falls within the period (Phase 9A audited this
- * timestamp as reliable — every status→done path stamps it, including checklist-auto-done).
+ * `status === "completed"` AND its `statusChangedAt` falls within the period (Phase 9A audited this
+ * timestamp as reliable — every status→completed path stamps it, including checklist-auto-done).
  * `updatedAt`/`dueDate`/`createdAt` are never used as the completion signal.
  *
  * ANTI-DOUBLE-COUNTING CONTRACT (enforced by construction, not just convention):
@@ -144,7 +144,7 @@ export function computeWeeklyReportSections(input: ComputeWeeklyReportInput): Co
 
   // 1. Qualifying Tasks — status=done AND statusChangedAt's LOCAL work date falls in range.
   const qualifyingTasks = input.tasks.filter((t) => {
-    if (t.status !== "done" || !t.statusChangedAt) return false;
+    if (t.status !== "completed" || !t.statusChangedAt) return false;
     return inRange(dateKeyFromTimestamp(t.statusChangedAt), rangeStart, rangeEnd);
   });
   const qualifyingTaskIds = new Set(qualifyingTasks.map((t) => t.id));

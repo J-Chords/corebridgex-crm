@@ -9,6 +9,7 @@ import { useProjects } from "@/lib/data/hooks/use-projects";
 import { useWorkstreams } from "@/lib/data/hooks/use-workstreams";
 import { projectHrefForCompany } from "@/lib/data/project-display";
 import { useRecentHandoffs } from "@/lib/data/hooks/use-task-handoffs";
+import { isTaskClosed } from "@/lib/data/task-display";
 import { GreetingText } from "@/components/dashboard/greeting-heading";
 import { SearchTriggerBar } from "@/components/dashboard/search-trigger-bar";
 import { KpiPreviewList } from "@/components/dashboard/kpi-preview-list";
@@ -39,7 +40,7 @@ export function SuperadminDashboard({ user }: { user: User }) {
 
   const staff = assignableStaff.filter((u) => u.id !== user.id);
 
-  const activeTasks = tasks.filter((t) => t.status !== "done");
+  const activeTasks = tasks.filter((t) => !isTaskClosed(t.status));
   const activeTaskCount = activeTasks.length;
   const atRiskCompanies = companies.filter((c) => c.health.status === "at-risk");
   const atRiskCount = atRiskCompanies.length;

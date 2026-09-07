@@ -1,4 +1,5 @@
 import type { TaskStatus, WorkstreamStatus } from "./types";
+import { isTaskClosed } from "./task-display";
 
 export type ClientHealthStatus = "on-track" | "needs-attention" | "at-risk";
 
@@ -71,7 +72,7 @@ export function computeClientHealth(
     .toISOString()
     .slice(0, 10);
 
-  const openTasks = tasks.filter((t) => t.status !== "done");
+  const openTasks = tasks.filter((t) => !isTaskClosed(t.status));
   const overdueTasks = openTasks.filter((t) => t.dueDate && t.dueDate < today);
   const dueSoonTasks = openTasks.filter((t) => t.dueDate && t.dueDate >= today && t.dueDate <= dueSoonCutoff);
 

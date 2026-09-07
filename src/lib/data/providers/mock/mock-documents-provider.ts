@@ -37,31 +37,12 @@ function taskAssigneeIds(taskId: string): string[] {
   return db.taskAssignees.filter((ta) => ta.taskId === taskId).map((ta) => ta.userId);
 }
 
-/** Direct-authority hotfix — mirrors `mock-tasks-provider.ts`'s own `hierarchyAssigneeIds` exactly
- * (Phase 10's one-hop parent/child Subtask visibility): the parent's assignees (when `task` is a
- * Subtask) plus every direct child's assignees (when `task` is a parent). Needed here too, so a
- * Task-linked Document's VIEW gate (`canAccessTask`) correctly grants hierarchy-only readers the
- * same read visibility their Task already has elsewhere — this context object is also passed to
- * `canAccessTaskDirectly` for the mutation gate, which simply ignores the extra field (that
- * function's own signature has no hierarchy branch at all, by design). */
-function hierarchyAssigneeIds(taskId: string): string[] {
-  const ids: string[] = [];
-  const task = db.tasks.find((t) => t.id === taskId);
-  if (!task) return ids;
-  if (task.parentTaskId) ids.push(...taskAssigneeIds(task.parentTaskId));
-  for (const child of db.tasks.filter((t) => t.parentTaskId === taskId)) {
-    ids.push(...taskAssigneeIds(child.id));
-  }
-  return ids;
-}
-
 function taskContext(taskId: string) {
   const task = db.tasks.find((t) => t.id === taskId);
   if (!task) return null;
   return {
     assigneeIds: taskAssigneeIds(taskId),
     companyId: task.companyId,
-    hierarchyAssigneeIds: hierarchyAssigneeIds(taskId),
   };
 }
 

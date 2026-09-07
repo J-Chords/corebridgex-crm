@@ -7,7 +7,7 @@ import type { DepartmentWithActivities } from "@/lib/data/providers/activity-cat
 import type { TaskWithRelations } from "@/lib/data/providers/tasks-provider";
 import type { Activity, TaskStatus } from "@/lib/data/types";
 import { TaskListRow, TaskListHeader } from "@/components/tasks/task-list-row";
-import { isAssigneeColumnRedundantForViewer, subtaskSummary } from "@/lib/data/task-display";
+import { isAssigneeColumnRedundantForViewer, isTaskClosed } from "@/lib/data/task-display";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -34,14 +34,12 @@ interface WorkstreamActivityTasksProps {
  * (My Work/Team Work/Other Activities) is unique to the Service workspace — the row itself is not. */
 function ActivityTaskRows({
   tasks,
-  allTasks,
   runningTaskId,
   showAssignee,
   onEdit,
   onDeleted,
 }: {
   tasks: TaskWithRelations[];
-  allTasks: TaskWithRelations[];
   runningTaskId: string | null;
   showAssignee: boolean;
   onEdit?: (task: TaskWithRelations) => void;
@@ -57,7 +55,6 @@ function ActivityTaskRows({
             task={task}
             index={i}
             isRunning={task.id === runningTaskId}
-            subtaskCount={task.parentTaskId ? undefined : subtaskSummary(task.id, allTasks)}
             context="service"
             showAssignee={showAssignee}
             onEdit={onEdit}
@@ -69,13 +66,14 @@ function ActivityTaskRows({
   );
 }
 
-/** In-progress/blocked/waiting-on-client work first — the actionable statuses — then todo, then done last so completed work never crowds out what still needs attention. Ties broken by due date (soonest first, undated last), matching what the row itself already implies. */
+/** In-progress/blocked/waiting work first — the actionable statuses — then not-started, then completed/canceled last so finished (or abandoned) work never crowds out what still needs attention. Ties broken by due date (soonest first, undated last), matching what the row itself already implies. */
 const STATUS_PRIORITY: Record<TaskStatus, number> = {
   "in-progress": 0,
   blocked: 1,
-  "waiting-on-client": 2,
-  todo: 3,
-  done: 4,
+  waiting: 2,
+  "not-started": 3,
+  completed: 4,
+  canceled: 5,
 };
 
 function sortActivityTasks(tasks: TaskWithRelations[]): TaskWithRelations[] {
@@ -98,7 +96,6 @@ interface ActivityGroup {
 function ActivityCard({
   activity,
   tasks,
-  allTasks,
   isLoading,
   runningTaskId,
   onAddTask,
@@ -108,7 +105,6 @@ function ActivityCard({
 }: {
   activity: Activity;
   tasks: TaskWithRelations[];
-  allTasks: TaskWithRelations[];
   isLoading: boolean;
   runningTaskId: string | null;
   onAddTask: (activityId?: string) => void;
@@ -150,7 +146,6 @@ function ActivityCard({
       ) : (
         <ActivityTaskRows
           tasks={tasks}
-          allTasks={allTasks}
           runningTaskId={runningTaskId}
           showAssignee={showAssignee}
           onEdit={onEdit}
@@ -164,7 +159,6 @@ function ActivityCard({
 function Section({
   label,
   groups,
-  allTasks,
   isLoading,
   runningTaskId,
   onAddTask,
@@ -174,7 +168,6 @@ function Section({
 }: {
   label: string | null;
   groups: ActivityGroup[];
-  allTasks: TaskWithRelations[];
   isLoading: boolean;
   runningTaskId: string | null;
   onAddTask: (activityId?: string) => void;
@@ -192,7 +185,6 @@ function Section({
             key={activity.id}
             activity={activity}
             tasks={tasks}
-            allTasks={allTasks}
             isLoading={isLoading}
             runningTaskId={runningTaskId}
             onAddTask={onAddTask}
@@ -218,7 +210,7 @@ function Section({
  * - Superadmin: no personal-work concept — "Active Activities" (has any tasks) then "Other Activities".
  *
  * Inside every activity, tasks are ordered by actionable status first (in-progress/blocked/waiting,
- * then todo, then done last).
+ * then not-started, then completed/canceled last).
  */
 export function WorkstreamActivityTasks({ departments, catalogLoading, tasks, isLoading, runningTaskId, onAddTask, onEdit, onDeleted }: WorkstreamActivityTasksProps) {
   const { user } = useAuth();
@@ -237,7 +229,6 @@ export function WorkstreamActivityTasks({ departments, catalogLoading, tasks, is
         ) : (
           <ActivityTaskRows
             tasks={tasks}
-            allTasks={tasks}
             runningTaskId={runningTaskId}
             showAssignee={showAssignee}
             onEdit={onEdit}
@@ -256,7 +247,7 @@ export function WorkstreamActivityTasks({ departments, catalogLoading, tasks, is
     tasks: sortActivityTasks(tasks.filter((t) => t.activityId === activity.id)),
   }));
 
-  const isOpen = (t: TaskWithRelations) => t.status !== "done";
+  const isOpen = (t: TaskWithRelations) => !isTaskClosed(t.status);
   const isMine = (t: TaskWithRelations) => t.assignees.some((a) => a.id === user.id);
   const isTeam = (t: TaskWithRelations) => t.assignees.some((a) => a.id !== user.id && managesUser(user, a));
 
@@ -301,7 +292,6 @@ export function WorkstreamActivityTasks({ departments, catalogLoading, tasks, is
           key={section.label}
           label={section.label}
           groups={section.groups}
-          allTasks={tasks}
           isLoading={isLoading}
           runningTaskId={runningTaskId}
           onAddTask={onAddTask}
@@ -324,7 +314,6 @@ export function WorkstreamActivityTasks({ departments, catalogLoading, tasks, is
           ) : (
             <ActivityTaskRows
               tasks={untaggedTasks}
-              allTasks={tasks}
               runningTaskId={runningTaskId}
               showAssignee={showAssignee}
               onEdit={onEdit}

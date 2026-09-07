@@ -50,7 +50,7 @@ export default function PlannerPage() {
 
   const { filters, patch } = useTaskFilters();
 
-  // Phase 11B — Planner is a dedicated work surface: clicking a Task/Subtask calendar item always
+  // Phase 11B — Planner is a dedicated work surface: clicking a Task calendar item always
   // navigates straight to its full page now, never opens the (Dashboard-only) Quick View Drawer.
   function openTask(taskId: string) {
     router.push(`/dashboard/tasks/${taskId}`);

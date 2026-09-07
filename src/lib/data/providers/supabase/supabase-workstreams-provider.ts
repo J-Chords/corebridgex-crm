@@ -192,7 +192,7 @@ async function hydrate(workstreams: Workstream[]): Promise<WorkstreamWithRelatio
 
     const workstreamTasks = tasks.filter((t) => t.workstream_id === workstream.id);
     const taskCount = workstreamTasks.length;
-    const doneTaskCount = workstreamTasks.filter((t) => t.status === "done").length;
+    const doneTaskCount = workstreamTasks.filter((t) => t.status === "completed").length;
     const progressPercent = taskCount === 0 ? 0 : Math.round((doneTaskCount / taskCount) * 100);
 
     const expectedMinutes = workstreamTasks.some((t) => t.expected_minutes != null)

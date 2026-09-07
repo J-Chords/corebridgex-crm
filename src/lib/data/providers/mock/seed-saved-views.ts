@@ -26,7 +26,7 @@ export const seedSavedViews: SavedView[] = [
       search: "",
       companyId: "all",
       workstreamId: "all",
-      status: "waiting-on-client",
+      status: "waiting",
       priority: "all",
       assigneeId: "all",
       groupBy: "none",

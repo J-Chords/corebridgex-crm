@@ -1,4 +1,4 @@
-import type { TasksProvider, TaskWithRelations, TaskReuseCandidate, SubtaskInput, TaskTimeRollup } from "../tasks-provider";
+import type { TasksProvider, TaskWithRelations, TaskReuseCandidate } from "../tasks-provider";
 import type { Task, TaskPriority, TaskStatus, User, Role, ChecklistItem } from "../../types";
 import { assignableStaffFor } from "../../permissions";
 import { createClient } from "@/lib/supabase/client";
@@ -8,9 +8,9 @@ import { resolveProfileDirectory } from "./profile-directory";
  * Real Supabase Tasks provider (Phase 7). RLS (`can_access_task`/`can_edit_task`/
  * `can_progress_task`) mirrors the mock's permission functions exactly and is the real boundary.
  * Status-only changes and checklist toggles are routed through the `update_task_status`/
- * `toggle_checklist_item` RPCs (never a raw `.update()`) so the Todo->In Progress auto-transition,
- * the checklist-driven Done/In-Progress auto-transition, and their notifications stay atomic and
- * consistent with A.2/A.3's actor-resolution and lifecycle rules.
+ * `toggle_checklist_item` RPCs (never a raw `.update()`) so the Not Started->In Progress
+ * auto-transition, the checklist-driven Completed/In-Progress auto-transition, and their
+ * notifications stay atomic and consistent with A.2/A.3's actor-resolution and lifecycle rules.
  *
  * Known simplification (disclosed, not silent): `resolveAssigneeIds`'s exact scope-filtering
  * (employee forced to self; supervisor filtered to their own team) is replicated here in JS,
@@ -29,8 +29,8 @@ interface TaskRow {
   description: string;
   company_id: string;
   workstream_id: string;
-  parent_task_id: string | null;
   status: TaskStatus;
+  status_reason: string | null;
   priority: TaskPriority;
   start_date: string | null;
   due_date: string | null;
@@ -54,8 +54,8 @@ function toTask(row: TaskRow): Task {
     description: row.description,
     companyId: row.company_id,
     workstreamId: row.workstream_id,
-    parentTaskId: row.parent_task_id,
     status: row.status,
+    statusReason: row.status_reason,
     priority: row.priority,
     startDate: row.start_date,
     dueDate: row.due_date,
@@ -122,7 +122,7 @@ async function hydrate(tasks: Task[]): Promise<TaskWithRelations[]> {
 
   const [companiesRes, workstreamsRes, assigneesRes, checklistRes] = await Promise.all([
     supabase.from("companies").select("id, name, status, brand_id, primary_contact_id, contract_start_date, renewal_date, active, created_at").in("id", companyIds),
-    supabase.from("workstreams").select("id, name, project_id").in("id", workstreamIds),
+    supabase.from("workstreams").select("id, name, project_id, service_line_id").in("id", workstreamIds),
     supabase.from("task_assignees").select("task_id, user_id").in("task_id", ids),
     supabase.from("checklist_items").select("*").in("task_id", ids),
   ]);
@@ -135,21 +135,21 @@ async function hydrate(tasks: Task[]): Promise<TaskWithRelations[]> {
     ? await supabase.from("departments").select("id, name").in("id", departmentIds)
     : { data: [] as { id: string; name: string }[] };
 
-  // Phase 10 — light parent-Task reference (id/title only) for a "Subtask of <title>" breadcrumb.
-  // A separate small SELECT rather than embedding the full parent row, matching the same
-  // "light reference, not the full record" convention already used for workstream/activity above.
-  const parentTaskIds = Array.from(new Set(tasks.map((t) => t.parentTaskId).filter((x): x is string => x != null)));
-  const parentTasksRes = parentTaskIds.length
-    ? await supabase.from("tasks").select("id, title").in("id", parentTaskIds)
-    : { data: [] as { id: string; title: string }[] };
-  const parentTasks = (parentTasksRes.data ?? []) as { id: string; title: string }[];
-
-  const workstreamRowsForProjects = (workstreamsRes.data ?? []) as { id: string; name: string; project_id: string | null }[];
+  const workstreamRowsForProjects = (workstreamsRes.data ?? []) as { id: string; name: string; project_id: string | null; service_line_id: string | null }[];
   const projectIds = Array.from(new Set(workstreamRowsForProjects.map((w) => w.project_id).filter((x): x is string => x != null)));
   const projectsRes = projectIds.length
     ? await supabase.from("projects").select("id, name").in("id", projectIds)
     : { data: [] as { id: string; name: string }[] };
   const projects = (projectsRes.data ?? []) as { id: string; name: string }[];
+
+  // Section 20 — Service Identity data-shape prep: the global Service (line) name, alongside the
+  // Project-Service qualifier name already fetched above, so Task surfaces can show both without an
+  // N+1 per-card fetch.
+  const serviceLineIds = Array.from(new Set(workstreamRowsForProjects.map((w) => w.service_line_id).filter((x): x is string => x != null)));
+  const serviceLinesRes = serviceLineIds.length
+    ? await supabase.from("service_lines").select("id, name").in("id", serviceLineIds)
+    : { data: [] as { id: string; name: string }[] };
+  const serviceLines = (serviceLinesRes.data ?? []) as { id: string; name: string }[];
 
   const assigneeLinks = (assigneesRes.data ?? []) as { task_id: string; user_id: string }[];
   const allUserIds = Array.from(new Set([...creatorIds, ...statusChangerIds, ...assigneeLinks.map((a) => a.user_id)]));
@@ -162,7 +162,7 @@ async function hydrate(tasks: Task[]): Promise<TaskWithRelations[]> {
     id: string; name: string; status: string; brand_id: string; primary_contact_id: string | null;
     contract_start_date: string | null; renewal_date: string | null; active: boolean; created_at: string;
   }[];
-  const workstreams = (workstreamsRes.data ?? []) as { id: string; name: string; project_id: string | null }[];
+  const workstreams = (workstreamsRes.data ?? []) as { id: string; name: string; project_id: string | null; service_line_id: string | null }[];
   const checklistRows = (checklistRes.data ?? []) as {
     id: string; task_id: string; description: string; is_done: boolean; position: number; completed_by: string | null; completed_at: string | null;
   }[];
@@ -200,11 +200,9 @@ async function hydrate(tasks: Task[]): Promise<TaskWithRelations[]> {
     const total = checklistItems.length;
     const done = checklistItems.filter((ci) => ci.isDone).length;
     const progressPercent = total === 0 ? 0 : Math.round((done / total) * 100);
-    const parentTask = task.parentTaskId ? (parentTasks.find((p) => p.id === task.parentTaskId) ?? null) : null;
 
     return {
       ...task,
-      parentTask,
       company: {
         id: companyRow.id,
         name: companyRow.name,
@@ -221,6 +219,9 @@ async function hydrate(tasks: Task[]): Promise<TaskWithRelations[]> {
         name: workstreamRow.name,
         projectId: workstreamRow.project_id,
         projectName: workstreamRow.project_id ? (projects.find((p) => p.id === workstreamRow.project_id)?.name ?? null) : null,
+        serviceLineName: workstreamRow.service_line_id
+          ? (serviceLines.find((sl) => sl.id === workstreamRow.service_line_id)?.name ?? null)
+          : null,
       },
       activity,
       assignees,
@@ -272,6 +273,7 @@ export const supabaseTasksProvider: TasksProvider = {
       p_assignee_ids: input.assigneeIds,
       p_allow_unassigned: input.allowUnassigned ?? false,
       p_status: input.status,
+      p_status_reason: input.statusReason ?? null,
       p_priority: input.priority,
       p_due_date: input.dueDate,
       p_expected_minutes: input.expectedMinutes ?? null,
@@ -302,6 +304,12 @@ export const supabaseTasksProvider: TasksProvider = {
         due_date: input.dueDate,
         expected_minutes: input.expectedMinutes ?? null,
         activity_id: input.activityId ?? null,
+        // Status itself is never set here — status changes always route through the
+        // `update_task_status` RPC below (see the `input.status !== data.status` branch) so the
+        // actor/notification/lifecycle side effects stay atomic. But the reason text for an
+        // already-Waiting/Blocked task (no status change) must still be editable from this form —
+        // `enforce_task_invariants` validates/clears it against the task's current (unchanged) status.
+        status_reason: input.statusReason ?? null,
       })
       .eq("id", id)
       .select("*")
@@ -335,6 +343,7 @@ export const supabaseTasksProvider: TasksProvider = {
       const { data: statusUpdated, error: statusError } = await supabase.rpc("update_task_status", {
         target_task_id: id,
         new_status: input.status,
+        p_status_reason: input.statusReason ?? null,
       });
       if (statusError) throw new Error(statusError.message);
       const [hydrated] = await hydrate([toTask(statusUpdated as TaskRow)]);
@@ -346,10 +355,8 @@ export const supabaseTasksProvider: TasksProvider = {
   },
 
   /**
-   * Phase 13 Task Action correction — calls `delete_task` (local-only, unapplied migration
-   * `20260828100000_delete_task.sql` as of this writing; requires security review/hosted apply
-   * before this path works against real Supabase). Authorization and the logged-time/Subtask/Note
-   * safety guards all live in the RPC itself — see that migration's own doc comment.
+   * Phase 13 Task Action correction — calls `delete_task`. Authorization and the logged-time/
+   * history safety guards all live in the RPC itself — see that migration's own doc comment.
    */
   async deleteTask(_viewer, id) {
     const supabase = createClient();
@@ -357,9 +364,13 @@ export const supabaseTasksProvider: TasksProvider = {
     if (error) throw new Error(error.message);
   },
 
-  async updateTaskStatus(_viewer, id, status) {
+  async updateTaskStatus(_viewer, id, status, statusReason) {
     const supabase = createClient();
-    const { data, error } = await supabase.rpc("update_task_status", { target_task_id: id, new_status: status });
+    const { data, error } = await supabase.rpc("update_task_status", {
+      target_task_id: id,
+      new_status: status,
+      p_status_reason: statusReason ?? null,
+    });
     if (error) throw new Error(error.message);
     const [hydrated] = await hydrate([toTask(data as TaskRow)]);
     return hydrated;
@@ -384,48 +395,13 @@ export const supabaseTasksProvider: TasksProvider = {
     return hydrated;
   },
 
-  async listSubtasks(_viewer, parentTaskId) {
-    const supabase = createClient();
-    const { data, error } = await supabase.from("tasks").select("*").eq("parent_task_id", parentTaskId).order("created_at", { ascending: true });
-    if (error) throw new Error(error.message);
-    return hydrate((data ?? []).map(toTask));
-  },
-
-  async createSubtask(_viewer, parentTaskId, input: SubtaskInput) {
-    const supabase = createClient();
-    const { data, error } = await supabase.rpc("create_subtask", {
-      p_parent_task_id: parentTaskId,
-      p_title: input.title,
-      p_description: input.description,
-      p_assignee_ids: input.assigneeIds,
-      p_allow_unassigned: input.allowUnassigned ?? false,
-      p_status: input.status,
-      p_priority: input.priority,
-      p_due_date: input.dueDate,
-      p_expected_minutes: input.expectedMinutes ?? null,
-      p_checklist_items: input.checklistItems.map((item) => item.description),
-      p_start_date: input.startDate,
-    });
-    if (error) throw new Error(error.message);
-    const [hydrated] = await hydrate([toTask(data)]);
-    return hydrated;
-  },
-
-  async getTaskTimeRollup(_viewer, taskId): Promise<TaskTimeRollup> {
-    const supabase = createClient();
-    const { data, error } = await supabase.rpc("get_task_time_rollup", { target_task_id: taskId });
-    if (error) throw new Error(error.message);
-    const row = (data as { own_minutes: number; subtasks_minutes: number }[] | null)?.[0];
-    return { ownMinutes: row?.own_minutes ?? 0, subtasksMinutes: row?.subtasks_minutes ?? 0 };
-  },
-
   async listPastTasksForActivity(_viewer, activityId, excludeTaskId): Promise<TaskReuseCandidate[]> {
     const supabase = createClient();
     let query = supabase
       .from("tasks")
       .select("id, title, description, company_id, status_changed_at, updated_at, company:companies(name)")
       .eq("activity_id", activityId)
-      .eq("status", "done")
+      .eq("status", "completed")
       .order("status_changed_at", { ascending: false })
       .limit(5);
     if (excludeTaskId) query = query.neq("id", excludeTaskId);

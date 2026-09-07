@@ -1,5 +1,6 @@
 import type { TaskWithRelations } from "@/lib/data/providers/tasks-provider";
 import type { TaskPriority } from "@/lib/data/types";
+import { isTaskClosed } from "@/lib/data/task-display";
 
 const PRIORITY_RANK: Record<TaskPriority, number> = { urgent: 3, high: 2, medium: 1, low: 0 };
 
@@ -10,7 +11,7 @@ const PRIORITY_RANK: Record<TaskPriority, number> = { urgent: 3, high: 2, medium
  * arbitrary "winner" — the "start here" cue is only worth showing when there's a genuinely clear one.
  */
 export function findFocusTask(tasks: TaskWithRelations[], today: string): TaskWithRelations | null {
-  const open = tasks.filter((t) => t.status !== "done");
+  const open = tasks.filter((t) => !isTaskClosed(t.status));
   if (open.length === 0) return null;
 
   const overdue = open.filter((t) => t.dueDate && t.dueDate < today);

@@ -197,7 +197,7 @@ export const mockTimeEntriesProvider: TimeEntriesProvider = {
     // already been committed above, so if this unexpectedly failed it must never roll the timer
     // back or fail the Start Timer action the person actually asked for — starting a timer must
     // never end in "nothing happened."
-    if (task.status === "todo") {
+    if (task.status === "not-started") {
       try {
         await mockTasksProvider.updateTaskStatus(viewer, taskId, "in-progress");
       } catch {

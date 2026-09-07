@@ -53,7 +53,7 @@ export function ProjectTimeline({ tasks, notes, reports, workstreams }: ProjectT
 
     for (const task of tasks) {
       const context = `${task.workstream.name}${task.activity ? ` · ${task.activity.name}` : ""}`;
-      if (task.status === "done" && task.statusChangedAt) {
+      if (task.status === "completed" && task.statusChangedAt) {
         list.push({
           id: `task-done-${task.id}`,
           timestamp: task.statusChangedAt,
@@ -63,7 +63,7 @@ export function ProjectTimeline({ tasks, notes, reports, workstreams }: ProjectT
           secondary: context,
           actor: task.statusChangedBy?.fullName,
         });
-      } else if (task.status !== "todo" && task.statusChangedAt) {
+      } else if (task.status !== "not-started" && task.statusChangedAt) {
         // Only the CURRENT (most recent) transition is ever known — no full status history is
         // stored, so this is the single most-recent move, never a fabricated multi-step history.
         list.push({

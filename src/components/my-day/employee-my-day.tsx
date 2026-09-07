@@ -60,11 +60,12 @@ export function EmployeeMyDay({ user }: EmployeeMyDayProps) {
   // fight over which tasks are showing.
   const filteredTasks = filterTasks(tasks, { ...filters, status: "all" });
   const countByStatus: Record<TaskStatus, number> = {
-    todo: 0,
+    "not-started": 0,
     "in-progress": 0,
     blocked: 0,
-    "waiting-on-client": 0,
-    done: 0,
+    waiting: 0,
+    completed: 0,
+    canceled: 0,
   };
   for (const task of filteredTasks) countByStatus[task.status]++;
   const bucketTasks = filteredTasks.filter((t) => t.status === selectedStatus);

@@ -14,6 +14,7 @@ import { useMyTimeEntries } from "@/lib/data/hooks/use-time-entries";
 import { useElapsedSeconds } from "@/lib/data/hooks/use-elapsed-seconds";
 import { useRecentHandoffs } from "@/lib/data/hooks/use-task-handoffs";
 import { timeEntriesProvider } from "@/lib/data/providers";
+import { isTaskClosed } from "@/lib/data/task-display";
 import { formatMinutes } from "@/lib/format-minutes";
 import { GreetingText } from "@/components/dashboard/greeting-heading";
 import { SearchTriggerBar } from "@/components/dashboard/search-trigger-bar";
@@ -87,17 +88,17 @@ export function SupervisorDashboard({ user }: { user: User }) {
   const today = todayDateString();
   const sevenDaysAgoIso = new Date(new Date().getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
 
-  const openTasks = tasks.filter((t) => t.status !== "done");
+  const openTasks = tasks.filter((t) => !isTaskClosed(t.status));
   const overdueTasks = openTasks.filter((t) => t.dueDate && t.dueDate < today);
   const overdueCount = overdueTasks.length;
   const completedThisWeek = tasks.filter(
-    (t) => t.status === "done" && t.statusChangedAt && t.statusChangedAt >= sevenDaysAgoIso
+    (t) => t.status === "completed" && t.statusChangedAt && t.statusChangedAt >= sevenDaysAgoIso
   );
   const completedThisWeekCount = completedThisWeek.length;
   const clientsNeedingAttention = companies.filter((c) => c.health.status !== "on-track");
   const clientsNeedingAttentionCount = clientsNeedingAttention.length;
 
-  const myOpenTasks = myTasks.filter((t) => t.status !== "done");
+  const myOpenTasks = myTasks.filter((t) => !isTaskClosed(t.status));
   const weekEntries = myEntries.filter((e) => e.durationMinutes !== null && e.startTime >= sevenDaysAgoIso);
   const weekMinutes = weekEntries.reduce((sum, e) => sum + (e.durationMinutes ?? 0), 0);
   const weekEntriesSorted = [...weekEntries].sort((a, b) => b.startTime.localeCompare(a.startTime));
@@ -207,7 +208,7 @@ export function SupervisorDashboard({ user }: { user: User }) {
               />
             ),
           }}
-          viewAllHref="/dashboard/tasks?status=done"
+          viewAllHref="/dashboard/tasks?status=completed"
         />
         <StatCard
           label="Clients needing attention"

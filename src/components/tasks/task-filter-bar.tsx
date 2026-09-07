@@ -14,7 +14,7 @@ import { STATUS_COLOR_VAR, STATUS_META, TASK_STATUS_SELECT_ITEMS } from "@/compo
 import { TASK_PRIORITY_SELECT_ITEMS } from "@/components/tasks/task-priority-badge";
 import type { TaskStatus } from "@/lib/data/types";
 
-const STATUS_ORDER: TaskStatus[] = ["todo", "in-progress", "blocked", "waiting-on-client", "done"];
+const STATUS_ORDER: TaskStatus[] = ["not-started", "in-progress", "waiting", "blocked", "completed", "canceled"];
 
 function StatusDot({ status }: { status: TaskStatus }) {
   return (

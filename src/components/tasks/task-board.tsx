@@ -19,33 +19,35 @@ import type { TaskWithRelations } from "@/lib/data/providers/tasks-provider";
 import { canProgressTask } from "@/lib/data/permissions";
 import { useCompanyLookups } from "@/lib/data/hooks/use-companies";
 import { tasksProvider } from "@/lib/data/providers";
-import { subtaskSummary } from "@/lib/data/task-display";
 import { TaskCard } from "@/components/tasks/task-card";
 import { TaskFormDialog } from "@/components/tasks/task-form-dialog";
+import { StatusReasonDialog } from "@/components/tasks/status-reason-dialog";
 import { STATUS_COLOR_VAR, TASK_STATUS_SELECT_ITEMS } from "@/components/tasks/task-status-badge";
 import { Button } from "@/components/ui/button";
-import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { cn } from "@/lib/utils";
 
+// Canceled is deliberately not a board column — it's closed/historical, not an active workflow
+// state a Kanban column tracks (same "closed work doesn't get a bucket" call as My Day's own status
+// buckets). A Canceled task simply doesn't render here; it's still fully visible/filterable in the
+// List view.
 const COLUMNS: { key: TaskStatus; label: string }[] = [
-  { key: "todo", label: TASK_STATUS_SELECT_ITEMS.todo },
+  { key: "not-started", label: TASK_STATUS_SELECT_ITEMS["not-started"] },
   { key: "in-progress", label: TASK_STATUS_SELECT_ITEMS["in-progress"] },
+  { key: "waiting", label: TASK_STATUS_SELECT_ITEMS.waiting },
   { key: "blocked", label: TASK_STATUS_SELECT_ITEMS.blocked },
-  { key: "waiting-on-client", label: TASK_STATUS_SELECT_ITEMS["waiting-on-client"] },
-  { key: "done", label: TASK_STATUS_SELECT_ITEMS.done },
+  { key: "completed", label: TASK_STATUS_SELECT_ITEMS.completed },
 ];
 
 interface BoardCardProps {
   task: TaskWithRelations;
   canDrag: boolean;
   isRunning: boolean;
-  subtaskCount?: { total: number; done: number };
   onNavigate: () => void;
   onEdit: (task: TaskWithRelations) => void;
   onDeleted: (taskId: string) => void;
 }
 
-function BoardCard({ task, canDrag, isRunning, subtaskCount, onNavigate, onEdit, onDeleted }: BoardCardProps) {
+function BoardCard({ task, canDrag, isRunning, onNavigate, onEdit, onDeleted }: BoardCardProps) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: task.id,
     disabled: !canDrag,
@@ -73,7 +75,7 @@ function BoardCard({ task, canDrag, isRunning, subtaskCount, onNavigate, onEdit,
         isDragging && "opacity-50"
       )}
     >
-      <TaskCard task={task} isRunning={isRunning} subtaskCount={subtaskCount} onEdit={onEdit} onDeleted={onDeleted} />
+      <TaskCard task={task} isRunning={isRunning} onEdit={onEdit} onDeleted={onDeleted} />
     </div>
   );
 }
@@ -82,7 +84,6 @@ interface BoardColumnProps {
   status: TaskStatus;
   label: string;
   tasks: TaskWithRelations[];
-  allTasks: TaskWithRelations[];
   user: User;
   assignableStaff: User[];
   runningTaskId: string | null;
@@ -95,7 +96,7 @@ interface BoardColumnProps {
 
 /** Phase 12B — compact column header (dot + title + count) matching Reference 2's density, and a
  * bottom "+ Add task" affordance instead of the old boxed column chrome. */
-function BoardColumn({ status, label, tasks, allTasks, user, assignableStaff, runningTaskId, canAdd, onNavigate, onAddTask, onEdit, onDeleted }: BoardColumnProps) {
+function BoardColumn({ status, label, tasks, user, assignableStaff, runningTaskId, canAdd, onNavigate, onAddTask, onEdit, onDeleted }: BoardColumnProps) {
   const { setNodeRef, isOver } = useDroppable({ id: status });
   const color = STATUS_COLOR_VAR[status];
 
@@ -133,7 +134,6 @@ function BoardColumn({ status, label, tasks, allTasks, user, assignableStaff, ru
               task={task}
               canDrag={canProgressTask(user, { assigneeIds: task.assignees.map((a) => a.id), companyId: task.companyId }, assignableStaff)}
               isRunning={task.id === runningTaskId}
-              subtaskCount={task.parentTaskId ? undefined : subtaskSummary(task.id, allTasks)}
               onNavigate={() => onNavigate(task.id)}
               onEdit={onEdit}
               onDeleted={onDeleted}
@@ -170,18 +170,18 @@ export function TaskBoard({ user, tasks, onChanged, runningTaskId = null, onOpen
   // is the right "allUsers" convenience list for this UI-only gate.
   const { assignableStaff } = useCompanyLookups();
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
-  // Section 22 — dragging a parent Task with open Subtasks into Done needs the same confirmation the
-  // drawer's status Select shows. Derived from the already-fetched `tasks` list (no extra fetch —
-  // Section 49's N+1 avoidance), never stored.
-  const [pendingDoneTaskId, setPendingDoneTaskId] = useState<string | null>(null);
+  // Section 5/6 — dragging a card into the Waiting or Blocked column requires a reason the board
+  // itself has no form field for; collect it via the same small reusable dialog TaskStatusRail uses.
+  const [pendingReasonChange, setPendingReasonChange] = useState<{ taskId: string; status: TaskStatus } | null>(null);
+  const [reasonSubmitting, setReasonSubmitting] = useState(false);
   const [addStatus, setAddStatus] = useState<TaskStatus | null>(null);
   const [editingTask, setEditingTask] = useState<TaskWithRelations | null>(null);
 
   const grouped = new Map<TaskStatus, TaskWithRelations[]>(COLUMNS.map((c) => [c.key, []]));
   for (const task of tasks) grouped.get(task.status)?.push(task);
 
-  async function applyStatusChange(taskId: string, newStatus: TaskStatus) {
-    await tasksProvider.updateTaskStatus(user, taskId, newStatus);
+  async function applyStatusChange(taskId: string, newStatus: TaskStatus, statusReason?: string) {
+    await tasksProvider.updateTaskStatus(user, taskId, newStatus, statusReason);
     onChanged();
   }
 
@@ -193,15 +193,12 @@ export function TaskBoard({ user, tasks, onChanged, runningTaskId = null, onOpen
     const task = tasks.find((t) => t.id === taskId);
     if (!task || task.status === newStatus) return;
     if (!canProgressTask(user, { assigneeIds: task.assignees.map((a) => a.id), companyId: task.companyId }, assignableStaff)) return;
-    if (newStatus === "done" && !task.parentTaskId && tasks.some((t) => t.parentTaskId === taskId && t.status !== "done")) {
-      setPendingDoneTaskId(taskId);
+    if (newStatus === "waiting" || newStatus === "blocked") {
+      setPendingReasonChange({ taskId, status: newStatus });
       return;
     }
     await applyStatusChange(taskId, newStatus);
   }
-
-  const pendingDoneTask = pendingDoneTaskId ? tasks.find((t) => t.id === pendingDoneTaskId) : undefined;
-  const pendingOpenSubtaskCount = pendingDoneTaskId ? tasks.filter((t) => t.parentTaskId === pendingDoneTaskId && t.status !== "done").length : 0;
 
   const navigate = onOpenTask ?? ((taskId: string) => router.push(`/dashboard/tasks/${taskId}`));
 
@@ -214,7 +211,6 @@ export function TaskBoard({ user, tasks, onChanged, runningTaskId = null, onOpen
             status={key}
             label={label}
             tasks={grouped.get(key) ?? []}
-            allTasks={tasks}
             user={user}
             assignableStaff={assignableStaff}
             runningTaskId={runningTaskId}
@@ -226,16 +222,19 @@ export function TaskBoard({ user, tasks, onChanged, runningTaskId = null, onOpen
           />
         ))}
       </div>
-      <ConfirmDialog
-        open={pendingDoneTaskId !== null}
-        onOpenChange={(open) => {
-          if (!open) setPendingDoneTaskId(null);
-        }}
-        title="Subtasks are still open"
-        description={`${pendingOpenSubtaskCount} Subtask${pendingOpenSubtaskCount === 1 ? " is" : "s are"} still open. Mark "${pendingDoneTask?.title ?? "this Task"}" Done anyway?`}
-        confirmLabel="Mark Done"
-        onConfirm={() => {
-          if (pendingDoneTaskId) void applyStatusChange(pendingDoneTaskId, "done");
+      <StatusReasonDialog
+        pendingStatus={pendingReasonChange?.status ?? null}
+        isSubmitting={reasonSubmitting}
+        onCancel={() => setPendingReasonChange(null)}
+        onConfirm={async (reason) => {
+          if (!pendingReasonChange) return;
+          setReasonSubmitting(true);
+          try {
+            await applyStatusChange(pendingReasonChange.taskId, pendingReasonChange.status, reason);
+            setPendingReasonChange(null);
+          } finally {
+            setReasonSubmitting(false);
+          }
         }}
       />
       <TaskFormDialog

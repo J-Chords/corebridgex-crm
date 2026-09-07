@@ -1,7 +1,6 @@
-import { Layers, ListChecks } from "lucide-react";
+import { ListChecks } from "lucide-react";
 import type { TaskWithRelations } from "@/lib/data/providers/tasks-provider";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
 import { CompanyProjectAvatar } from "@/components/companies/company-project-avatar";
 import { TaskPriorityBadge } from "@/components/tasks/task-priority-badge";
 import { TaskStatusAvatar } from "@/components/tasks/task-status-avatar";
@@ -16,9 +15,6 @@ interface TaskCardProps {
   task: TaskWithRelations;
   /** True when this task has the current viewer's own active running timer. */
   isRunning?: boolean;
-  /** Derived client-side from the already-fetched task list (see `subtaskSummary`) — never a
-   * per-card fetch. Omitted entirely (not "0/0") for a Subtask, which can't have children. */
-  subtaskCount?: { total: number; done: number };
   /** Task Action correction — both passed together or neither: renders a `TaskActionsMenu` kebab in
    * the card's top-right corner. Its trigger stops click/pointerdown propagation so it never starts
    * a Board drag or triggers the card's own navigate-on-click. */
@@ -28,12 +24,12 @@ interface TaskCardProps {
 
 /**
  * Phase 12B — Board card, redesigned to Reference 2's compact density: title, a small Client/
- * Service line, priority + compact metadata icons (checklist, Subtasks) on one row, then assignee
- * avatars + due date on the bottom row. No description, no progress bar, no full breadcrumb, no
- * large status badge (status is already the column) — status stays legible via the thin left
- * accent only, matching `TaskGridCard`'s own existing convention.
+ * Service line, priority + compact checklist metadata icon on one row, then assignee avatars + due
+ * date on the bottom row. No description, no progress bar, no full breadcrumb, no large status badge
+ * (status is already the column) — status stays legible via the thin left accent only, matching
+ * `TaskGridCard`'s own existing convention.
  */
-export function TaskCard({ task, isRunning, subtaskCount, onEdit, onDeleted }: TaskCardProps) {
+export function TaskCard({ task, isRunning, onEdit, onDeleted }: TaskCardProps) {
   const overdue = isTaskOverdue(task);
   const checklistTotal = task.checklistItems.length;
   const checklistDone = task.checklistItems.filter((c) => c.isDone).length;
@@ -50,25 +46,15 @@ export function TaskCard({ task, isRunning, subtaskCount, onEdit, onDeleted }: T
             </span>
           )}
           <span className="truncate" title={task.title}>{task.title}</span>
-          {task.parentTaskId && (
-            <Badge variant="neutral" className="shrink-0 text-[10px]">
-              SUBTASK
-            </Badge>
-          )}
         </span>
         {onEdit && onDeleted && (
           <TaskActionsMenu task={task} onEdit={() => onEdit(task)} onDeleted={() => onDeleted(task.id)} className="-mt-1 -mr-1" />
         )}
       </div>
       <span className="flex min-w-0 items-center gap-1.5 truncate text-xs text-muted-foreground">
-        {!task.parentTask && (
-          <CompanyProjectAvatar companyId={task.company.id} companyName={task.company.name} size="sm" isInternal={isLikelyInternalTask(task)} />
-        )}
-        <span
-          className="truncate"
-          title={task.parentTask ? `Parent: ${task.parentTask.title}` : `${task.company.name} · ${taskServiceLabel(task)}`}
-        >
-          {task.parentTask ? `Parent: ${task.parentTask.title}` : `${task.company.name} · ${taskServiceLabel(task)}`}
+        <CompanyProjectAvatar companyId={task.company.id} companyName={task.company.name} size="sm" isInternal={isLikelyInternalTask(task)} />
+        <span className="truncate" title={`${task.company.name} · ${taskServiceLabel(task)}`}>
+          {task.company.name} · {taskServiceLabel(task)}
         </span>
       </span>
       <div className="flex items-center gap-2">
@@ -78,12 +64,6 @@ export function TaskCard({ task, isRunning, subtaskCount, onEdit, onDeleted }: T
             <span className="flex items-center gap-0.5" title="Checklist">
               <ListChecks className="size-3" aria-hidden="true" />
               {checklistDone}/{checklistTotal}
-            </span>
-          )}
-          {subtaskCount && subtaskCount.total > 0 && (
-            <span className="flex items-center gap-0.5" title="Subtasks">
-              <Layers className="size-3" aria-hidden="true" />
-              {subtaskCount.done}/{subtaskCount.total}
             </span>
           )}
         </div>

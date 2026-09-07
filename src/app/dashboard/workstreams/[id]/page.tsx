@@ -45,10 +45,10 @@ import { STATUS_COLOR_VAR } from "@/components/tasks/task-status-badge";
 import { getInitials as initials } from "@/lib/initials";
 
 const STATUS_STRIP = [
-  { key: "open" as const, label: "Open", icon: Circle, color: STATUS_COLOR_VAR.todo },
+  { key: "open" as const, label: "Open", icon: Circle, color: STATUS_COLOR_VAR["not-started"] },
   { key: "inProgress" as const, label: "In Progress", icon: PlayCircle, color: STATUS_COLOR_VAR["in-progress"] },
   { key: "blockedWaiting" as const, label: "Blocked / Waiting", icon: AlertTriangle, color: STATUS_COLOR_VAR.blocked },
-  { key: "done" as const, label: "Done", icon: CheckCircle2, color: STATUS_COLOR_VAR.done },
+  { key: "done" as const, label: "Done", icon: CheckCircle2, color: STATUS_COLOR_VAR.completed },
 ];
 
 type TabKey = "overview" | "activities" | "team" | "schedule";
@@ -130,10 +130,10 @@ function LoadedWorkstreamDetailPage({
   const canManage = canManageWorkstreams(user);
   const hasConfiguredActivities = activityDepartments.flatMap((d) => d.activities).length > 0;
   const statusCounts = {
-    open: tasks.filter((t) => t.status === "todo").length,
+    open: tasks.filter((t) => t.status === "not-started").length,
     inProgress: tasks.filter((t) => t.status === "in-progress").length,
-    blockedWaiting: tasks.filter((t) => t.status === "blocked" || t.status === "waiting-on-client").length,
-    done: tasks.filter((t) => t.status === "done").length,
+    blockedWaiting: tasks.filter((t) => t.status === "blocked" || t.status === "waiting").length,
+    done: tasks.filter((t) => t.status === "completed").length,
   };
   const qualifier = splitWorkstreamQualifier(workstream.name, workstream.serviceLine?.name ?? null);
 

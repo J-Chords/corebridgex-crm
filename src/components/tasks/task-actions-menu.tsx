@@ -133,7 +133,7 @@ export function TaskActionsMenu({ task, onEdit, onDeleted, className, hideEditIt
         onOpenChange={setConfirmOpen}
         title="Delete task?"
         description={
-          task.status === "done"
+          task.status === "completed"
             ? `"${task.title}" will be removed, including its record in Completed Work and Timeline. This can't be undone.`
             : `"${task.title}" will be removed. This can't be undone.`
         }

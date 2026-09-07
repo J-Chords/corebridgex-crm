@@ -4,19 +4,17 @@ import { useState } from "react";
 import Link from "next/link";
 import { ArrowUpRight, ListChecks, Pencil } from "lucide-react";
 import { useAuth } from "@/lib/auth/auth-context";
-import { useTask, useSubtasks } from "@/lib/data/hooks/use-tasks";
+import { useTask } from "@/lib/data/hooks/use-tasks";
 import { useTaskTimer } from "@/lib/data/hooks/use-task-timer";
 import { useCompanyLookups } from "@/lib/data/hooks/use-companies";
 import { canEditTask } from "@/lib/data/permissions";
 import type { TaskWithRelations } from "@/lib/data/providers/tasks-provider";
 import type { User } from "@/lib/data/types";
-import { Badge } from "@/components/ui/badge";
 import { TaskStatusBadge } from "@/components/tasks/task-status-badge";
 import { TaskPriorityBadge } from "@/components/tasks/task-priority-badge";
 import { TaskTimerControl } from "@/components/tasks/task-timer-control";
 import { TaskFormDialog } from "@/components/tasks/task-form-dialog";
 import { TaskActionsMenu } from "@/components/tasks/task-actions-menu";
-import { TaskRowList } from "@/components/tasks/task-row";
 import {
   DetailDrawer,
   DetailDrawerHeader,
@@ -31,7 +29,7 @@ import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { CompanyProjectAvatar } from "@/components/companies/company-project-avatar";
 import { TaskStatusAvatar } from "@/components/tasks/task-status-avatar";
-import { formatDueDateShort } from "@/lib/data/task-display";
+import { formatDueDateShort, isTaskClosed } from "@/lib/data/task-display";
 import { isLikelyInternalTask } from "@/lib/data/identity-color";
 
 import { getInitials as initials } from "@/lib/initials";
@@ -58,10 +56,7 @@ interface TaskDrawerProps {
  * actually authorized to edit — never merely because hierarchy-read visibility let them see it).
  *
  * Identity, once — Company name only (never the redundant "Company → Project-with-year" chain),
- * paired with Service · Activity as muted secondary context. Subtask navigation: a Subtask's own
- * parent context, and the fact that a parent's own historical Subtasks aren't individually listed
- * here (only their count), are both handled with plain `Link` navigation to that Task's own full
- * page, never a stacked Drawer.
+ * paired with Service · Activity as muted secondary context.
  */
 export function TaskDrawer({ taskId, onOpenChange, onChanged, onTimerChanged }: TaskDrawerProps) {
   const { user } = useAuth();
@@ -91,8 +86,8 @@ export function TaskDrawer({ taskId, onOpenChange, onChanged, onTimerChanged }: 
  * queried `task_id=""` on every mount while the real Task was still loading, since
  * `useTaskTimeEntries` (unlike `useTask`/`getTask`, which has its own established `if (!id) return
  * null` guard) has no such guard. This child component only ever mounts once `task` is a real,
- * loaded object, so `useTaskTimer`/`useSubtasks`/`useState` are always called consistently (Rules of
- * Hooks) and no empty-id query can ever fire.
+ * loaded object, so `useTaskTimer`/`useState` are always called consistently (Rules of Hooks) and no
+ * empty-id query can ever fire.
  */
 function LoadedTaskQuickView({
   task,
@@ -109,8 +104,6 @@ function LoadedTaskQuickView({
 }) {
   const [editOpen, setEditOpen] = useState(false);
   const timer = useTaskTimer(task.id, task.assignees.map((a) => a.id));
-  // Only a top-level Task has (historical) Subtasks — useSubtasks(null) is a safe no-op for a Subtask itself.
-  const { subtasks } = useSubtasks(task.parentTaskId ? null : task.id);
   // Phase 13 security hardening — see task-actions-menu.tsx's own comment on why `assignableStaff`
   // is the right "allUsers" convenience list for this UI-only gate.
   const { assignableStaff } = useCompanyLookups();
@@ -122,22 +115,6 @@ function LoadedTaskQuickView({
   return (
     <>
       <DetailDrawerHeader>
-        {task.parentTaskId && task.parentTask && (
-          <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-            <Badge variant="neutral" className="text-[10px]">
-              SUBTASK
-            </Badge>
-            <span>
-              Subtask of{" "}
-              <Link
-                href={`/dashboard/tasks/${task.parentTask.id}`}
-                className="font-medium text-foreground underline underline-offset-2 hover:no-underline"
-              >
-                {task.parentTask.title}
-              </Link>
-            </span>
-          </div>
-        )}
         <DetailDrawerIdentity
           icon={<TaskStatusAvatar title={task.title} status={task.status} />}
           title={task.title}
@@ -172,7 +149,7 @@ function LoadedTaskQuickView({
               {task.startDate ? formatDueDateShort(task.startDate) : "—"}
             </DetailDrawerPropertyRow>
             <DetailDrawerPropertyRow label="Due">
-              <span className={task.dueDate && task.status !== "done" && task.dueDate < new Date().toISOString().slice(0, 10) ? "font-medium text-warning" : undefined}>
+              <span className={task.dueDate && !isTaskClosed(task.status) && task.dueDate < new Date().toISOString().slice(0, 10) ? "font-medium text-warning" : undefined}>
                 {task.dueDate ? formatDueDateShort(task.dueDate) : "—"}
               </span>
             </DetailDrawerPropertyRow>
@@ -215,12 +192,6 @@ function LoadedTaskQuickView({
         <DetailDrawerSection label="Time">
           <TaskTimerControl timer={timer} onTaskChanged={onChanged} onTimerChanged={onTimerChanged} variant="compact" />
         </DetailDrawerSection>
-
-        {!task.parentTaskId && subtasks.length > 0 && (
-          <DetailDrawerSection label="Subtasks">
-            <TaskRowList tasks={subtasks} emptyMessage="" />
-          </DetailDrawerSection>
-        )}
       </DetailDrawerBody>
 
       <DetailDrawerFooter>

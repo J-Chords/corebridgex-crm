@@ -106,7 +106,7 @@ export interface TaskGroup {
   tasks: TaskWithRelations[];
 }
 
-const STATUS_ORDER: TaskStatus[] = ["todo", "in-progress", "blocked", "waiting-on-client", "done"];
+const STATUS_ORDER: TaskStatus[] = ["not-started", "in-progress", "waiting", "blocked", "completed", "canceled"];
 
 /** Groups that represent "nothing" for their dimension — sorted last rather than wherever they'd alphabetically fall. */
 function isFallbackGroup(key: string) {

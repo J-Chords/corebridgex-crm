@@ -2,23 +2,25 @@ import Link from "next/link";
 import type { TaskWithRelations } from "@/lib/data/providers/tasks-provider";
 import type { TaskStatus } from "@/lib/data/types";
 
-const STATUS_ORDER: TaskStatus[] = ["todo", "in-progress", "blocked", "waiting-on-client", "done"];
+const STATUS_ORDER: TaskStatus[] = ["not-started", "in-progress", "waiting", "blocked", "completed", "canceled"];
 
 /** Mirrors TaskStatusBadge's variant choice per status, so the donut's colors never drift from the badges. */
 const STATUS_COLOR: Record<TaskStatus, string> = {
-  todo: "var(--muted-foreground)",
+  "not-started": "var(--muted-foreground)",
   "in-progress": "var(--info)",
+  waiting: "var(--warning)",
   blocked: "var(--destructive)",
-  "waiting-on-client": "var(--warning)",
-  done: "var(--success)",
+  completed: "var(--success)",
+  canceled: "var(--muted-foreground)",
 };
 
 const STATUS_LABEL: Record<TaskStatus, string> = {
-  todo: "To do",
-  "in-progress": "In progress",
+  "not-started": "Not Started",
+  "in-progress": "In Progress",
+  waiting: "Waiting",
   blocked: "Blocked",
-  "waiting-on-client": "Waiting on client",
-  done: "Done",
+  completed: "Completed",
+  canceled: "Canceled",
 };
 
 const RADIUS = 40;

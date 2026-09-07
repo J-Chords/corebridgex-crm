@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowRight, CheckCheck, Send } from "lucide-react";
+import { ArrowRight, CheckCheck } from "lucide-react";
 import { useAuth } from "@/lib/auth/auth-context";
 import { taskHandoffsProvider } from "@/lib/data/providers";
 import type { TaskHandoffWithUsers } from "@/lib/data/providers/task-handoffs-provider";
@@ -10,7 +10,6 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { TaskHandoffDialog } from "@/components/tasks/task-handoff-dialog";
 
 import { getInitials as initials } from "@/lib/initials";
 
@@ -30,10 +29,14 @@ interface TaskHandoffSectionProps {
   onChanged: () => void;
 }
 
-/** Reaching this component at all already proves task access (the page itself gates on it) — no extra permission check needed to show the "Hand off task" button, same as NotesSection. */
-export function TaskHandoffSection({ taskId, handoffs, onChanged }: TaskHandoffSectionProps) {
+/**
+ * Task Level Phase 1, Section 8 — Handoff creation is retired (ownership transfer is now: change
+ * Assignee(s) + add a Comment). This section is read-only history plus the one still-live action on
+ * an already-existing Handoff (Acknowledge) — there is no "Hand off task" authoring entry point here
+ * anymore. `taskId` is kept in the props for the historical-list query the parent already performs.
+ */
+export function TaskHandoffSection({ handoffs, onChanged }: TaskHandoffSectionProps) {
   const { user } = useAuth();
-  const [dialogOpen, setDialogOpen] = useState(false);
   const [acknowledgingId, setAcknowledgingId] = useState<string | null>(null);
 
   if (!user) return null;
@@ -51,11 +54,8 @@ export function TaskHandoffSection({ taskId, handoffs, onChanged }: TaskHandoffS
 
   return (
     <Card>
-      <CardHeader className="flex items-center justify-between">
+      <CardHeader>
         <CardTitle className="text-base">Handoffs</CardTitle>
-        <Button size="sm" variant="outline" onClick={() => setDialogOpen(true)}>
-          <Send /> Hand off task
-        </Button>
       </CardHeader>
       <CardContent className="flex flex-col gap-1">
         {handoffs.length === 0 ? (
@@ -124,13 +124,6 @@ export function TaskHandoffSection({ taskId, handoffs, onChanged }: TaskHandoffS
           ))
         )}
       </CardContent>
-
-      <TaskHandoffDialog
-        open={dialogOpen}
-        onOpenChange={setDialogOpen}
-        taskId={taskId}
-        onHandedOff={onChanged}
-      />
     </Card>
   );
 }

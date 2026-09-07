@@ -5,15 +5,18 @@ import type { TaskStatus } from "@/lib/data/types";
 import { STATUS_COLOR_VAR, TASK_STATUS_SELECT_ITEMS } from "@/components/tasks/task-status-badge";
 import { cn } from "@/lib/utils";
 
-export const STATUS_ORDER: TaskStatus[] = ["todo", "in-progress", "blocked", "waiting-on-client", "done"];
+/** My Day's own personal "today" buckets — Canceled is deliberately excluded here (closed, not
+ * actionable daily work); it still appears in the org-wide "Task(s) by Status" breakdown. */
+export const STATUS_ORDER: TaskStatus[] = ["not-started", "in-progress", "blocked", "waiting", "completed"];
 
 /** Full, warm empty-bucket sentences (each with its own natural ending, no shared suffix needed) — a touch of personality for a genuinely empty bucket, distinct from the plainer "no matches for your filters" case. */
 export const EMPTY_BUCKET_COPY: Record<TaskStatus, string> = {
-  todo: "Inbox zero for today ✨",
+  "not-started": "Inbox zero for today ✨",
   "in-progress": "Nothing in progress right now",
   blocked: "No blocked tasks — smooth sailing ⛵",
-  "waiting-on-client": "Nothing waiting on clients right now",
-  done: "No completed tasks yet — get after it 💪",
+  waiting: "Nothing waiting right now",
+  completed: "No completed tasks yet — get after it 💪",
+  canceled: "No canceled tasks",
 };
 
 interface StatusBucketButtonProps {

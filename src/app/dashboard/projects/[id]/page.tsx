@@ -19,7 +19,7 @@ import { useCompanyNotes } from "@/lib/data/hooks/use-notes";
 import { useRunningTimer } from "@/lib/data/hooks/use-time-entries";
 import { projectsProvider, projectIssuesProvider } from "@/lib/data/providers";
 import { DEFAULT_TASK_FILTERS, filterTasks, groupTasksBy } from "@/lib/data/hooks/use-task-filters";
-import { isAssigneeColumnRedundantForViewer, isTaskOverdue } from "@/lib/data/task-display";
+import { isAssigneeColumnRedundantForViewer, isTaskClosed, isTaskOverdue } from "@/lib/data/task-display";
 import { operationalProjectIdentity, serviceLineDisplayName } from "@/lib/data/project-display";
 import { canConfigureWorkstreamActivities, canCreateWorkstreamInProject, canManageProjects, isEmployee, isSupervisor } from "@/lib/data/permissions";
 import { AddServiceActivitiesDialog } from "@/components/workstreams/add-service-activities-dialog";
@@ -360,7 +360,14 @@ function LoadedProjectDetailPage({
   const showAssignee = isEmployee(user) ? !isAssigneeColumnRedundantForViewer(filteredTasks, user.id) : true;
   const projectIdentity = operationalProjectIdentity(project.companyName, project.name);
   const statusCounts = useMemo(() => {
-    const counts: Record<TaskStatus, number> = { todo: 0, "in-progress": 0, blocked: 0, "waiting-on-client": 0, done: 0 };
+    const counts: Record<TaskStatus, number> = {
+      "not-started": 0,
+      "in-progress": 0,
+      waiting: 0,
+      blocked: 0,
+      completed: 0,
+      canceled: 0,
+    };
     for (const t of tasks) counts[t.status] += 1;
     return counts;
   }, [tasks]);
@@ -371,7 +378,7 @@ function LoadedProjectDetailPage({
   // showed org-wide counts, not their own scope) — now derived from this same already-fetched,
   // already-scoped array instead, closing that gap while keeping Admin's number identical (Admin's
   // scope already covers every Task on the Project either way).
-  const openCount = tasks.length - statusCounts.done;
+  const openCount = tasks.filter((t) => !isTaskClosed(t.status)).length;
   const overdueCount = tasks.filter((t) => isTaskOverdue(t)).length;
 
 // Manual Acceptance Step 3/4 — Overview role-awareness. All derived from Tasks/Services/Members
@@ -381,12 +388,12 @@ function LoadedProjectDetailPage({
   const isTeamLead = isSupervisor(user);
   const nextDueTask = useMemo(() => {
     const withDue = tasks
-      .filter((t) => t.status !== "done" && t.dueDate != null)
+      .filter((t) => !isTaskClosed(t.status) && t.dueDate != null)
       .map((t) => ({ title: t.title, dueDate: t.dueDate as string }));
     return withDue.sort((a, b) => (a.dueDate < b.dueDate ? -1 : 1))[0] ?? null;
   }, [tasks]);
   const myTasks = useMemo(
-    () => tasks.filter((t) => t.status !== "done" && t.assignees.some((a) => a.id === user.id)),
+    () => tasks.filter((t) => !isTaskClosed(t.status) && t.assignees.some((a) => a.id === user.id)),
     [tasks, user.id]
   );
   const today = new Date().toISOString().slice(0, 10);
@@ -551,7 +558,7 @@ function LoadedProjectDetailPage({
               <AttentionPanel
                 title="My work"
                 overdueCount={myOverdueCount}
-                waitingCount={myTasks.filter((t) => t.status === "waiting-on-client").length}
+                waitingCount={myTasks.filter((t) => t.status === "waiting").length}
                 blockedCount={myTasks.filter((t) => t.status === "blocked").length}
                 openCount={myTasks.length}
                 nextDueTask={myNextDueTask}
@@ -561,7 +568,7 @@ function LoadedProjectDetailPage({
               <AttentionPanel
                 title="Work needing attention"
                 overdueCount={overdueCount}
-                waitingCount={statusCounts["waiting-on-client"]}
+                waitingCount={statusCounts.waiting}
                 blockedCount={statusCounts.blocked}
                 openCount={openCount}
                 nextDueTask={nextDueTask}
@@ -774,7 +781,6 @@ function LoadedProjectDetailPage({
                 key={group.key}
                 group={group}
                 groupBy="status"
-                allTasks={tasks}
                 runningTaskId={runningTaskId}
                 isCollapsed={collapsedGroups.has(group.key)}
                 onToggleCollapse={() => toggleGroup(group.key)}
@@ -805,7 +811,7 @@ function LoadedProjectDetailPage({
                 <p className="text-sm text-muted-foreground">No services yet for this project.</p>
               )}
               {workstreams.map((workstream, i) => {
-                const openTaskCount = tasks.filter((t) => t.workstreamId === workstream.id && t.status !== "done").length;
+                const openTaskCount = tasks.filter((t) => t.workstreamId === workstream.id && !isTaskClosed(t.status)).length;
                 const staffing = globalServiceStaffing.find((s) => s.serviceLineId === workstream.serviceLine?.id);
                 const nameFor = (userId: string) => assignableStaff.find((s) => s.id === userId)?.fullName ?? "Unknown";
                 return (
@@ -1080,7 +1086,10 @@ function LoadedProjectDetailPage({
           open={createTaskOpen}
           onOpenChange={setCreateTaskOpen}
           mode="create"
-          defaultWorkstreamId={workstreams[0].id}
+          // Section 22 — only ever preselect when there's exactly one Service to pick from; with
+          // more than one, the field starts empty so the user must actively choose (never a silent
+          // workstreams[0] default that could put a Task under the wrong Service).
+          defaultWorkstreamId={workstreams.length === 1 ? workstreams[0].id : undefined}
           defaultStatus={createTaskDefaultStatus}
           onSaved={refreshTasks}
         />

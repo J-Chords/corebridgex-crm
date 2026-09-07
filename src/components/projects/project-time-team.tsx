@@ -6,6 +6,7 @@ import type { TaskWithRelations } from "@/lib/data/providers/tasks-provider";
 import { timeEntriesProvider } from "@/lib/data/providers";
 import type { TimeEntryWithUserAndTask } from "@/lib/data/providers/time-entries-provider";
 import { isEmployee, isSuperadmin, isSupervisor } from "@/lib/data/permissions";
+import { isTaskClosed } from "@/lib/data/task-display";
 import { formatMinutes } from "@/lib/format-minutes";
 import { todayDateOnly, dateKeyFromTimestamp, formatDateOnly, addDays, startOfMonth } from "@/lib/planner-dates";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -19,9 +20,9 @@ type RangeKey = "this-month" | "last-30" | "custom";
 
 interface ProjectTimeTeamProps {
   user: User;
-  /** This Project's own already-fetched Tasks (top-level + Subtasks) — used both to derive which
-   * Task ids to fetch TimeEntries for, and to attach Service/Activity context to each entry (the
-   * TimeEntry read shape itself only carries a light Task context, no workstream/activity). */
+  /** This Project's own already-fetched Tasks — used both to derive which Task ids to fetch
+   * TimeEntries for, and to attach Service/Activity context to each entry (the TimeEntry read shape
+   * itself only carries a light Task context, no workstream/activity). */
   tasks: TaskWithRelations[];
 }
 
@@ -134,17 +135,18 @@ export function ProjectTimeTeam({ user, tasks }: ProjectTimeTeamProps) {
     if (isEmployee(user)) return [];
     const byUser = new Map<string, { name: string; open: number; completed: number }>();
     for (const task of tasks) {
-      if (task.parentTaskId) continue;
       for (const assignee of task.assignees) {
         const row = byUser.get(assignee.id) ?? { name: assignee.fullName, open: 0, completed: 0 };
-        if (task.status === "done") {
+        if (task.status === "completed") {
           // Only a genuine `statusChangedAt` counts as a trustworthy completion date — a legacy
           // Task without one is never silently counted into a specific period via `updatedAt`.
           if (task.statusChangedAt) {
             const completedLocalDate = dateKeyFromTimestamp(task.statusChangedAt);
             if (completedLocalDate >= rangeStart && completedLocalDate <= rangeEnd) row.completed += 1;
           }
-        } else {
+        } else if (!isTaskClosed(task.status)) {
+          // Canceled never counts as open work — it's closed, just not "completed" (no completion
+          // date semantics apply), so it contributes to neither bucket.
           row.open += 1;
         }
         byUser.set(assignee.id, row);

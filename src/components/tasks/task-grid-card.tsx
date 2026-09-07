@@ -6,13 +6,12 @@ import Link from "next/link";
 import { CheckCircle2, Flag, Play } from "lucide-react";
 import type { TaskWithRelations } from "@/lib/data/providers/tasks-provider";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
 import { TaskPriorityBadge } from "@/components/tasks/task-priority-badge";
 import { TaskStatusAvatar } from "@/components/tasks/task-status-avatar";
 import { STATUS_COLOR_VAR, TASK_STATUS_SELECT_ITEMS } from "@/components/tasks/task-status-badge";
 import { ChecklistProgress } from "@/components/ui/checklist-progress";
 import { Checkbox } from "@/components/ui/checkbox";
-import { isTaskOverdue, formatDueDateShort } from "@/lib/data/task-display";
+import { isTaskOverdue, isTaskClosed, formatDueDateShort } from "@/lib/data/task-display";
 import { cn } from "@/lib/utils";
 import { TaskActionsMenu } from "@/components/tasks/task-actions-menu";
 
@@ -83,7 +82,7 @@ export function TaskGridCard({ task, className, style, isFocusTask, onMarkDone, 
       )}
 
       <div className="flex items-start gap-2">
-        {onMarkDone && task.status !== "done" && (
+        {onMarkDone && !isTaskClosed(task.status) && (
           <span
             className="mt-0.5 shrink-0"
             onClick={(e) => {
@@ -105,31 +104,16 @@ export function TaskGridCard({ task, className, style, isFocusTask, onMarkDone, 
         <span className="sr-only">{TASK_STATUS_SELECT_ITEMS[task.status]}</span>
         <span className="min-w-0 flex-1 text-sm font-medium break-words group-hover/card:underline" title={task.title}>
           {task.title}
-          {task.parentTaskId && (
-            <Badge variant="neutral" className="ml-1.5 align-middle text-[10px] no-underline">
-              SUBTASK
-            </Badge>
-          )}
         </span>
         <TaskPriorityBadge priority={task.priority} />
       </div>
 
       <p
         className="truncate text-xs text-muted-foreground"
-        title={
-          task.parentTask
-            ? `Subtask of ${task.parentTask.title}`
-            : `${task.company.name} · ${task.workstream.name}${task.activity ? ` · ${task.activity.name}` : ""}`
-        }
+        title={`${task.company.name} · ${task.workstream.name}${task.activity ? ` · ${task.activity.name}` : ""}`}
       >
-        {task.parentTask ? (
-          `Subtask of ${task.parentTask.title}`
-        ) : (
-          <>
-            {task.company.name} · {task.workstream.name}
-            {task.activity && <> · {task.activity.name}</>}
-          </>
-        )}
+        {task.company.name} · {task.workstream.name}
+        {task.activity && <> · {task.activity.name}</>}
       </p>
 
       <ChecklistProgress

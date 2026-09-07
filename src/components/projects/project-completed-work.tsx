@@ -2,10 +2,8 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { Layers } from "lucide-react";
 import type { TaskWithRelations } from "@/lib/data/providers/tasks-provider";
 import { TaskStatusAvatar } from "@/components/tasks/task-status-avatar";
-import { subtaskSummary } from "@/lib/data/task-display";
 import { monthKeyFromTimestamp, parseDateOnly } from "@/lib/planner-dates";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card } from "@/components/ui/card";
@@ -45,18 +43,13 @@ function monthLabel(key: string): string {
 }
 
 interface ProjectCompletedWorkProps {
-  /** Every Task this Project's workspace already fetched (top-level AND Subtasks, same flattened
-   * shape every other Task surface uses) — this component derives its own completed/top-level slice,
-   * never a second fetch. */
+  /** Every Task this Project's workspace already fetched (same flattened shape every other Task
+   * surface uses) — this component derives its own completed slice, never a second fetch. */
   tasks: TaskWithRelations[];
 }
 
 /**
- * Phase 13C — completed NORMAL Tasks for this Project, grouped by the real month they were
- * completed. Subtasks are excluded from this top-level list entirely (never double-counted as
- * their own row) — a parent with completed Subtasks shows a small "X/Y subtasks" caption instead,
- * reusing the same `subtaskSummary` every other Task surface already computes; no historical
- * Subtask record is deleted or hidden, it simply isn't its own top-level row here.
+ * Phase 13C — completed Tasks for this Project, grouped by the real month they were completed.
  */
 export function ProjectCompletedWork({ tasks }: ProjectCompletedWorkProps) {
   const [serviceFilter, setServiceFilter] = useState(ALL);
@@ -64,7 +57,7 @@ export function ProjectCompletedWork({ tasks }: ProjectCompletedWorkProps) {
   const [periodFilter, setPeriodFilter] = useState(ALL);
 
   const completedTopLevel = useMemo(
-    () => tasks.filter((t) => t.status === "done" && !t.parentTaskId),
+    () => tasks.filter((t) => t.status === "completed"),
     [tasks]
   );
 
@@ -160,7 +153,6 @@ export function ProjectCompletedWork({ tasks }: ProjectCompletedWorkProps) {
             <span className="font-mono text-xs tracking-wider text-muted-foreground uppercase">{group.label}</span>
             <div className="overflow-hidden rounded-lg border divide-y">
               {group.tasks.map((task) => {
-                const subtasks = subtaskSummary(task.id, tasks);
                 return (
                   <Link
                     key={task.id}
@@ -171,12 +163,6 @@ export function ProjectCompletedWork({ tasks }: ProjectCompletedWorkProps) {
                     <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                       <span className="flex items-center gap-1.5 truncate font-medium">
                         {task.title}
-                        {subtasks.total > 0 && (
-                          <span className="flex shrink-0 items-center gap-0.5 text-xs font-normal text-muted-foreground" title="Subtasks">
-                            <Layers className="size-3" aria-hidden="true" />
-                            {subtasks.done}/{subtasks.total}
-                          </span>
-                        )}
                       </span>
                       <span className="truncate text-xs text-muted-foreground">
                         {task.workstream.name}

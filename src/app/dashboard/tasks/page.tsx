@@ -17,7 +17,7 @@ import {
   useActivityOptionsFromTasks,
 } from "@/lib/data/hooks/use-task-filters";
 import { isEmployee } from "@/lib/data/permissions";
-import { isAssigneeColumnRedundantForViewer } from "@/lib/data/task-display";
+import { isAssigneeColumnRedundantForViewer, isTaskClosed } from "@/lib/data/task-display";
 import type { TaskStatus } from "@/lib/data/types";
 import type { TaskWithRelations } from "@/lib/data/providers/tasks-provider";
 import { Card } from "@/components/ui/card";
@@ -34,7 +34,7 @@ import { TaskBoard } from "@/components/tasks/task-board";
 import { TaskListSection, FlatTaskList } from "@/components/tasks/task-list-section";
 import { TaskFormDialog } from "@/components/tasks/task-form-dialog";
 
-const VALID_STATUSES: TaskStatus[] = ["todo", "in-progress", "blocked", "waiting-on-client", "done"];
+const VALID_STATUSES: TaskStatus[] = ["not-started", "in-progress", "waiting", "blocked", "completed", "canceled"];
 
 function todayDateString() {
   return new Date().toISOString().slice(0, 10);
@@ -70,7 +70,7 @@ function TasksPageContent() {
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
   const { filters, patch } = useTaskFilters();
 
-  // Seeds this page's filter from a KPI-card "view full details" link (e.g. /dashboard/tasks?status=done)
+  // Seeds this page's filter from a KPI-card "view full details" link (e.g. /dashboard/tasks?status=completed)
   // — one-time on mount, same `patch` the filter bar itself already calls, no change to useTaskFilters.
   const [runningOnly, setRunningOnly] = useState(false);
   const [overdueOnly, setOverdueOnly] = useState(() => searchParams.get("overdue") === "1");
@@ -129,10 +129,10 @@ function TasksPageContent() {
   const beforeStatusFilter = useMemo(() => filterTasks(tasks, { ...filters, status: "all" }), [tasks, filters]);
   const filtered = useMemo(() => {
     let result = filterTasks(tasks, filters);
-    if (activeOnly) result = result.filter((t) => t.status !== "done");
+    if (activeOnly) result = result.filter((t) => !isTaskClosed(t.status));
     if (runningOnly) result = result.filter((t) => t.id === runningTaskId);
-    if (overdueOnly) result = result.filter((t) => t.status !== "done" && t.dueDate != null && t.dueDate < today);
-    if (dueTodayOnly) result = result.filter((t) => t.status !== "done" && t.dueDate === today);
+    if (overdueOnly) result = result.filter((t) => !isTaskClosed(t.status) && t.dueDate != null && t.dueDate < today);
+    if (dueTodayOnly) result = result.filter((t) => !isTaskClosed(t.status) && t.dueDate === today);
     return result;
   }, [tasks, filters, activeOnly, runningOnly, overdueOnly, dueTodayOnly, runningTaskId, today]);
   const groups = useMemo(
@@ -148,14 +148,15 @@ function TasksPageContent() {
 
   const statusCounts = {
     all: beforeStatusFilter.length,
-    todo: 0,
+    "not-started": 0,
     "in-progress": 0,
+    waiting: 0,
     blocked: 0,
-    "waiting-on-client": 0,
-    done: 0,
+    completed: 0,
+    canceled: 0,
     running: beforeStatusFilter.filter((t) => t.id === runningTaskId).length,
-    overdue: beforeStatusFilter.filter((t) => t.status !== "done" && t.dueDate != null && t.dueDate < today).length,
-    dueToday: beforeStatusFilter.filter((t) => t.status !== "done" && t.dueDate === today).length,
+    overdue: beforeStatusFilter.filter((t) => !isTaskClosed(t.status) && t.dueDate != null && t.dueDate < today).length,
+    dueToday: beforeStatusFilter.filter((t) => !isTaskClosed(t.status) && t.dueDate === today).length,
   };
   for (const task of beforeStatusFilter) statusCounts[task.status]++;
 
@@ -314,7 +315,6 @@ function TasksPageContent() {
         ) : (
           <FlatTaskList
             tasks={filtered}
-            allTasks={tasks}
             runningTaskId={runningTaskId}
             showAssignee={showAssignee}
             onEdit={setEditingTask}
@@ -331,7 +331,6 @@ function TasksPageContent() {
               key={group.key}
               group={group}
               groupBy={filters.groupBy}
-              allTasks={tasks}
               runningTaskId={runningTaskId}
               isCollapsed={collapsedGroups.has(group.key)}
               onToggleCollapse={() => toggleGroup(group.key)}

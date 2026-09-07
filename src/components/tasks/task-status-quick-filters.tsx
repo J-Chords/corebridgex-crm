@@ -5,7 +5,7 @@ import type { TaskStatus } from "@/lib/data/types";
 import { STATUS_COLOR_VAR, TASK_STATUS_SELECT_ITEMS } from "@/components/tasks/task-status-badge";
 import { cn } from "@/lib/utils";
 
-const STATUS_ORDER: TaskStatus[] = ["todo", "in-progress", "blocked", "waiting-on-client", "done"];
+const STATUS_ORDER: TaskStatus[] = ["not-started", "in-progress", "waiting", "blocked", "completed", "canceled"];
 
 interface PillProps {
   label: string;
@@ -45,11 +45,12 @@ function Pill({ label, color, selected, count, icon, onClick }: PillProps) {
 
 export interface TaskStatusQuickFilterCounts {
   all: number;
-  todo: number;
+  "not-started": number;
   "in-progress": number;
+  waiting: number;
   blocked: number;
-  "waiting-on-client": number;
-  done: number;
+  completed: number;
+  canceled: number;
   running: number;
   overdue: number;
   dueToday: number;

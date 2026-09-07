@@ -54,7 +54,7 @@ export function BucketTaskGrid({ user, tasks, selectedStatus, focusTaskId, onCha
 
   async function handleMarkDone(task: TaskWithRelations) {
     setExiting((prev) => ({ ...prev, [task.id]: task }));
-    await tasksProvider.updateTaskStatus(user, task.id, "done");
+    await tasksProvider.updateTaskStatus(user, task.id, "completed");
     onChanged();
   }
 

@@ -9,7 +9,6 @@ import { operationalProjectPickerLabels } from "@/lib/data/project-display";
 import { workstreamDisplayHeading, splitWorkstreamQualifier } from "@/lib/data/workstream-name";
 import { useCompanyLookups } from "@/lib/data/hooks/use-companies";
 import { useProjects } from "@/lib/data/hooks/use-projects";
-import { useSubtasks } from "@/lib/data/hooks/use-tasks";
 import { useWorkstreams } from "@/lib/data/hooks/use-workstreams";
 import { useWorkstreamActivities } from "@/lib/data/hooks/use-workstream-activities";
 import { tasksProvider } from "@/lib/data/providers";
@@ -47,6 +46,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 const NO_ACTIVITY = "none";
+
+/** Task Level Phase 1, Section 5 — the only two statuses that require a `status_reason`; mirrors
+ * `enforce_task_invariants`'s own server-side rule exactly. */
+function statusRequiresReason(status: TaskStatus): boolean {
+  return status === "waiting" || status === "blocked";
+}
 
 const STOPWORDS = new Set(["the", "a", "an", "and", "or", "of", "for", "to", "in", "on", "at", "by", "with", "from"]);
 
@@ -108,7 +113,8 @@ function emptyForm(userId: string, defaultWorkstreamId?: string, defaultActivity
     workstreamId: defaultWorkstreamId ?? "",
     activityId: defaultActivityId ?? NO_ACTIVITY,
     assigneeIds: [userId],
-    status: defaultStatus ?? ("todo" as TaskStatus),
+    status: defaultStatus ?? ("not-started" as TaskStatus),
+    statusReason: null as string | null,
     priority: "medium" as TaskPriority,
     // Phase 13B final boss-feedback pass (Part E) — a brand-new Task's Start Date defaults to
     // today's real local calendar date (never createdAt, never a UTC-shifted value — see
@@ -264,6 +270,7 @@ export function TaskFormDialog({
         activityId: task.activityId ?? NO_ACTIVITY,
         assigneeIds: task.assignees.map((a) => a.id),
         status: task.status,
+        statusReason: task.statusReason,
         priority: task.priority,
         startDate: task.startDate ?? "",
         dueDate: task.dueDate ?? "",
@@ -287,21 +294,27 @@ export function TaskFormDialog({
   // an existing task should always allow retagging/removing its activity.
   const activityLocked = mode === "create" && Boolean(defaultActivityId);
 
-  // Phase 10 hierarchy-authorization hardening (Section 12/17) — a Subtask's Client/Project/Service/
-  // Activity are inherited from its parent and read-only (enforced server-side by
-  // enforce_task_invariants); a top-level Task that already HAS Subtasks can't change Service/
-  // Activity either, same trigger. Shown as fixed read-only context here rather than offering
-  // editable selectors and waiting for the database to reject the change.
-  const isEditingSubtask = mode === "edit" && Boolean(task?.parentTaskId);
-  const { subtasks: existingChildTasksForLock } = useSubtasks(mode === "edit" && task && !task.parentTaskId ? task.id : null);
-  const hasSubtasks = existingChildTasksForLock.length > 0;
-  const contextLocked = isEditingSubtask || hasSubtasks;
+  // Legacy compatibility (mirrors enforce_task_invariants' own bypass, added 20260908120000) — a
+  // handful of hosted Tasks were carried through the original status-rename migration already sitting
+  // at Waiting/Blocked with no recorded reason (no real reason text ever existed to backfill, and
+  // fabricating one is explicitly disallowed). Editing anything else on one of those Tasks — without
+  // touching its status or reason — must not be blocked forever by a rule that postdates the data.
+  // This can never mask a genuinely new gap: it only applies when the ORIGINAL fetched Task already
+  // had this exact status with an already-empty reason, so a real transition into Waiting/Blocked, or
+  // clearing an existing real reason, still requires one exactly as before.
+  const isLegacyReasonGap =
+    mode === "edit" &&
+    Boolean(task) &&
+    task!.status === form.status &&
+    statusRequiresReason(form.status) &&
+    !task!.statusReason?.trim();
 
   const canSubmit =
     !isSubmitting &&
     form.title.trim().length > 0 &&
     form.workstreamId.length > 0 &&
-    (!activityRequired || form.activityId !== NO_ACTIVITY);
+    (!activityRequired || form.activityId !== NO_ACTIVITY) &&
+    (!statusRequiresReason(form.status) || isLegacyReasonGap || Boolean(form.statusReason?.trim()));
 
   // Cmd/Ctrl+Enter submits from anywhere in the panel, guarded by the same validity check the submit
   // button itself uses. A document-level listener (not a form onKeyDown) because focus can end up on
@@ -369,6 +382,7 @@ export function TaskFormDialog({
         activityId: form.activityId === NO_ACTIVITY ? null : form.activityId,
         assigneeIds: form.assigneeIds,
         status: form.status,
+        statusReason: statusRequiresReason(form.status) ? (form.statusReason?.trim() || null) : null,
         priority: form.priority,
         startDate: form.startDate || null,
         dueDate: form.dueDate || null,
@@ -437,29 +451,6 @@ export function TaskFormDialog({
           <FormDialogColumns>
           <FormDrawerSection label="Context">
               <div className="flex flex-col gap-4">
-                {contextLocked ? (
-                  <div className="flex flex-col gap-1.5">
-                    <Label>Client / Project / Service{selectedActivityLabel ? " / Activity" : ""}</Label>
-                    <p className="rounded-md border bg-muted/40 px-3 py-2 text-sm">
-                      {selectedWorkstream?.company.name ?? "—"}
-                      {(() => {
-                        const projectName = selectedWorkstream?.projectId
-                          ? (projects.find((p) => p.id === selectedWorkstream.projectId)?.name ?? null)
-                          : null;
-                        return projectName ? ` — ${projectName}` : "";
-                      })()}
-                      {" — "}
-                      {selectedWorkstream ? workstreamPrimaryLabel(selectedWorkstream) : "—"}
-                      {selectedActivityLabel ? ` — ${selectedActivityLabel}` : ""}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {isEditingSubtask
-                        ? "Inherited from the parent Task — cannot be changed independently."
-                        : "This Task has Subtasks. Service and Activity cannot be changed."}
-                    </p>
-                  </div>
-                ) : (
-                  <>
                 <div className="flex flex-col gap-1.5">
                   <Label htmlFor="task-project">Project</Label>
                   <Select
@@ -628,8 +619,6 @@ export function TaskFormDialog({
                     </Button>
                   )}
                 </div>
-                  </>
-                )}
               </div>
           </FormDrawerSection>
 
@@ -638,7 +627,9 @@ export function TaskFormDialog({
               <FormDrawerField label="Status">
                 <TaskStatusPicker
                   value={form.status}
-                  onChange={(status) => setForm((p) => ({ ...p, status }))}
+                  onChange={(status) =>
+                    setForm((p) => ({ ...p, status, statusReason: statusRequiresReason(status) ? p.statusReason : null }))
+                  }
                 />
               </FormDrawerField>
               <FormDrawerField label="Priority">
@@ -664,6 +655,25 @@ export function TaskFormDialog({
                 />
               </FormDrawerField>
             </FormDrawerPropertyGrid>
+            {statusRequiresReason(form.status) && (
+              <div className="flex flex-col gap-1.5 pt-3">
+                <Label htmlFor="task-status-reason">
+                  Why is this {form.status === "blocked" ? "blocked" : "waiting"}?
+                </Label>
+                <Textarea
+                  id="task-status-reason"
+                  rows={2}
+                  value={form.statusReason ?? ""}
+                  onChange={(e) => setForm((p) => ({ ...p, statusReason: e.target.value }))}
+                  placeholder={form.status === "blocked" ? "Describe what it's blocked by…" : "Describe what it's waiting on…"}
+                />
+                {isLegacyReasonGap && !form.statusReason?.trim() && (
+                  <p className="text-xs text-muted-foreground">
+                    No reason was recorded for this before the reason requirement existed — you can save as-is, or add one now.
+                  </p>
+                )}
+              </div>
+            )}
           </FormDrawerSection>
           </FormDialogColumns>
 

@@ -35,10 +35,14 @@ interface NotesSectionProps {
   description?: string;
   notes: NoteWithAuthor[];
   emptyMessage: string;
-  onAddNote: (input: { body: string; type: NoteType }) => Promise<void>;
+  onAddNote?: (input: { body: string; type: NoteType }) => Promise<void>;
+  /** Task Level Phase 1, Section 9 — Task Notes authoring is retired (Comments is now the canonical
+   * Task conversation); historical Notes stay fully visible, just without the composer. Omit (or
+   * pass `onAddNote`) for surfaces where authoring a new Note is still normal, e.g. Company Notes. */
+  readOnly?: boolean;
 }
 
-export function NotesSection({ title, description, notes, emptyMessage, onAddNote }: NotesSectionProps) {
+export function NotesSection({ title, description, notes, emptyMessage, onAddNote, readOnly }: NotesSectionProps) {
   const [body, setBody] = useState("");
   const [type, setType] = useState<NoteType>("internal");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -46,7 +50,7 @@ export function NotesSection({ title, description, notes, emptyMessage, onAddNot
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!body.trim()) return;
+    if (!body.trim() || !onAddNote) return;
     setIsSubmitting(true);
     setError(null);
     try {
@@ -67,38 +71,42 @@ export function NotesSection({ title, description, notes, emptyMessage, onAddNot
         {description && <p className="text-sm text-muted-foreground">{description}</p>}
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
-        <form onSubmit={handleSubmit} className="flex flex-col gap-2">
-          <Textarea
-            value={body}
-            onChange={(e) => setBody(e.target.value)}
-            placeholder="Add a note…"
-            rows={2}
-            aria-label="Note body"
-          />
-          <div className="flex items-center justify-between gap-2">
-            <Select items={NOTE_TYPE_SELECT_ITEMS} value={type} onValueChange={(v) => setType((v ?? "internal") as NoteType)}>
-              <SelectTrigger aria-label="Note type" size="sm">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="call">Call</SelectItem>
-                <SelectItem value="meeting">Meeting</SelectItem>
-                <SelectItem value="internal">Internal</SelectItem>
-                <SelectItem value="decision">Decision</SelectItem>
-              </SelectContent>
-            </Select>
-            <Button type="submit" size="sm" disabled={isSubmitting || !body.trim()}>
-              <Send /> {isSubmitting ? "Posting…" : "Post note"}
-            </Button>
-          </div>
-          {error && (
-            <p role="alert" className="text-sm text-destructive">
-              {error}
-            </p>
-          )}
-        </form>
+        {!readOnly && (
+          <>
+            <form onSubmit={handleSubmit} className="flex flex-col gap-2">
+              <Textarea
+                value={body}
+                onChange={(e) => setBody(e.target.value)}
+                placeholder="Add a note…"
+                rows={2}
+                aria-label="Note body"
+              />
+              <div className="flex items-center justify-between gap-2">
+                <Select items={NOTE_TYPE_SELECT_ITEMS} value={type} onValueChange={(v) => setType((v ?? "internal") as NoteType)}>
+                  <SelectTrigger aria-label="Note type" size="sm">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="call">Call</SelectItem>
+                    <SelectItem value="meeting">Meeting</SelectItem>
+                    <SelectItem value="internal">Internal</SelectItem>
+                    <SelectItem value="decision">Decision</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Button type="submit" size="sm" disabled={isSubmitting || !body.trim()}>
+                  <Send /> {isSubmitting ? "Posting…" : "Post note"}
+                </Button>
+              </div>
+              {error && (
+                <p role="alert" className="text-sm text-destructive">
+                  {error}
+                </p>
+              )}
+            </form>
 
-        <Separator />
+            <Separator />
+          </>
+        )}
 
         {notes.length === 0 ? (
           <p className="text-sm text-muted-foreground">{emptyMessage}</p>

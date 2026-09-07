@@ -124,12 +124,17 @@ async function hydrate(projects: Project[]): Promise<ProjectWithRelations[]> {
       .filter((w) => w.project_id === project.id)
       .map((w) => ({ id: w.id, name: w.name, serviceLineId: w.service_line_id }));
     const projectTasks = tasks.filter((t) => projectWorkstreamIds.includes(t.workstream_id));
-    const doneCount = projectTasks.filter((t) => t.status === "done").length;
-    const overdueCount = projectTasks.filter((t) => t.status !== "done" && t.due_date != null && t.due_date < today).length;
+    // Section 23/24 — six-status model: "done" was renamed to "completed", and "canceled" is a new
+    // CLOSED status that must never count as open or overdue (raw string column, not the narrower
+    // TaskStatus type, so this can't just reuse the typed isTaskClosed helper).
+    const isClosedStatus = (status: string) => status === "completed" || status === "canceled";
+    const doneCount = projectTasks.filter((t) => t.status === "completed").length;
+    const closedCount = projectTasks.filter((t) => isClosedStatus(t.status)).length;
+    const overdueCount = projectTasks.filter((t) => !isClosedStatus(t.status) && t.due_date != null && t.due_date < today).length;
     const taskSummary: ProjectTaskSummary = {
       totalCount: projectTasks.length,
       doneCount,
-      openCount: projectTasks.length - doneCount,
+      openCount: projectTasks.length - closedCount,
       overdueCount,
     };
     const progressPercent = taskSummary.totalCount === 0 ? 0 : Math.round((doneCount / taskSummary.totalCount) * 100);

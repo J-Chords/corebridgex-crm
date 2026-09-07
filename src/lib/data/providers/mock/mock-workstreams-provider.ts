@@ -86,7 +86,7 @@ function toWorkstreamWithRelations(workstream: Workstream): WorkstreamWithRelati
 
   const tasks = db.tasks.filter((t) => t.workstreamId === workstream.id);
   const taskCount = tasks.length;
-  const doneTaskCount = tasks.filter((t) => t.status === "done").length;
+  const doneTaskCount = tasks.filter((t) => t.status === "completed").length;
   const progressPercent = taskCount === 0 ? 0 : Math.round((doneTaskCount / taskCount) * 100);
   const budget = workstreamHours(workstream.id);
 

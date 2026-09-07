@@ -1,16 +1,20 @@
 "use client";
 
+import { useState } from "react";
 import type { TaskStatus } from "@/lib/data/types";
 import { STATUS_META, statusChipStyle } from "@/components/tasks/task-status-badge";
+import { StatusReasonDialog } from "@/components/tasks/status-reason-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 
-const STATUS_ORDER: TaskStatus[] = ["todo", "in-progress", "blocked", "waiting-on-client", "done"];
+const STATUS_ORDER: TaskStatus[] = ["not-started", "in-progress", "waiting", "blocked", "completed", "canceled"];
 
 interface TaskStatusRailProps {
   status: TaskStatus;
-  /** Omit (or pass nothing) to render a read-only status — used when the viewer can't progress this Task. */
-  onChange?: (status: TaskStatus) => void;
+  /** Omit (or pass nothing) to render a read-only status — used when the viewer can't progress this
+   * Task. `statusReason` is required by the server whenever `status` is `"waiting"`/`"blocked"` —
+   * this rail collects it inline via `StatusReasonDialog` before calling through. */
+  onChange?: (status: TaskStatus, statusReason?: string) => void;
   disabled?: boolean;
 }
 
@@ -24,6 +28,7 @@ interface TaskStatusRailProps {
  */
 export function TaskStatusRail({ status, onChange, disabled }: TaskStatusRailProps) {
   const meta = STATUS_META[status];
+  const [pendingStatus, setPendingStatus] = useState<TaskStatus | null>(null);
 
   if (!onChange) {
     return (
@@ -33,26 +38,44 @@ export function TaskStatusRail({ status, onChange, disabled }: TaskStatusRailPro
     );
   }
 
+  function handleSelect(next: TaskStatus) {
+    if (next === "waiting" || next === "blocked") {
+      setPendingStatus(next);
+    } else {
+      onChange!(next);
+    }
+  }
+
   return (
-    <Select
-      items={Object.fromEntries(STATUS_ORDER.map((s) => [s, STATUS_META[s].label]))}
-      value={status}
-      onValueChange={(v) => v && onChange(v as TaskStatus)}
-      disabled={disabled}
-    >
-      <SelectTrigger aria-label="Task status" className="h-8 w-full" style={statusChipStyle(status)}>
-        <SelectValue />
-      </SelectTrigger>
-      <SelectContent>
-        {STATUS_ORDER.map((s) => (
-          <SelectItem key={s} value={s}>
-            <span className="flex items-center gap-1.5">
-              <span className="size-2 shrink-0 rounded-full" style={{ backgroundColor: statusChipStyle(s).color }} aria-hidden="true" />
-              {STATUS_META[s].label}
-            </span>
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
+    <>
+      <Select
+        items={Object.fromEntries(STATUS_ORDER.map((s) => [s, STATUS_META[s].label]))}
+        value={status}
+        onValueChange={(v) => v && handleSelect(v as TaskStatus)}
+        disabled={disabled}
+      >
+        <SelectTrigger aria-label="Task status" className="h-8 w-full" style={statusChipStyle(status)}>
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {STATUS_ORDER.map((s) => (
+            <SelectItem key={s} value={s}>
+              <span className="flex items-center gap-1.5">
+                <span className="size-2 shrink-0 rounded-full" style={{ backgroundColor: statusChipStyle(s).color }} aria-hidden="true" />
+                {STATUS_META[s].label}
+              </span>
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <StatusReasonDialog
+        pendingStatus={pendingStatus}
+        onCancel={() => setPendingStatus(null)}
+        onConfirm={(reason) => {
+          onChange!(pendingStatus!, reason);
+          setPendingStatus(null);
+        }}
+      />
+    </>
   );
 }

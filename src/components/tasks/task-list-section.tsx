@@ -6,13 +6,11 @@ import type { TaskGroupBy, TaskStatus } from "@/lib/data/types";
 import type { TaskWithRelations } from "@/lib/data/providers/tasks-provider";
 import { STATUS_COLOR_VAR } from "@/components/tasks/task-status-badge";
 import { TaskListRow, TaskListHeader, type TaskListContext } from "@/components/tasks/task-list-row";
-import { subtaskSummary } from "@/lib/data/task-display";
 import { cn } from "@/lib/utils";
 
 interface TaskListSectionProps {
   group: TaskGroup;
   groupBy: TaskGroupBy;
-  allTasks: TaskWithRelations[];
   runningTaskId: string | null;
   isCollapsed: boolean;
   onToggleCollapse: () => void;
@@ -43,7 +41,6 @@ interface TaskListSectionProps {
 export function TaskListSection({
   group,
   groupBy,
-  allTasks,
   runningTaskId,
   isCollapsed,
   onToggleCollapse,
@@ -103,7 +100,6 @@ export function TaskListSection({
               task={task}
               index={i}
               isRunning={task.id === runningTaskId}
-              subtaskCount={task.parentTaskId ? undefined : subtaskSummary(task.id, allTasks)}
               context={context}
               projectIsInternal={projectIsInternal}
               showAssignee={showAssignee}
@@ -120,7 +116,6 @@ export function TaskListSection({
 /** Plain, ungrouped fallback — Group by "None": a flat dense list, a column header, then rows. */
 export function FlatTaskList({
   tasks,
-  allTasks,
   runningTaskId,
   context = "global",
   projectIsInternal,
@@ -129,7 +124,6 @@ export function FlatTaskList({
   onDeleted,
 }: {
   tasks: TaskWithRelations[];
-  allTasks: TaskWithRelations[];
   runningTaskId: string | null;
   context?: TaskListContext;
   projectIsInternal?: boolean;
@@ -146,7 +140,6 @@ export function FlatTaskList({
           task={task}
           index={i}
           isRunning={task.id === runningTaskId}
-          subtaskCount={task.parentTaskId ? undefined : subtaskSummary(task.id, allTasks)}
           context={context}
           projectIsInternal={projectIsInternal}
           showAssignee={showAssignee}

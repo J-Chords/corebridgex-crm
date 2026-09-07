@@ -13,7 +13,7 @@ import { getInitials as initials } from "@/lib/initials";
 interface TaskPropertiesRailProps {
   task: TaskWithRelations;
   canProgress: boolean;
-  onStatusChange: (status: string | null) => void;
+  onStatusChange: (status: string | null, statusReason?: string) => void;
   statusPending: boolean;
 }
 
@@ -42,7 +42,7 @@ export function TaskPropertiesRail({ task, canProgress, onStatusChange, statusPe
         <div className="w-36">
           <TaskStatusRail
             status={task.status}
-            onChange={canProgress ? (s) => onStatusChange(s) : undefined}
+            onChange={canProgress ? (s, reason) => onStatusChange(s, reason) : undefined}
             disabled={statusPending}
           />
         </div>

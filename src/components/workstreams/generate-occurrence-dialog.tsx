@@ -169,7 +169,7 @@ export function GenerateOccurrenceDialog({
           workstreamId: created.id,
           assigneeIds,
           allowUnassigned: assigneeIds.length === 0,
-          status: "todo",
+          status: "not-started",
           priority: task.priority,
           startDate: shiftedStartDate(task),
           dueDate: shiftedDueDate(task),

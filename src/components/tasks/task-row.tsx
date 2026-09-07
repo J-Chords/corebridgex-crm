@@ -1,6 +1,5 @@
 import Link from "next/link";
 import type { TaskWithRelations } from "@/lib/data/providers/tasks-provider";
-import { Badge } from "@/components/ui/badge";
 import { STATUS_META } from "@/components/tasks/task-status-badge";
 import { TaskStatusAvatar } from "@/components/tasks/task-status-avatar";
 import { isTaskOverdue, formatDueDateShort } from "@/lib/data/task-display";
@@ -13,18 +12,17 @@ interface TaskRowProps {
   subtitle?: string;
   /** Phase 11B — when provided, the row opens this handler (Dashboard/Home's Quick View Drawer)
    * instead of navigating to the full Task route. Every dedicated work surface (Tasks module,
-   * Subtasks section, Company/Project/Workstream pages) omits this and keeps its Link-navigate
-   * default per the locked navigation rule. */
+   * Company/Project/Workstream pages) omits this and keeps its Link-navigate default per the
+   * locked navigation rule. */
   onOpen?: (taskId: string) => void;
 }
 
 /**
  * Phase 12B — a dense row (Part 36's own "○ Title · Status · Assignee · Due date" concept): a
- * small status dot, title, status label, assignee name(s), and due date. Used only by the parent
- * Task's Subtasks section — Subtasks aren't status-grouped the way the Tasks Home List view is, so
- * this row shows status explicitly (the List view's own `TaskListRow` deliberately omits it,
- * relying on its section header instead). Desktop renders one true aligned row; mobile (Part 10)
- * drops the fixed-width columns for a compact stacked block instead of overflowing.
+ * small status dot, title, status label, assignee name(s), and due date — shows status explicitly
+ * (the List view's own `TaskListRow` deliberately omits it, relying on its section header instead).
+ * Desktop renders one true aligned row; mobile (Part 10) drops the fixed-width columns for a
+ * compact stacked block instead of overflowing.
  */
 export function TaskRow({ task, subtitle, onOpen }: TaskRowProps) {
   const overdue = isTaskOverdue(task);
@@ -37,11 +35,6 @@ export function TaskRow({ task, subtitle, onOpen }: TaskRowProps) {
     <span className="flex min-w-0 items-center gap-1.5 text-sm font-medium group-hover/row:underline">
       <TaskStatusAvatar title={task.title} status={task.status} size="sm" />
       <span className="truncate">{task.title}</span>
-      {task.parentTaskId && (
-        <Badge variant="neutral" className="shrink-0 text-[10px] no-underline">
-          SUBTASK
-        </Badge>
-      )}
     </span>
   );
 
@@ -90,7 +83,7 @@ interface TaskRowListProps {
   onOpen?: (taskId: string) => void;
 }
 
-/** A dense vertical list of TaskRows — the shared shape the Subtasks section uses. */
+/** A dense vertical list of TaskRows. */
 export function TaskRowList({ tasks, emptyMessage, isLoading, subtitleFor, onOpen }: TaskRowListProps) {
   if (!isLoading && tasks.length === 0) {
     return <p className="text-sm text-muted-foreground">{emptyMessage}</p>;

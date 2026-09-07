@@ -1,9 +1,16 @@
+/**
+ * Task Level Phase 1 — final canonical status set (renamed from the pre-Phase-1
+ * todo/in-progress/blocked/waiting-on-client/done set; `canceled` is new). Persisted value IS the
+ * canonical name — no separate display-mapping layer. See `supabase/migrations/
+ * 20260908090000_task_status_model_phase1.sql` for the historical-data rename.
+ */
 export type TaskStatus =
-  | "todo"
+  | "not-started"
   | "in-progress"
+  | "waiting"
   | "blocked"
-  | "waiting-on-client"
-  | "done";
+  | "completed"
+  | "canceled";
 
 export type TaskPriority = "low" | "medium" | "high" | "urgent";
 
@@ -17,16 +24,12 @@ export interface Task {
   companyId: string;
   /** Every task belongs to a workstream; companyId above is a denormalized copy of workstream.companyId, synced by the provider — never independently editable. */
   workstreamId: string;
-  /**
-   * Phase 10 — null for a normal top-level Task; another Task's id for a Subtask, nested exactly
-   * one level under it (never deeper — a Task whose own `parentTaskId` is set can never itself be a
-   * parent). Immutable once set (or left null) at creation: never re-parented, promoted to
-   * top-level, or converted from an existing top-level Task afterward. A Subtask always inherits
-   * its parent's `companyId`/`workstreamId`/`activityId` exactly — enforced server-side, never
-   * independently editable on a Subtask.
-   */
-  parentTaskId: string | null;
   status: TaskStatus;
+  /** Task Level Phase 1 — the CURRENT reason this Task is Waiting or Blocked; required exactly when
+   * `status` is `"waiting"` or `"blocked"`, and auto-cleared the moment status leaves either of those
+   * (server-enforced by `enforce_task_invariants`, never left stale). This is workflow state, not
+   * conversation history — it never replaces or is replaced by Comments. */
+  statusReason: string | null;
   priority: TaskPriority;
   /** Optional planned/scheduled start date, set directly by the user — never derived from
    * createdAt, statusChangedAt, or any timer/status event. Phase 13B, added for the Project

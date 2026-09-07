@@ -1,4 +1,5 @@
 import type { TaskWithRelations } from "@/lib/data/providers/tasks-provider";
+import { isTaskClosed } from "@/lib/data/task-display";
 
 /**
  * One short, friendly line reflecting the viewer's actual day — replaces the plain weekday/date
@@ -6,7 +7,7 @@ import type { TaskWithRelations } from "@/lib/data/providers/tasks-provider";
  * "overdue" definitions the status buckets and Upcoming strip already use elsewhere on this page.
  */
 export function myDaySubtitle(tasks: TaskWithRelations[], today: string): string {
-  const open = tasks.filter((t) => t.status !== "done");
+  const open = tasks.filter((t) => !isTaskClosed(t.status));
   const overdueCount = open.filter((t) => t.dueDate && t.dueDate < today).length;
   const dueTodayCount = open.filter((t) => t.dueDate === today).length;
 

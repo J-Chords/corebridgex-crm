@@ -4,7 +4,7 @@ import { PropertySelect } from "@/components/tasks/property-select";
 import { STATUS_META, StatusDot } from "@/components/tasks/task-status-badge";
 import type { TaskStatus } from "@/lib/data/types";
 
-const STATUS_ORDER: TaskStatus[] = ["todo", "in-progress", "blocked", "waiting-on-client", "done"];
+const STATUS_ORDER: TaskStatus[] = ["not-started", "in-progress", "waiting", "blocked", "completed", "canceled"];
 
 const OPTIONS = STATUS_ORDER.map((status) => ({
   value: status,

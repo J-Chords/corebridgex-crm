@@ -13,6 +13,7 @@ import { projectsProvider } from "@/lib/data/providers";
 import type { ProjectWithRelations } from "@/lib/data/providers/projects-provider";
 import type { TaskWithRelations } from "@/lib/data/providers/tasks-provider";
 import { isSuperadmin } from "@/lib/data/permissions";
+import { isTaskClosed } from "@/lib/data/task-display";
 import type { ProjectStatus } from "@/lib/data/types";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -195,10 +196,10 @@ export default function ProjectsPage() {
     const today = new Date().toISOString().slice(0, 10);
     for (const project of filtered) {
       const projectTasks = tasksByProject.get(project.id) ?? [];
-      const waitingCount = projectTasks.filter((t) => t.status === "waiting-on-client").length;
+      const waitingCount = projectTasks.filter((t) => t.status === "waiting").length;
       const blockedCount = projectTasks.filter((t) => t.status === "blocked").length;
       const myTasks = user
-        ? projectTasks.filter((t) => t.status !== "done" && t.assignees.some((a) => a.id === user.id))
+        ? projectTasks.filter((t) => !isTaskClosed(t.status) && t.assignees.some((a) => a.id === user.id))
         : [];
       const myOverdueCount = myTasks.filter((t) => t.dueDate != null && t.dueDate < today).length;
       const myNextDue = myTasks.map((t) => t.dueDate).filter((d): d is string => !!d).sort()[0] ?? null;

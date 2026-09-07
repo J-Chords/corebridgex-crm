@@ -770,29 +770,38 @@ for Service Lines at all, only `listServiceLines()`. A full Admin Service Catalo
 Services, active/inactive lifecycle, safe delete/archive) is the next, separately-scoped
 Service-level phase.
 
-## Task Level — locked decisions carried forward (not yet implemented)
+## Task Level — Phase 1 status (see `docs/current-project-state.md`'s own "Task Level — Phase 1"
+section for the full write-up; summarized here since this is where the decisions were originally
+recorded)
 
-Recorded here so they survive until Task Level actually begins — none of these were implemented
-during the Task Level audit or the Boss Feedback Alignment correction pass; both were explicitly
-scoped to stop short of any Task business/status redesign.
+**Phase 1 (Core Model / Security / Lifecycle) is now IMPLEMENTED, uncommitted, CORE ACCEPTANCE
+PENDING** — the items below were locked-but-not-implemented as of the Boss Feedback Alignment pass;
+this records what actually happened once Phase 1 ran.
 
-- **NO SUBTASKS.** Subtasks are being removed from the product entirely at Task Level — new
-  unexpected work becomes another ordinary Task under the correct Activity. Final hierarchy: Project →
-  Service → Activity → Task → Checklist, no Parent Task → Subtask level. Before removing the schema,
-  Task Level must first do a READ-ONLY hosted count of `tasks` where `parent_task_id is not null`; if
-  zero, the legacy architecture may be safely removed via a new forward-only migration; if not zero,
-  those rows must be flattened into ordinary Tasks (preserving title/description/status/priority/
-  dates/assignees/checklist/time/comments/notes/documents/creator/Activity/Service) before the
-  parent/subtask architecture is removed — never deleted outright.
-- **Handoff is being retired.** No future Handoff creation/acknowledgment UX; assignment change +
-  Comment replaces it. Existing historical Handoff records must not be silently destroyed.
-- **Task Notes authoring is being retired.** Comments becomes the canonical Task conversation surface
-  (mirroring the same "old composer made read-only, e.g. 'Legacy Notes'" pattern Project's own Notes
-  already received). Legacy Notes must not be silently destroyed.
-- **Task Timeline/Gantt is retained**, to be redesigned during Task Level as a lightweight schedule
-  view (start→due bars, a clear Today marker, strong Task status colors, shared filters, optional
-  grouping by Service/Activity/Assignee) — explicitly not dependency arrows/critical path/resource
-  leveling. Final Task views: List / Board / Timeline.
+- **NO SUBTASKS — now IMPLEMENTED, per Product Owner final decision.** The required READ-ONLY hosted
+  count of `tasks` where `parent_task_id is not null` returned **1** (not 0) — "Phase 10 Child" under
+  "Phase 10 Manual Test Parent," a manual-test artifact — which correctly stopped the first
+  destructive-removal attempt per the locked rule. Once safe, that one Task was flattened in place
+  (same row/id, all business fields/history preserved) and a new forward-only migration removed
+  `tasks.parent_task_id` (column/index/FK), the `create_subtask`/`get_task_time_rollup` RPCs, and
+  every Subtask-specific branch inside `enforce_task_invariants`/`delete_task`/`toggle_checklist_item`/
+  `can_access_task`. Every Subtask-only application capability was removed too (provider methods/
+  types, `Task.parentTaskId`, hooks, UI badges/warnings/sections). Final hierarchy (Project → Service
+  → Activity → Task → Checklist, no Parent/Subtask level) is the current, actual state — not merely a
+  target.
+- **Handoff creation is now retired** — `create_task_handoff`/`list_handoff_candidates` EXECUTE
+  revoked from `authenticated` (hosted read-back confirmed both already used the narrow
+  `can_access_task_directly` gate, so no authorization bug needed fixing); `acknowledge_task_handoff`
+  stays grantable for the one real pending hosted Handoff. The "Hand off task" button/dialog is
+  removed from the UI. Assignment change + Comment is now the normal ownership-transfer path.
+  Historical Handoff records are fully intact and still readable.
+- **Task Notes authoring is now retired** — Comments is the canonical Task conversation surface.
+  `notes_insert`'s RLS was narrowed to Company Notes only (the Task-scoped OR-branch was dropped);
+  `NotesSection` gained a `readOnly` mode, used by the Task detail page (mirroring the same pattern
+  already used for Project's own "Legacy Notes"). Legacy Task Notes remain fully readable, never
+  destroyed.
+- **Task Timeline/Gantt redesign remains deferred to Phase 2** — untouched this pass. Final Task
+  views stay List / Board / Timeline.
 
 ## Remaining gaps (explicit, not hidden)
 

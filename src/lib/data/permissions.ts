@@ -119,18 +119,10 @@ export function canGenerateClientFacingReport(
  * Task visibility gate. Employee -> tasks where they're an assignee AND the
  * task's company is one they can access. Supervisor -> tasks where ANY
  * assignee is on their team. Superadmin -> everything.
- *
- * Phase 10 — `hierarchyAssigneeIds` (optional) carries the combined assignee ids of this Task's
- * ONE-HOP hierarchy relation: its parent's assignees (when this Task is a Subtask) plus its
- * Subtasks' assignees (when this Task is a parent). Being in that set grants READ visibility only —
- * enough to see "Subtask of <parent>"/"2 of 4 Subtasks done" context — never edit/progress/time-log
- * rights, which stay on the fully separate `canEditTask`/`canProgressTask`/`canLogTime` predicates.
- * Always a single hop (never recursive), since nesting is capped at one level by the data model
- * itself. Omitting the field preserves the exact pre-Phase-10 behavior for every existing call site.
  */
 export function canAccessTask(
   viewer: User,
-  task: { assigneeIds: string[]; companyId: string; hierarchyAssigneeIds?: string[] },
+  task: { assigneeIds: string[]; companyId: string },
   allUsers: User[]
 ): boolean {
   if (isSuperadmin(viewer)) return true;
@@ -139,20 +131,15 @@ export function canAccessTask(
     if (task.assigneeIds.some((id) => teamIds.has(id))) return true;
     // Unassigned tasks (e.g. freshly created from a template) are visible to any supervisor
     // who can access the underlying company, so they can be triaged instead of vanishing from view.
-    if (task.assigneeIds.length === 0 && canAccessCompany(viewer, task.companyId, allUsers)) return true;
-  } else if (task.assigneeIds.includes(viewer.id) && canAccessCompany(viewer, task.companyId, allUsers)) {
-    return true;
+    return task.assigneeIds.length === 0 && canAccessCompany(viewer, task.companyId, allUsers);
   }
-  return Boolean(task.hierarchyAssigneeIds?.includes(viewer.id)) && canAccessCompany(viewer, task.companyId, allUsers);
+  return task.assigneeIds.includes(viewer.id) && canAccessCompany(viewer, task.companyId, allUsers);
 }
 
 /**
- * Phase 10 hierarchy-authorization hardening — pure pre-Phase-10 `canAccessTask` semantics, with NO
- * `hierarchyAssigneeIds` branch. Use this (never `canAccessTask`) as the authorization gate for any
- * MUTATION or side-effect on a Task — creating a Subtask, a Note, a Handoff, logging time, or the
- * parent time roll-up. `canAccessTask` remains the READ-only hierarchy-visibility helper for list/
- * detail screens and SELECT-shaped queries; being visible to a viewer through a parent/child
- * relationship must never, by itself, grant operating authority over that row.
+ * Use this (never `canAccessTask`) as the authorization gate for any MUTATION or side-effect on a
+ * Task — a Note, a Handoff, logging time. `canAccessTask` is the READ-only visibility helper for
+ * list/detail screens and SELECT-shaped queries.
  */
 export function canAccessTaskDirectly(
   viewer: User,
@@ -202,8 +189,8 @@ export function canEditTask(
  * role-based guess: an Employee may delete a Task only under the identical condition they may
  * already edit every field of it (self-added, still theirs). This is a UI-only convenience
  * gate — `delete_task`'s own SECURITY DEFINER RPC re-derives and enforces this itself via
- * `can_edit_task`, and additionally blocks deletion outright whenever the Task has logged time,
- * Subtasks, or attached Notes (never exposed as a permission the client can bypass by hiding UI).
+ * `can_edit_task`, and additionally blocks deletion outright whenever the Task has logged time or
+ * attached history (never exposed as a permission the client can bypass by hiding UI).
  */
 export function canDeleteTask(
   viewer: User,

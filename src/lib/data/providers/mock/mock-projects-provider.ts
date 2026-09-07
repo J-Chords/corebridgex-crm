@@ -2,6 +2,7 @@ import type { ProjectsProvider, ProjectWithRelations, ProjectTaskSummary, Projec
 import type { Project, ProjectGroup, ProjectStatus, ProjectTrashSettings, User, Workstream } from "../../types";
 import { canAccessProject, canManageProjects } from "../../permissions";
 import { INTERNAL_COMPANY_ID } from "../../constants";
+import { isTaskClosed } from "../../task-display";
 import { db } from "./mock-db";
 import { mockProjectTemplatesProvider } from "./mock-project-templates-provider";
 import { mockCompaniesProvider } from "./mock-companies-provider";
@@ -20,12 +21,15 @@ function taskSummaryFor(projectId: string): ProjectTaskSummary {
   const workstreamIds = db.workstreams.filter((w) => w.projectId === projectId).map((w) => w.id);
   const tasks = db.tasks.filter((t) => workstreamIds.includes(t.workstreamId));
   const today = new Date().toISOString().slice(0, 10);
-  const doneCount = tasks.filter((t) => t.status === "done").length;
-  const overdueCount = tasks.filter((t) => t.status !== "done" && t.dueDate != null && t.dueDate < today).length;
+  const doneCount = tasks.filter((t) => t.status === "completed").length;
+  const closedCount = tasks.filter((t) => isTaskClosed(t.status)).length;
+  const overdueCount = tasks.filter((t) => !isTaskClosed(t.status) && t.dueDate != null && t.dueDate < today).length;
   return {
     totalCount: tasks.length,
     doneCount,
-    openCount: tasks.length - doneCount,
+    // Section 23 — Canceled is CLOSED, never counted as open work; openCount excludes both
+    // Completed and Canceled (doneCount alone would leave a Canceled task counted as "open").
+    openCount: tasks.length - closedCount,
     overdueCount,
   };
 }

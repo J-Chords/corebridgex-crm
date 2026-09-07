@@ -405,7 +405,9 @@ export default function CompanyDetailPage({ params }: { params: Promise<{ id: st
           open={taskDialogOpen}
           onOpenChange={setTaskDialogOpen}
           mode="create"
-          defaultWorkstreamId={workstreams[0].id}
+          // Section 22 — only preselect when there's exactly one Service; with more than one, the
+          // field starts empty so the user must actively choose (never a silent workstreams[0] default).
+          defaultWorkstreamId={workstreams.length === 1 ? workstreams[0].id : undefined}
           onSaved={refreshTasks}
         />
       )}

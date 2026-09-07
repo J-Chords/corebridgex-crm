@@ -5,14 +5,13 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Pencil } from "lucide-react";
 import { useAuth } from "@/lib/auth/auth-context";
-import { useTask, useSubtasks } from "@/lib/data/hooks/use-tasks";
+import { useTask } from "@/lib/data/hooks/use-tasks";
 import { useTaskTimer } from "@/lib/data/hooks/use-task-timer";
 import { useCompanyLookups } from "@/lib/data/hooks/use-companies";
 import { canEditTask, canProgressTask } from "@/lib/data/permissions";
 import { tasksProvider } from "@/lib/data/providers";
 import type { TaskWithRelations } from "@/lib/data/providers/tasks-provider";
 import type { TaskStatus, User } from "@/lib/data/types";
-import { Badge } from "@/components/ui/badge";
 import { CompanyProjectAvatar } from "@/components/companies/company-project-avatar";
 import { TaskStatusAvatar } from "@/components/tasks/task-status-avatar";
 import { isLikelyInternalTask } from "@/lib/data/identity-color";
@@ -22,7 +21,6 @@ import { TaskDetailContent } from "@/components/tasks/task-detail-content";
 import { TaskTimerControl } from "@/components/tasks/task-timer-control";
 import { TaskPropertiesRail } from "@/components/tasks/task-properties-rail";
 import { Button } from "@/components/ui/button";
-import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 
 export default function TaskDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -65,15 +63,13 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
  *
  * Phase 12B — two-column workspace layout (Part 25): a main work-area column (`TaskDetailContent`)
  * and a right property rail (`TaskPropertiesRail` + the rail-variant `TaskTimerControl`). Status-
- * change state/logic (including the existing "mark parent Done with open Subtasks" confirmation)
- * lives here now, since the rail's compact status control and the confirmation dialog need to share
- * it — `canProgressTask`/`updateTaskStatus` themselves are completely unchanged.
+ * change state/logic lives here now, since the rail's compact status control needs it —
+ * `canProgressTask`/`updateTaskStatus` themselves are completely unchanged.
  */
 function LoadedTaskDetailPage({ task, user, refresh }: { task: TaskWithRelations; user: User; refresh: () => void }) {
   const router = useRouter();
   const [editOpen, setEditOpen] = useState(false);
   const [statusPending, setStatusPending] = useState(false);
-  const [confirmDoneOpen, setConfirmDoneOpen] = useState(false);
   // The ONE authoritative timer instance for this page, shared by the right rail's timer widget and
   // the Time Activity history section below (via TaskDetailContent) — see use-task-timer.ts.
   const timer = useTaskTimer(task.id, task.assignees.map((a) => a.id));
@@ -84,31 +80,19 @@ function LoadedTaskDetailPage({ task, user, refresh }: { task: TaskWithRelations
   const canEdit = canEditTask(user, { ...task, assigneeIds }, assignableStaff);
   const canProgress = canProgressTask(user, { assigneeIds, companyId: task.companyId }, assignableStaff);
 
-  // Only a top-level Task can have Subtasks — this warning is a no-op for a Subtask itself.
-  const { subtasks } = useSubtasks(task.parentTaskId ? null : task.id);
-  const openSubtaskCount = subtasks.filter((s) => s.status !== "done").length;
-
-  async function applyStatusChange(status: TaskStatus) {
+  async function applyStatusChange(status: TaskStatus, statusReason?: string) {
     setStatusPending(true);
     try {
-      await tasksProvider.updateTaskStatus(user, task.id, status);
+      await tasksProvider.updateTaskStatus(user, task.id, status, statusReason);
       refresh();
     } finally {
       setStatusPending(false);
     }
   }
 
-  function handleStatusChange(status: string | null) {
+  function handleStatusChange(status: string | null, statusReason?: string) {
     if (!status) return;
-    // Section 22 — a warning, never a hard block: manually marking a parent Task Done while
-    // Subtasks remain open still succeeds if the user confirms. This is the ONLY place completing
-    // a Subtask could ever indirectly touch the parent's status, and only via this explicit,
-    // user-initiated, confirmable action — never automatically.
-    if (status === "done" && !task.parentTaskId && openSubtaskCount > 0) {
-      setConfirmDoneOpen(true);
-      return;
-    }
-    void applyStatusChange(status as TaskStatus);
+    void applyStatusChange(status as TaskStatus, statusReason);
   }
 
   return (
@@ -121,20 +105,6 @@ function LoadedTaskDetailPage({ task, user, refresh }: { task: TaskWithRelations
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex flex-col gap-1.5">
           <div className="flex flex-wrap items-center gap-1.5 text-sm text-muted-foreground">
-            {task.parentTaskId && task.parentTask && (
-              <>
-                <Badge variant="neutral" className="text-[10px]">
-                  SUBTASK
-                </Badge>
-                <span>
-                  Subtask of{" "}
-                  <Link href={`/dashboard/tasks/${task.parentTask.id}`} className="font-medium text-foreground underline underline-offset-2 hover:no-underline">
-                    {task.parentTask.title}
-                  </Link>
-                </span>
-                <span className="text-muted-foreground/60">·</span>
-              </>
-            )}
             <CompanyProjectAvatar
               companyId={task.company.id}
               companyName={task.company.name}
@@ -205,15 +175,6 @@ function LoadedTaskDetailPage({ task, user, refresh }: { task: TaskWithRelations
       {canEdit && (
         <TaskFormDialog open={editOpen} onOpenChange={setEditOpen} mode="edit" task={task} onSaved={refresh} />
       )}
-
-      <ConfirmDialog
-        open={confirmDoneOpen}
-        onOpenChange={setConfirmDoneOpen}
-        title="Subtasks are still open"
-        description={`${openSubtaskCount} Subtask${openSubtaskCount === 1 ? " is" : "s are"} still open. Mark this Task Done anyway?`}
-        confirmLabel="Mark Done"
-        onConfirm={() => applyStatusChange("done")}
-      />
     </div>
   );
 }

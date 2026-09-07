@@ -7,20 +7,25 @@ export const STATUS_META: Record<
   TaskStatus,
   { label: string; variant: "success" | "info" | "warning" | "destructive" | "neutral" }
 > = {
-  todo: { label: "To do", variant: "neutral" },
-  "in-progress": { label: "In progress", variant: "info" },
+  "not-started": { label: "Not Started", variant: "neutral" },
+  "in-progress": { label: "In Progress", variant: "info" },
+  waiting: { label: "Waiting", variant: "warning" },
   blocked: { label: "Blocked", variant: "destructive" },
-  "waiting-on-client": { label: "Waiting on client", variant: "warning" },
-  done: { label: "Done", variant: "success" },
+  completed: { label: "Completed", variant: "success" },
+  // Task Level Phase 1 — Canceled is a new CLOSED status; reuses the same neutral/muted treatment as
+  // Not Started for now (a genuinely distinct visual identity is Phase 2's "final selected status
+  // colors" work, deliberately not done here).
+  canceled: { label: "Canceled", variant: "neutral" },
 };
 
 /** The single source of truth for "what color is this status" — every status-colored element in the app (this badge, the status picker's pills, My Day's buckets, the board) reads from this map. */
 export const STATUS_COLOR_VAR: Record<TaskStatus, string> = {
-  todo: "var(--muted-foreground)",
+  "not-started": "var(--muted-foreground)",
   "in-progress": "var(--info)",
+  waiting: "var(--warning)",
   blocked: "var(--destructive)",
-  "waiting-on-client": "var(--warning)",
-  done: "var(--success)",
+  completed: "var(--success)",
+  canceled: "var(--muted-foreground)",
 };
 
 /**

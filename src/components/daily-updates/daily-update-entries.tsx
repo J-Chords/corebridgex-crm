@@ -59,11 +59,12 @@ interface DailyUpdateEntriesProps {
 
 /** A colored left rail per entry — the quick "scan the shape of the day" cue Toggl/Harvest-style timesheets use, derived entirely from real status data (never a fabricated signal). Non-task sources (legacy handoff rows, manual notes) get a plain primary accent, since they have no status of their own. */
 const STATUS_ACCENT: Record<TaskStatus, string> = {
-  todo: "border-l-muted-foreground/30",
+  "not-started": "border-l-muted-foreground/30",
   "in-progress": "border-l-info",
+  waiting: "border-l-warning",
   blocked: "border-l-destructive",
-  "waiting-on-client": "border-l-warning",
-  done: "border-l-success",
+  completed: "border-l-success",
+  canceled: "border-l-muted-foreground/30",
 };
 const NON_TASK_ACCENT = "border-l-primary/50";
 

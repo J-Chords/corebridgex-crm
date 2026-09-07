@@ -97,15 +97,19 @@ Company
       → Service / Workstream   (service container)
           → Activity           (optional single tag — see below)
           → Task                (executable work)
-              → Subtask         (one level only — see Phase 10)
-              → Checklist       (simple completion steps, inside a Task or Subtask)
+              → Checklist       (simple completion steps, inside a Task)
 ```
 
 - **Workstream** = one service delivered to one client (e.g. "Payroll 2026"). A lightweight container — name, service line, lead + team, status, optional start/renewal dates, optional recurrence. It carries **no** effort/estimate field of its own.
 - **Activity** = a service-specific work category from the brand's Activity Catalog (Brand → Department → Activity). A Task may optionally carry a single `activityId` tag, scoped to the Task's own Workstream's service line when one is set. **This tag is optional, never required** — work is never blocked for lack of one.
 - **Task** = the actual unit of executable work — title, status, priority, due date, expected time, assignees, checklist.
-- **Subtask** = a full child Task, self-referencing its parent Task (`tasks.parent_task_id`) — exactly **one level deep** (a Subtask can never itself have children), inheriting its parent's Company/Project/Service/Activity context automatically, with its own independent status/assignees/time/checklist. **Built in Phase 10 — see that section below for the complete locked rules.**
-- **Checklist** = plain completion steps inside a Task or Subtask (no sub-status, no assignee of its own).
+- **Checklist** = plain completion steps inside a Task (no sub-status, no assignee of its own).
+- **NO SUBTASKS.** Phase 10 built a one-level Subtask hierarchy (`tasks.parent_task_id`); Task Level
+  Phase 1 removed it entirely as a final Product Owner decision — see "Task Level — Phase 1" below
+  for the full removal writeup. Unexpected additional work is now always another ordinary Task under
+  the correct Activity, never a child Task. Historical narrative below describing Phase 10's original
+  Subtask build (and later phases' Subtask-aware UI) is kept as an accurate record of what existed at
+  the time — it does not describe current behavior.
 
 **Locked data-model decision**: each Task belongs to exactly **one Workstream** (required — `Task.workstreamId`) and optionally **one Activity** (`Task.activityId: string | null`). `Task.companyId` is a denormalized copy of the Workstream's own company, kept in sync by the provider, never independently editable. **Do not** introduce `workstreamIds[]` or `activityIds[]` — if several Activities are ever needed at once, the intended direction is batch-creating separate Tasks, not one Task belonging to several Activities/Workstreams.
 
@@ -208,6 +212,114 @@ architecture, delete/archive rules, default-Task-title/template redesign, Creato
 role matrix) was deliberately not started during Service Level; only catalog CRUD/configuration
 (create a new global Activity, list existing ones per Service) was built, on the existing Activity
 Catalog architecture (`departments`/`activities`), never a competing model.
+
+## Task Level — Phase 1 (Core Model / Security / Lifecycle)
+
+**Status: TASK PHASE 1 — CORE ACCEPTANCE PENDING.** Implemented on top of the Boss Feedback Alignment
+checkpoint, superseding the "fully deferred" note above. Three new forward-only migrations applied
+and hosted-read-back-verified (`20260908090000_task_status_model_phase1.sql`,
+`20260908100000_task_delete_history_blockers.sql`,
+`20260908110000_retire_handoff_and_task_notes_creation.sql`). Not yet committed/pushed.
+
+- **Final status model — exactly six, persisted value is the canonical name**: Not Started
+  (`not-started`), In Progress (`in-progress`), Waiting (`waiting`), Blocked (`blocked`), Completed
+  (`completed`), Canceled (`canceled`). No Todo, no Done, no "waiting-on-client" alias anywhere —
+  hosted data was audited and migrated (`todo`→`not-started`, `waiting-on-client`→`waiting`,
+  `done`→`completed`, `in-progress`/`blocked` unchanged; `canceled` is new, no row maps to it).
+  `TaskStatus` (`src/lib/data/types/task.ts`) and every `Record<TaskStatus, _>` consumer across ~50
+  files were swept to match — see git history for the full file list.
+- **Completed vs Canceled are both CLOSED, never merged.** `isTaskClosed(status)`
+  (`src/lib/data/task-display.ts`) is the one shared helper for "is this task open or closed" —
+  `isTaskOverdue` and every open-work/overdue/active-task count across dashboards, My Day, Project/
+  Client Health, and the Task Center were rewritten to use it instead of a bare `status !== "done"`
+  check, so a Canceled task is never counted as open, overdue, or due-today.
+- **`status_reason`** (`tasks.status_reason`, nullable text) — one reusable field, required exactly
+  when status is Waiting or Blocked, force-cleared the instant it isn't. Enforced server-side in
+  `enforce_task_invariants` (the same trigger every Task write already goes through, so this applies
+  uniformly to `create_task`, `create_subtask`, `update_task_status`, the general `updateTask` path,
+  and checklist auto-transitions — never duplicated per-RPC). UI collection: the Create/Edit Task
+  dialog shows a conditional reason field when Waiting/Blocked is picked; `TaskStatusRail` (full Task
+  page) and the Kanban board's drag-to-column both open a small shared `StatusReasonDialog`
+  (`src/components/tasks/status-reason-dialog.tsx`) when a quick status change needs one. Never
+  replaces Comments — status_reason is the current workflow reason, Comments stays the team
+  conversation.
+- **Legacy status_reason gap — found and corrected** (`20260908120000_status_reason_legacy_compat.sql`).
+  A hosted post-migration audit found 2 real Tasks at `status = 'waiting'` with `status_reason IS
+  NULL` (never touched by `update_task_status`, `status_changed_at` still null) — the original
+  status-rename migration's bulk `UPDATE` necessarily ran before the reason requirement's trigger was
+  installed, and no real reason text ever existed for either row to backfill (fabricating one, e.g.
+  "Waiting on client," was explicitly rejected as untruthful). `enforce_task_invariants` gained one
+  narrow bypass: a write may leave an already-null reason null only when it isn't the one creating or
+  worsening the gap (`TG_OP = 'UPDATE'`, status unchanged, reason was *already* null before this
+  write) — a closed set that can never grow, since a brand-new INSERT, a transition INTO
+  Waiting/Blocked, or clearing an *existing real* reason all still raise exactly as before (all 4
+  proven live, rolled back, zero lasting mutation). `TaskFormDialog`'s own `canSubmit` gate mirrors
+  the same bypass (`isLegacyReasonGap`) so an unrelated edit to one of these 2 Tasks isn't blocked
+  forever by a rule that postdates the data — a small honest hint explains why Save is enabled with
+  an empty reason field, without ever fabricating one.
+- **Checklist auto-completion preserved unchanged** (last item → auto-Completed; reopening one →
+  reverts to In Progress). There is no longer any "but this Task has open Subtasks" exception —
+  removed along with the rest of the Subtask architecture (see below).
+- **NO SUBTASKS — now IMPLEMENTED**, not merely a locked decision. The required read-only hosted audit
+  (`count(*) where parent_task_id is not null`) originally found **1**, not 0 ("Phase 10 Child" under
+  "Phase 10 Manual Test Parent"), which correctly stopped the first destructive-removal attempt per
+  the locked rule. Once safe, that one pre-existing Task was **flattened in place** — same Task row,
+  same Task id, every business field/assignee/checklist/time/comment/note/document/creator untouched —
+  and only the obsolete parent/Subtask relationship was removed. A new forward-only migration
+  (`20260908130000_remove_subtask_architecture.sql`) then removed `tasks.parent_task_id` (column,
+  index, FK), the `create_subtask` and `get_task_time_rollup` RPCs, and every Subtask-specific branch
+  inside `enforce_task_invariants`/`delete_task`/`toggle_checklist_item`/`can_access_task` — every
+  other Task invariant (status_reason lifecycle, legacy compatibility, inactive-Activity gate,
+  Service/Activity integrity, Company derivation, and all real delete-history blockers) is unchanged.
+  All Subtask-only application code was removed too: the provider interface's `listSubtasks`/
+  `createSubtask`/`getTaskTimeRollup`/`SubtaskInput`/`TaskTimeRollup`, `Task.parentTaskId`,
+  `useSubtasks`, `TaskSubtasksSection` (deleted), and every "SUBTASK" badge/"Subtask of…" breadcrumb/
+  open-Subtask completion warning across the Task detail page, Board, List, Grid, Drawer, and Quick
+  View. Unexpected additional work is now always another ordinary Task under the correct Activity.
+- **Handoff creation retired.** `create_task_handoff`/`list_handoff_candidates` EXECUTE revoked from
+  `authenticated` (hosted-confirmed both already used the narrow `can_access_task_directly` gate —
+  no authorization bug, no security migration needed for that). `acknowledge_task_handoff` stays
+  grantable (1 real pending hosted Handoff). The "Hand off task" button and its authoring dialog
+  (`task-handoff-dialog.tsx`) are removed from the UI entirely; `TaskHandoffSection` is now
+  history-plus-Acknowledge only. Normal ownership transfer is now: change Assignee(s) + add a Comment.
+- **Task Notes authoring retired**, Comments is canonical. `notes_insert`'s RLS narrowed to
+  Company Notes only (the pre-existing OR-branch for `task_id` was dropped; Company Notes creation is
+  untouched). `NotesSection` (`src/components/notes/notes-section.tsx`) gained a `readOnly` prop,
+  mirroring `SharedNotesSection`'s existing precedent; the Task detail page passes `readOnly` and only
+  renders the section when history exists, while the Company page keeps its composer active.
+- **Task delete safety** — `delete_task` now also blocks on `project_comments` (task-scoped,
+  non-deleted), `task_handoffs`, and a linked `project_issues` row, closing a real gap (Comments
+  weren't checked before, and both Comments and Handoffs CASCADE on delete — they could have been
+  silently destroyed). No Task Trash was built; this stays a friendly hard-block.
+- **Service/Activity reassignment integrity** — an inactive Activity can never be newly selected
+  (create, or an edit that actually changes `activity_id`); an already-selected inactive Activity on
+  an existing Task stays valid until deliberately changed. Enforced in `enforce_task_invariants`
+  (hosted) and mirrored in the mock provider's own `requireActiveActivityIfNewlySelected` helper.
+- **Project → New Task Service prefill corrected**: zero Services never silently proceeds; exactly one
+  Service may still preselect; more than one now leaves the field empty so the user must actively
+  choose (previously always silently defaulted to `workstreams[0]`) — fixed on both the Project page
+  and the Company page's "New Task" entry points.
+- **Service identity data-shape prep** — `TaskWithRelations.workstream` gained `serviceLineName`
+  (alongside the existing `projectName` qualifier) in both providers, so a future surface can show the
+  global Service name primary / Project-Service qualifier secondary without an N+1 fetch. No surface
+  redesign done this pass beyond the New/Edit Task dialog, which already followed this rule.
+- **Estimated Time** (`expectedMinutes`) — confirmed already round-tripping correctly through
+  create/update in both providers; no duplicate field added. Final UI control stays Phase 2.
+- **Creator/Assignees/Comments** — unchanged: Creator is still preserved and never overwritten,
+  multi-assignee storage is untouched, Comments remains the one canonical Task conversation.
+- **Provider parity** — Supabase's `updateTask` gained `status_reason` in its update payload (a real,
+  previously-undiscovered parity gap around editing the reason for an already-Waiting/Blocked task
+  without changing status); `create_task`/`create_subtask`/`update_task_status` calls all gained
+  `p_status_reason`; mock mirrors every rule above via small explicit helper functions since it has no
+  shared DB trigger.
+- **Validation**: `tsc`/`eslint`/`git diff --check` clean; all 4 provider builds
+  (`mock`/`supabase-auth`/`supabase-core`/`supabase`) clean; one mock dev server restarted on port 3000
+  for manual verification.
+- **Explicitly NOT done this pass (Phase 2)**: full Task-detail visual redesign, Timeline redesign,
+  final Board/List visual polish, a distinct Canceled status color (currently reuses Not Started's
+  neutral treatment), final large Task-dialog layout corrections beyond the defects above, and any
+  Handoff/Notes *history presentation* redesign (both remain fully readable, just not yet visually
+  reworked).
 
 ## Roles and access
 
@@ -2450,6 +2562,50 @@ Read the Current phase and Next roadmap sections before proposing changes.
 
 ## Last updated
 
+- Date: 2026-09-07 (**TASK PHASE 1 — FINAL SUBTASK REMOVAL, per Product Owner final decision: THERE
+  ARE NO SUBTASKS IN COREBRIDGE X.** Re-audited hosted `parent_task_id is not null` (still exactly 1,
+  unchanged since the earlier audit) — that one pre-existing Task ("Phase 10 Child") was flattened in
+  place (same row/id, every business field/history preserved, only the parent/Subtask relationship
+  removed) via a new forward-only migration (`20260908130000_remove_subtask_architecture.sql`) that
+  also dropped `tasks.parent_task_id` (column/index/FK), the `create_subtask` and
+  `get_task_time_rollup` RPCs, and every Subtask-specific branch inside `enforce_task_invariants`/
+  `delete_task`/`toggle_checklist_item`/`can_access_task` — all other invariants (status_reason
+  lifecycle + legacy compatibility, inactive-Activity gate, Service/Activity integrity, real
+  delete-history blockers) verified unchanged via hosted read-back. Removed every Subtask-only
+  application capability: provider interface methods/types, `Task.parentTaskId`, `useSubtasks`,
+  `TaskSubtasksSection` (deleted outright), and all "SUBTASK" badges/"Subtask of…" breadcrumbs/
+  open-Subtask completion warnings across the Task detail page, Board, List, Grid, Drawer, and Quick
+  View — confirmed via a full source sweep (zero remaining active-code matches). Final hierarchy is
+  now truly PROJECT → SERVICE → ACTIVITY → TASK → CHECKLIST; unexpected work becomes another ordinary
+  Task. `tsc`/`eslint`/`git diff --check` clean, all 4 provider builds clean, one mock dev server
+  restarted on port 3000 and used for a full manual QA pass. Uncommitted, pending final Product Owner
+  acceptance alongside the rest of Task Phase 1.)
+- Date: 2026-09-07 (**TASK LEVEL — PHASE 1 correction pass — legacy `status_reason` gap found and
+  fixed.** The Phase 1 hosted negative-path validation surfaced 2 real Tasks at `status = 'waiting'`
+  with `status_reason IS NULL`, predating the reason requirement (root-caused to the original
+  migration's rename `UPDATE` necessarily running before its own trigger was installed — not an
+  execution bug). No reason text was fabricated. New forward-only migration
+  `20260908120000_status_reason_legacy_compat.sql` gives `enforce_task_invariants` one narrow,
+  structurally-closed bypass (a write may leave an already-null legacy reason null only when it isn't
+  the one creating the gap); `TaskFormDialog`'s `canSubmit` gained the matching client-side bypass.
+  All 4 live hosted proofs (legacy-row unrelated edit now succeeds; new transition into Waiting/
+  Blocked still rejected; clearing an existing real reason still rejected; a brand-new INSERT still
+  rejected) passed, each rolled back with zero lasting mutation. `tsc`/`eslint`/`git diff --check`
+  clean, all 4 provider builds re-run clean. Uncommitted. See "Task Level — Phase 1"'s own
+  `status_reason` bullet above for the full write-up.)
+- Date: 2026-09-07 (**TASK LEVEL — PHASE 1 (Core Model / Security / Lifecycle) — IMPLEMENTED,
+  uncommitted, CORE ACCEPTANCE PENDING.** See the new "Task Level — Phase 1" section above for the
+  full write-up: six-state canonical status model with hosted data migrated and audited beforehand
+  (`todo`/`waiting-on-client`/`done` renamed, `canceled` added), a new `status_reason` field required
+  exactly for Waiting/Blocked and enforced via `enforce_task_invariants`, Subtask removal deferred
+  (hosted count = 1, not 0 — audit-gated STOP as locked), Handoff creation retired (EXECUTE revoked,
+  history + Acknowledge preserved), Task Notes authoring retired (Comments canonical, `notes_insert`
+  narrowed), Task delete now also blocks on Comments/Handoffs/linked Issues, inactive-Activity
+  reselection closed at the DB layer, the unsafe `workstreams[0]` New-Task prefill default fixed, and
+  `TaskWithRelations.workstream` gained `serviceLineName` for a future Service-identity display pass.
+  Three new forward-only migrations applied and hosted-read-back-verified. `tsc`/`eslint`/
+  `git diff --check` clean, all 4 provider builds clean. Uncommitted, pending Product Owner
+  acceptance — do not begin Task Phase 2 until that happens.)
 - Date: 2026-09-07 (**Boss Feedback Alignment** — a management-demo-driven correction pass on top of
   the Activity Level checkpoint (`5dfcf80fc2326143bfad377d17690626a881bf57`), not yet committed. Project
   Overview's KPI shell unified into one 4-tile structure (Services/Open Work/Attention/Next Due) for

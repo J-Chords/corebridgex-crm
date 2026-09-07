@@ -71,7 +71,7 @@ export function QuickAddFromActivityDialog({ open, onOpenChange, workstream, onA
         workstreamId: workstream.id,
         assigneeIds: [],
         allowUnassigned: true,
-        status: "todo",
+        status: "not-started",
         priority: "medium",
         startDate: null,
         dueDate: null,
