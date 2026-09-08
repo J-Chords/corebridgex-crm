@@ -1,5 +1,5 @@
-import type { ProjectsProvider, ProjectWithRelations, ProjectTaskSummary, ProjectInput, ClientProjectInput, ProjectRenewalInput } from "../projects-provider";
-import type { Project, ProjectGroup, ProjectStatus, ProjectTrashSettings, User, Workstream } from "../../types";
+import type { ProjectsProvider, ProjectWithRelations, ProjectTaskSummary, ProjectInput, ClientProjectInput } from "../projects-provider";
+import type { Project, ProjectGroup, ProjectStatus, ProjectTrashSettings, User } from "../../types";
 import { canAccessProject, canManageProjects } from "../../permissions";
 import { INTERNAL_COMPANY_ID } from "../../constants";
 import { isTaskClosed } from "../../task-display";
@@ -294,22 +294,30 @@ export const mockProjectsProvider: ProjectsProvider = {
     return updated;
   },
 
-  async setProjectStatus(viewer, id, status, reason) {
+  async setProjectStatus(viewer, id, status) {
     requireAdmin(viewer);
+    // Product Owner Final Lifecycle Integrity correction — Project = Client workspace; the normal
+    // lifecycle is Active <-> Archived only. "on-hold"/"completed"/"cancelled" are retired as
+    // normal targets (mirrors the hosted `set_project_status` RPC exactly) — an existing legacy row
+    // in one of those states is untouched (this function is never called with a target it isn't
+    // asked to move TO); it can still move forward into Active, Archived, or Trash like any other
+    // Project.
+    if (status !== "active" && status !== "archived") {
+      throw new Error(`Invalid status for this action: ${status}`);
+    }
     const existing = db.projects.find((p) => p.id === id);
     if (!existing) throw new Error("Project not found.");
     if (existing.status === "trash") throw new Error("This project is in Trash — restore it first.");
-    if ((status === "on-hold" || status === "cancelled") && !reason?.trim()) {
-      throw new Error(`A reason is required when moving a project to ${status}.`);
-    }
 
     const updated: Project = {
       ...existing,
       status,
-      statusReason: status === "on-hold" || status === "cancelled" ? reason!.trim() : null,
+      statusReason: null,
       statusChangedAt: new Date().toISOString(),
       statusChangedById: viewer.id,
-      completionDate: status === "completed" && !existing.completionDate ? new Date().toISOString().slice(0, 10) : existing.completionDate,
+      // Archive atomically stamps the persisted archive/relationship-end date — never cleared by
+      // any other transition (Reactivate simply never sets it, so it survives untouched).
+      completionDate: status === "archived" ? new Date().toISOString().slice(0, 10) : existing.completionDate,
       updatedAt: new Date().toISOString(),
     };
     db.projects = db.projects.map((p) => (p.id === id ? updated : p));
@@ -368,93 +376,5 @@ export const mockProjectsProvider: ProjectsProvider = {
     const group: ProjectGroup = { id: crypto.randomUUID(), name: trimmed };
     db.projectGroups = [...db.projectGroups, group];
     return group;
-  },
-
-  async renewProject(viewer, sourceProjectId, input: ProjectRenewalInput) {
-    requireManageProjects(viewer);
-    const source = db.projects.find((p) => p.id === sourceProjectId);
-    if (!source) throw new Error("Source project not found.");
-    requireActiveOwner(input.ownerId);
-
-    const newProjectId = crypto.randomUUID();
-    const now = new Date().toISOString();
-    const newProject: Project = {
-      id: newProjectId,
-      companyId: source.companyId,
-      name: input.name,
-      ownerId: input.ownerId,
-      status: "active",
-      contractStartDate: input.contractStartDate,
-      contractMonths: input.contractMonths,
-      contractEndDate: input.contractEndDate,
-      description: source.description,
-      completionDate: null,
-      startDate: null,
-      endDate: null,
-      projectGroupId: source.projectGroupId,
-      tags: source.tags,
-      statusReason: null,
-      statusChangedAt: null,
-      statusChangedById: null,
-      trashedAt: null,
-      preTrashStatus: null,
-      createdById: viewer.id,
-      createdAt: now,
-      updatedAt: now,
-    };
-    db.projects = [...db.projects, newProject];
-    syncMembers(newProjectId, input.memberUserIds);
-
-    // Carry forward ONLY the explicitly selected source Services, each as a genuinely new
-    // Workstream row — see the real renew_project RPC's own header comment for the full rationale
-    // (fresh dates, active-only lead/team, no historical Task/time/note data, never mutating the
-    // source). Any id not genuinely belonging to sourceProjectId is silently excluded.
-    const sourceWorkstreams = db.workstreams.filter(
-      (w) => w.projectId === sourceProjectId && input.workstreamIdsToCarryForward.includes(w.id)
-    );
-    for (const ws of sourceWorkstreams) {
-      const newWsId = crypto.randomUUID();
-      const leadStillActive = db.users.some((u) => u.id === ws.leadUserId && u.active);
-      const effectiveLead = leadStillActive ? ws.leadUserId : input.ownerId;
-
-      const newWorkstream: Workstream = {
-        id: newWsId,
-        name: ws.name,
-        description: ws.description,
-        companyId: source.companyId,
-        projectId: newProjectId,
-        serviceLineId: ws.serviceLineId,
-        brandId: ws.brandId,
-        leadUserId: effectiveLead,
-        status: "active",
-        startDate: input.contractStartDate,
-        endDate: null,
-        recurrenceFrequency: ws.recurrenceFrequency,
-        recurrenceAnchorDate: ws.recurrenceFrequency ? input.contractStartDate : null,
-        recurrenceCustomIntervalDays: ws.recurrenceCustomIntervalDays,
-        previousOccurrenceWorkstreamId: null,
-        createdById: viewer.id,
-        createdAt: now,
-        updatedAt: now,
-      };
-      db.workstreams = [...db.workstreams, newWorkstream];
-
-      const activeTeamIds = db.workstreamMembers
-        .filter((m) => m.workstreamId === ws.id)
-        .map((m) => m.userId)
-        .filter((userId) => db.users.some((u) => u.id === userId && u.active));
-      db.workstreamMembers = [
-        ...db.workstreamMembers,
-        ...activeTeamIds.map((userId) => ({ workstreamId: newWsId, userId })),
-      ];
-
-      const activityIds = db.workstreamActivities.filter((wa) => wa.workstreamId === ws.id).map((wa) => wa.activityId);
-      db.workstreamActivities = [
-        ...db.workstreamActivities,
-        ...activityIds.map((activityId) => ({ workstreamId: newWsId, activityId })),
-      ];
-    }
-
-    return toProjectWithRelations(newProject)!;
   },
 };

@@ -17,6 +17,7 @@ import {
 } from "@/lib/data/hooks/use-task-filters";
 import { timeEntriesProvider } from "@/lib/data/providers";
 import { isTaskClosed } from "@/lib/data/task-display";
+import { workstreamDisplayHeading } from "@/lib/data/workstream-name";
 import { formatMinutes } from "@/lib/format-minutes";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardAction } from "@/components/ui/card";
@@ -338,7 +339,7 @@ export function EmployeeDashboard({ user }: { user: User }) {
                   : "No tasks match your filters."
               }
               subtitleFor={(task) =>
-                `${task.company.name} · ${task.workstream.name}${task.activity ? ` · ${task.activity.name}` : ""}`
+                `${task.company.name} · ${workstreamDisplayHeading(task.workstream.name, task.workstream.serviceLineName)}${task.activity ? ` · ${task.activity.name}` : ""}`
               }
               onOpen={setDrawerTaskId}
             />
@@ -454,7 +455,7 @@ export function EmployeeDashboard({ user }: { user: User }) {
               : "No tasks match your filters."
           }
           subtitleFor={(task) =>
-            `${task.company.name} · ${task.workstream.name}${task.activity ? ` · ${task.activity.name}` : ""}`
+            `${task.company.name} · ${workstreamDisplayHeading(task.workstream.name, task.workstream.serviceLineName)}${task.activity ? ` · ${task.activity.name}` : ""}`
           }
           onOpen={setDrawerTaskId}
         />

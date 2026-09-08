@@ -6,6 +6,7 @@ import { useAuth } from "@/lib/auth/auth-context";
 import { useSchedulableProjects } from "@/lib/data/hooks/use-client-report-schedules";
 import { clientReportSchedulesProvider } from "@/lib/data/providers";
 import type { ClientReportSchedule } from "@/lib/data/types";
+import { operationalProjectIdentity } from "@/lib/data/project-display";
 import {
   Dialog,
   DialogContent,
@@ -73,8 +74,17 @@ export function ScheduleFormDialog({ open, onOpenChange, onSaved, schedule }: Sc
     setError(null);
   }, [open, schedule]);
 
+  // Project IS the visible Client identity (Product Owner acceptance correction) — for an ordinary
+  // Company with exactly one Project, `projectName` is now just `companyName` again, so showing both
+  // would read as "Alderleaf Manufacturing — Alderleaf Manufacturing". Only append the Project's own
+  // name when it genuinely says something the Company name doesn't (e.g. a renewed annual term).
+  function projectPickerLabel(p: { companyName: string; projectName: string }): string {
+    const identity = operationalProjectIdentity(p.companyName, p.projectName);
+    return identity.secondary ? `${identity.primary} — ${identity.secondary}` : identity.primary;
+  }
+
   const projectItems = useMemo(
-    () => Object.fromEntries(clientProjects.map((p) => [p.projectId, `${p.companyName} — ${p.projectName}`])),
+    () => Object.fromEntries(clientProjects.map((p) => [p.projectId, projectPickerLabel(p)])),
     [clientProjects]
   );
 
@@ -127,7 +137,7 @@ export function ScheduleFormDialog({ open, onOpenChange, onSaved, schedule }: Sc
               <SelectContent>
                 {clientProjects.map((p) => (
                   <SelectItem key={p.projectId} value={p.projectId}>
-                    {p.companyName} — {p.projectName}
+                    {projectPickerLabel(p)}
                   </SelectItem>
                 ))}
               </SelectContent>

@@ -321,6 +321,143 @@ and hosted-read-back-verified (`20260908090000_task_status_model_phase1.sql`,
   Handoff/Notes *history presentation* redesign (both remain fully readable, just not yet visually
   reworked).
 
+## Task Level — Phase 2 (Product UX + Cross-App Integration)
+
+**Status: TASK PHASE 2 — CORE ACCEPTANCE PENDING.** Built on the Task Phase 1 checkpoint
+(`e674b78791b87db13ee72edb2fafef7a29847c75`). No schema/security change and no new migration —
+audited existing Task UI and corrected the remaining product/UX deltas the Phase 2 review identified,
+reusing every already-accepted surface (Task detail's two-column layout, the large centered Create/
+Edit Task dialog, the existing Board/List, `TaskTimeline`) rather than rebuilding any of them.
+
+- **Task detail — context/history/time/properties**: the breadcrumb now shows the global Service name
+  primary (`workstreamDisplayHeading`), with the Project-Service instance's own qualifier/reference
+  shown only as small secondary text when it's genuinely different, e.g. "Accounting (Reference:
+  Accounting 2026)." Handoffs and historical Notes were merged into one new
+  `TaskLegacyHistorySection` (reusing `TaskHandoffSection`/`NotesSection` unchanged) — renders nothing
+  at all when neither has real history, otherwise a single collapsed-by-default "Legacy history" box;
+  no empty "No handoffs recorded yet" card shows in the normal case anymore. The right Properties rail
+  gained **Reason** (shown only while Waiting/Blocked), **Estimated** (`expectedMinutes`), **Tracked**
+  (`timer.totalMinutes`), and **Created by** (moved up from a loose footer paragraph at the bottom of
+  the main content, which is now gone). The separate Time Tracking control block no longer shows its
+  own idle-state "Tracked"/"No time logged" text (Properties' own row is now the single source for
+  that number) — it shows only the live running clock plus action buttons, eliminating the reported
+  "duplicate time presentation."
+- **Estimated Time exposed** — `TaskFormDialog` (Create/Edit) gained an "Estimated time" field reusing
+  the existing `ExpectedTimeInput` component verbatim (already used by Daily Updates/manual time entry/
+  time corrections) — no second estimate field, no new input pattern invented.
+- **Status visual system strengthened** — `PropertySelect` (the Create/Edit dialog's Status/Priority
+  picker shell) gained an optional per-option `triggerStyle`; `TaskStatusPicker` now passes
+  `statusChipStyle(status)` so the closed dropdown itself is tinted with the selected status's color
+  (matching `TaskStatusRail`'s existing pattern), not a plain bordered box with only a small dot. The
+  underlying six-status color mapping itself was already correct and is unchanged; native `Select`
+  already shows a checkmark on the current item in every dropdown, for free.
+- **Timeline (`TaskTimeline`) upgraded, not rebuilt** — gained a red "Today" vertical marker spanning
+  the header and every task row, plus a collapsed-by-default "Unscheduled" list for any Task with
+  neither a start nor due date (previously an inline "No schedule" row inside the main Gantt grid every
+  month, forever) — never invents a date for these. Its own Service-identity context line was fixed to
+  the same primary/secondary rule as everywhere else. Added as the Global Tasks page's **third view**
+  (List/Board/**Timeline**) and the Project Tasks tab gained a **Board** view (List/**Board**/Timeline)
+  — both pages now expose the same three views, sharing the identical `TaskTimeline`/`TaskBoard`
+  components and the same already-filtered task list, never a second implementation.
+- **Service Identity cross-app sweep** — `taskServiceLabel` (the one shared helper `TaskCard`/Board
+  reads) and every remaining direct `task.workstream.name` display (List rows in all three contexts,
+  Grid cards, Quick View/Drawer, Project Completed Work, Project Time's By-Service breakdown, My Day's
+  task-row subtitles on both Employee/Supervisor dashboards, the Service filter/group-by option labels)
+  now show the global Service name primary with the qualifier as secondary/omitted, via the same
+  existing `workstreamDisplayHeading`/`splitWorkstreamQualifier` helpers Service Level already built —
+  no new helper invented. Task search matching was extended to also match the global Service name.
+- **Project Edit Drawer — width bug found and fixed.** Root cause: the shared `SheetContent`
+  primitive hardcodes `data-[side=right]:sm:max-w-sm` as its own default; `ProjectFormDialog`'s plain
+  `sm:max-w-4xl` override had a shorter modifier chain, so tailwind-merge never recognized it as the
+  same utility and the attribute-qualified default's higher CSS specificity silently won — the drawer
+  rendered ~24rem wide regardless of that className. Fixed by matching the exact modifier chain
+  (`data-[side=right]:sm:max-w-4xl`). New Project and Edit Project already shared the identical
+  `ProjectFormDialog` component, so this one fix corrects both consistently — Project was never
+  migrated to the Task/Service `FormDialog` (centered Dialog) shell, and this pass deliberately did
+  not do that either, per instruction.
+- **Hidden/legacy UI sweep** — found and fixed two remaining stale labels: the Service detail page's
+  own status-rollup strip said "Done" instead of "Completed"; a seeded example Saved View was named
+  "Waiting on client" instead of "Waiting." Confirmed zero remaining active-UI Subtask/Handoff-
+  authoring/Task-Notes-authoring text; `service_lines`/`workstream` stays internal-only vocabulary,
+  never user-facing.
+- **Role/security** — no permission function was touched this pass; every role continues to see the
+  same Task information architecture with only their existing legitimate actions available.
+- **Explicitly NOT done this pass**: any further visual redesign beyond the defects above (final
+  large Task-dialog layout polish, a distinct Canceled status color, Timeline dependency/critical-path
+  features — none were requested or built).
+
+## Project Level — Final Lifecycle Correction (Project = Client Workspace)
+
+**Locked business rule**: a Project IS the client/company workspace, not a finite piece of work.
+Final user-facing lifecycle: **Active → Archived → (Reactivate) → Active**, the same workspace every
+time — never a new/cloned Project, never a year-suffixed name. Trash stays a completely separate,
+still-destructive-feeling removal workflow (`ProjectStatusControl`'s own dedicated Trash/Restore
+actions, untouched). The Archived-write invariant is now **authoritative in both Mock and Supabase**
+— see the new migration below, applied with explicit Product Owner approval after a full read-only
+hosted audit (all 4 hosted Projects were `active` with `completion_date IS NULL` — zero ambiguity).
+
+- **Archive/Reactivate** — `ProjectStatusControl`'s dedicated "Archive" (lightweight, non-destructive
+  confirm dialog) and "Reactivate" actions make exactly ONE authoritative `setProjectStatus` call each
+  — no separate client-side orchestration. Admin-only, unchanged.
+- **"Completed"/"On Hold"/"Canceled" retired as normal targets, now at every layer.** An exhaustive
+  application-layer search found no feature reading a Project's own status for any of the three
+  (unlike Workstream/Project-Issue status, unrelated entities with their own vocabulary), and hosted
+  data confirmed zero rows in any of those states. Removed from `ProjectStatusControl` (no dropdown at
+  all now — Active shows only the badge plus dedicated Archive/Trash buttons) and from the Projects
+  list's normal KPI tiles (a tile reappears automatically the instant a real record in that state
+  exists — never hardcoded to zero). **Now also rejected at the data layer**: both the hosted
+  `set_project_status` RPC and the mock provider's `setProjectStatus` only accept `'active'`/
+  `'archived'` as a transition target — a direct API/RPC call using a retired value fails just like
+  the UI already did. Any already-existing legacy row is untouched and can still move forward into
+  Active, Archived, or Trash exactly like any other Project. `PROJECT_STATUS_META`'s entries for all
+  three remain so a legacy row still renders a real label. Task "Completed" is unrelated and untouched.
+- **"Archived On" / "Client Since" / "Previously Archived On" — now atomic.** Reuses the existing
+  `completionDate`/`completion_date` column (proven to have no other accepted consumer) as the
+  persisted archive/relationship-end date. Both `set_project_status` (hosted RPC) and the mock
+  provider's `setProjectStatus` now stamp it in the SAME atomic write as the status transition itself
+  — archiving can no longer partially succeed (status changed but date not stamped); Reactivate never
+  touches the column, so it survives; a later re-Archive updates it to the newest date. The Project
+  Details card shows "Client Since" (Active, `contractStartDate`, only if truthfully set), "Archived
+  On" (Archived, `completionDate`), and "Previously Archived On" (Active-but-previously-archived, same
+  `completionDate`) — no "Completion date" row, no manual entry field, no lifecycle-event-history
+  table (only the single latest date is retained, as instructed). No DB column renamed/dropped/added.
+- **New work blocked while Archived — UI, mock provider, AND hosted database, all three layers.**
+  New Task (Project/Workstream/Company pages, the shared `TaskFormDialog` picker), Add Service
+  (Project/Company pages), Apply Template (Company page), Configure Activities (Project page) all
+  check status client-side with a clear explanation. `mock-tasks-provider.ts`'s `createTask` and
+  `mock-workstreams-provider.ts`'s `createWorkstream`/`setWorkstreamActivities` independently reject
+  the same three operations (proven via a temporary, deleted-afterward debug route calling the
+  provider directly). The hosted `create_task`/`create_workstream` RPCs and the
+  `workstream_activities_write` RLS policy now carry the identical rejection, applied via migration
+  `20260908140000_project_lifecycle_authoritative_hardening.sql` — read from the ACTUAL live hosted
+  function/policy bodies via `pg_get_functiondef`/`pg_policies` (not stale migration-file text;
+  `create_task`'s hosted signature had already drifted to include `p_start_date`/`p_status_reason`
+  from a later Task Phase 1 migration, confirming why this mattered) and read back after applying to
+  confirm the exact change landed. The separate `workstream_activities_select` policy (reads) is
+  untouched. History (Overview/Services/Tasks/Members/Comments/Time/Issues/Reports) remains fully
+  readable while Archived, everywhere.
+- **Archived visibility widened for Team Lead/Employee** — the Projects list's non-Admin visible-
+  status set now includes `archived` (previously Admin-only, bundled with Trash); Trash alone stays
+  Admin-only. Archive/Reactivate authority itself is unchanged (Admin-only, enforced server-side).
+- **Annual "Renew Project" fully retired — UI, provider, AND hosted RPC.** The dead UI/provider layer
+  (`project-renewal-dialog.tsx`, `nextAnnualName()`, `ProjectsProvider.renewProject`,
+  `ProjectRenewalInput`) was already removed with zero consumers found. The hosted `renew_project` RPC
+  — still `EXECUTE`-granted to `authenticated` and capable of creating a duplicate annual Project if
+  called directly, regardless of the UI — was **dropped outright** in the same migration (zero
+  dependents found; superadmin-gated already, self-contained). No historical Project row it ever
+  created was touched.
+- **Known, disclosed limitation**: a full live authenticated negative-path test directly against the
+  hosted PostgREST/RPC endpoint (Section 17 of the correction) was not performed — simulating a
+  superadmin session via raw JWT-claim impersonation was correctly blocked by this environment's
+  safety classifier as a privilege-escalation-shaped action, and no real hosted user credentials were
+  available to authenticate a genuine session. Confidence instead comes from (a) exact hosted
+  read-back of the installed function/policy bodies via `pg_get_functiondef`/`pg_policies`, (b) the
+  identical business logic already proven live end-to-end on the mock provider, and (c) the migration
+  applying without error (proving valid, executable SQL).
+- **Explicitly NOT done this pass**: On Hold/Canceled's reason-required validation and any
+  already-existing legacy row's data were left completely alone; no lifecycle-event-history table;
+  Task Completed semantics untouched; no unrelated schema touched.
+
 ## Roles and access
 
 Exactly **three roles**: `superadmin`, `supervisor`, `employee`. No configurable permission matrix.

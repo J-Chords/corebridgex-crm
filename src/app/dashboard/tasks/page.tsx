@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { ArrowLeft, Bookmark, LayoutGrid, List as ListIcon, Plus, Search, SlidersHorizontal } from "lucide-react";
+import { ArrowLeft, Bookmark, GanttChart, LayoutGrid, List as ListIcon, Plus, Search, SlidersHorizontal } from "lucide-react";
 import { useAuth } from "@/lib/auth/auth-context";
 import { useTasks } from "@/lib/data/hooks/use-tasks";
 import { useCompanies, useCompanyLookups } from "@/lib/data/hooks/use-companies";
@@ -32,6 +32,7 @@ import { SavedViewsBar } from "@/components/tasks/saved-views-bar";
 import { TaskGroupBySelect } from "@/components/tasks/task-group-by-select";
 import { TaskBoard } from "@/components/tasks/task-board";
 import { TaskListSection, FlatTaskList } from "@/components/tasks/task-list-section";
+import { TaskTimeline } from "@/components/tasks/task-timeline";
 import { TaskFormDialog } from "@/components/tasks/task-form-dialog";
 
 const VALID_STATUSES: TaskStatus[] = ["not-started", "in-progress", "waiting", "blocked", "completed", "canceled"];
@@ -40,7 +41,7 @@ function todayDateString() {
   return new Date().toISOString().slice(0, 10);
 }
 
-type TaskView = "board" | "list";
+type TaskView = "board" | "list" | "timeline";
 
 export default function TasksPage() {
   return (
@@ -234,6 +235,9 @@ function TasksPageContent() {
         <Button size="sm" variant={view === "board" ? "secondary" : "ghost"} aria-pressed={view === "board"} onClick={() => setView("board")}>
           <LayoutGrid /> Board
         </Button>
+        <Button size="sm" variant={view === "timeline" ? "secondary" : "ghost"} aria-pressed={view === "timeline"} onClick={() => setView("timeline")}>
+          <GanttChart /> Timeline
+        </Button>
       </div>
 
       {/* Phase 12B — one compact toolbar row (Reference 1): grouping/filtering/saved-views on the
@@ -309,6 +313,8 @@ function TasksPageContent() {
         <p className="p-6 text-sm text-muted-foreground">Loading tasks…</p>
       ) : view === "board" ? (
         <TaskBoard user={user} tasks={filtered} onChanged={refresh} runningTaskId={runningTaskId} />
+      ) : view === "timeline" ? (
+        <TaskTimeline tasks={filtered} onEdit={setEditingTask} onDeleted={refresh} />
       ) : filters.groupBy === "none" ? (
         filtered.length === 0 ? (
           <Card className="p-10 text-center text-sm text-muted-foreground">No tasks match this view.</Card>

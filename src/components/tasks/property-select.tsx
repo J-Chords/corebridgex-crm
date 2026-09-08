@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 export interface PropertySelectOption<T extends string> {
@@ -9,6 +9,11 @@ export interface PropertySelectOption<T extends string> {
   /** A small leading visual (a status dot, priority bars) — rendered identically in the trigger's
    * current value and in each dropdown item, so the closed control and its open menu always agree. */
   indicator: ReactNode;
+  /** Task Level Phase 2, Section 14 — an optional colored-chip style applied to the trigger ONLY
+   * while this option is the current value (e.g. `statusChipStyle(status)`), so the selected value
+   * visually reads as "selected" at a glance instead of a plain bordered box with a small dot. Omit
+   * for an enum with no such per-value color (e.g. Priority keeps the plain trigger). */
+  triggerStyle?: CSSProperties;
 }
 
 /**
@@ -32,9 +37,10 @@ export function PropertySelect<T extends string>({
   disabled?: boolean;
 }) {
   const items = Object.fromEntries(options.map((o) => [o.value, o.label]));
+  const currentOption = options.find((o) => o.value === value);
   return (
     <Select items={items} value={value} onValueChange={(v) => v && onChange(v as T)} disabled={disabled}>
-      <SelectTrigger aria-label={ariaLabel} className="h-8 w-full">
+      <SelectTrigger aria-label={ariaLabel} className="h-8 w-full font-medium" style={currentOption?.triggerStyle}>
         <SelectValue>
           {(current: T | null) => {
             const option = options.find((o) => o.value === current);

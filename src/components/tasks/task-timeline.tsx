@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 import type { TaskWithRelations } from "@/lib/data/providers/tasks-provider";
 import { TaskPriorityBadge } from "@/components/tasks/task-priority-badge";
 import { TaskStatusAvatar } from "@/components/tasks/task-status-avatar";
@@ -10,6 +10,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { STATUS_COLOR_VAR } from "@/components/tasks/task-status-badge";
 import { addDays, formatDateOnly, formatMonthLabel, startOfMonth } from "@/lib/planner-dates";
+import { workstreamDisplayHeading } from "@/lib/data/workstream-name";
 import { cn } from "@/lib/utils";
 import { getInitials as initials } from "@/lib/initials";
 import { TaskActionsMenu } from "@/components/tasks/task-actions-menu";
@@ -88,12 +89,23 @@ interface TaskTimelineProps {
 export function TaskTimeline({ tasks, onEdit, onDeleted }: TaskTimelineProps) {
   const router = useRouter();
   const [monthCursor, setMonthCursor] = useState(() => startOfMonth(new Date()));
+  const [unscheduledExpanded, setUnscheduledExpanded] = useState(false);
   const showActions = Boolean(onEdit && onDeleted);
 
   const days = useMemo(() => {
     const daysInMonth = new Date(monthCursor.getFullYear(), monthCursor.getMonth() + 1, 0).getDate();
     return Array.from({ length: daysInMonth }, (_, i) => addDays(monthCursor, i));
   }, [monthCursor]);
+
+  // Task Level Phase 2, Section 23 — never invent a date for a Task with nothing real to schedule.
+  // Partitioned once here so the main Gantt only ever renders Tasks that have at least one real
+  // date; a Task with neither gets its own small "Unscheduled" list instead of a "No schedule" row
+  // taking up a full Gantt line every month, forever.
+  const scheduledTasks = tasks.filter((t) => t.startDate || t.dueDate);
+  const unscheduledTasks = tasks.filter((t) => !t.startDate && !t.dueDate);
+
+  const todayStr = formatDateOnly(new Date());
+  const todayIndex = days.findIndex((d) => formatDateOnly(d) === todayStr);
 
   function stepMonth(delta: number) {
     setMonthCursor((prev) => startOfMonth(new Date(prev.getFullYear(), prev.getMonth() + delta, 1)));
@@ -108,6 +120,8 @@ export function TaskTimeline({ tasks, onEdit, onDeleted }: TaskTimelineProps) {
   }
 
   return (
+    <div className="flex flex-col gap-3">
+    {scheduledTasks.length > 0 && (
     <div className="overflow-hidden rounded-lg border">
       <div className="flex flex-col sm:flex-row">
         {/* Left — compact Task identity columns, no Client/Company/Project column (Project is
@@ -121,7 +135,7 @@ export function TaskTimeline({ tasks, onEdit, onDeleted }: TaskTimelineProps) {
             </div>
             {showActions && <div className="size-7 shrink-0" aria-hidden="true" />}
           </div>
-          {tasks.map((task) => (
+          {scheduledTasks.map((task) => (
             <div
               key={task.id}
               role="button"
@@ -142,9 +156,9 @@ export function TaskTimeline({ tasks, onEdit, onDeleted }: TaskTimelineProps) {
                     <span className="truncate font-medium" title={task.title}>{task.title}</span>
                     <span
                       className="truncate text-xs text-muted-foreground"
-                      title={`${task.workstream.name}${task.activity ? ` · ${task.activity.name}` : ""}`}
+                      title={`${workstreamDisplayHeading(task.workstream.name, task.workstream.serviceLineName)}${task.activity ? ` · ${task.activity.name}` : ""}`}
                     >
-                      {task.workstream.name}
+                      {workstreamDisplayHeading(task.workstream.name, task.workstream.serviceLineName)}
                       {task.activity && ` · ${task.activity.name}`}
                     </span>
                   </div>
@@ -173,10 +187,20 @@ export function TaskTimeline({ tasks, onEdit, onDeleted }: TaskTimelineProps) {
             </Button>
           </div>
           <div className="overflow-x-auto">
-            <div style={{ width: days.length * DAY_WIDTH }}>
+            <div className="relative" style={{ width: days.length * DAY_WIDTH }}>
+              {/* Task Level Phase 2, Section 22 — Today marker, spanning the header and every task
+                  row below it (this wrapper is the one `relative` ancestor sized to the full grid). */}
+              {todayIndex !== -1 && (
+                <div
+                  className="pointer-events-none absolute top-0 bottom-0 z-10 w-px bg-destructive/60"
+                  style={{ left: todayIndex * DAY_WIDTH + DAY_WIDTH / 2 }}
+                  aria-hidden="true"
+                />
+              )}
               <div className="flex h-10 items-center border-b">
-                {days.map((d) => {
+                {days.map((d, i) => {
                   const weekend = d.getDay() === 0 || d.getDay() === 6;
+                  const isToday = i === todayIndex;
                   return (
                     <div
                       key={formatDateOnly(d)}
@@ -184,12 +208,19 @@ export function TaskTimeline({ tasks, onEdit, onDeleted }: TaskTimelineProps) {
                       style={{ width: DAY_WIDTH }}
                     >
                       <span className="text-[9px] text-muted-foreground/70">{d.toLocaleDateString("en-US", { weekday: "short" })}</span>
-                      <span className="text-[10px] font-medium">{String(d.getDate()).padStart(2, "0")}</span>
+                      <span
+                        className={cn(
+                          "text-[10px] font-medium",
+                          isToday && "flex size-4 items-center justify-center rounded-full bg-destructive text-destructive-foreground"
+                        )}
+                      >
+                        {String(d.getDate()).padStart(2, "0")}
+                      </span>
                     </div>
                   );
                 })}
               </div>
-              {tasks.map((task) => {
+              {scheduledTasks.map((task) => {
                 const bar = computeTaskBarState(task, days);
                 const color = STATUS_COLOR_VAR[task.status];
                 return (
@@ -251,13 +282,9 @@ export function TaskTimeline({ tasks, onEdit, onDeleted }: TaskTimelineProps) {
                         style={{ left: bar.index * DAY_WIDTH + 2, backgroundColor: color }}
                       />
                     )}
-                    {bar.kind === "no-schedule" && (
-                      <span className="pointer-events-none absolute top-1/2 left-2 -translate-y-1/2 text-[10px] whitespace-nowrap text-muted-foreground/60">
-                        No schedule
-                      </span>
-                    )}
-                    {/* "out-of-range": renders nothing — the Task IS scheduled, its dates simply
-                        don't fall in the selected month. */}
+                    {/* "no-schedule" never occurs here — this grid only ever renders `scheduledTasks`
+                        (see the Unscheduled list below for those). "out-of-range" renders nothing —
+                        the Task IS scheduled, its dates simply don't fall in the selected month. */}
                   </div>
                 );
               })}
@@ -265,6 +292,63 @@ export function TaskTimeline({ tasks, onEdit, onDeleted }: TaskTimelineProps) {
           </div>
         </div>
       </div>
+    </div>
+    )}
+
+    {unscheduledTasks.length > 0 && (
+      <div className="flex flex-col rounded-lg border border-dashed bg-muted/10">
+        <button
+          type="button"
+          onClick={() => setUnscheduledExpanded((v) => !v)}
+          aria-expanded={unscheduledExpanded}
+          className="flex items-center gap-2 px-3 py-2 text-left text-sm text-muted-foreground hover:text-foreground"
+        >
+          <ChevronDown
+            className={cn("size-3.5 shrink-0 transition-transform duration-200", !unscheduledExpanded && "-rotate-90")}
+            aria-hidden="true"
+          />
+          Unscheduled
+          <span className="font-mono text-xs">{unscheduledTasks.length}</span>
+        </button>
+        {unscheduledExpanded && (
+          <div className="flex flex-col divide-y border-t">
+            {unscheduledTasks.map((task) => (
+              <div
+                key={task.id}
+                role="button"
+                tabIndex={0}
+                onClick={() => openTask(task.id)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    openTask(task.id);
+                  }
+                }}
+                className="flex h-10 cursor-pointer items-center gap-2 px-3 text-sm transition-colors hover:bg-muted/50"
+              >
+                <div className="grid flex-1 grid-cols-[1fr_100px_72px] items-center gap-2">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <TaskStatusAvatar title={task.title} status={task.status} size="sm" />
+                    <div className="flex min-w-0 flex-col">
+                      <span className="truncate font-medium" title={task.title}>{task.title}</span>
+                      <span className="truncate text-xs text-muted-foreground">
+                        {workstreamDisplayHeading(task.workstream.name, task.workstream.serviceLineName)}
+                        {task.activity && ` · ${task.activity.name}`}
+                      </span>
+                    </div>
+                  </div>
+                  <TaskPriorityBadge priority={task.priority} />
+                  <TaskAssigneeStack task={task} />
+                </div>
+                {showActions && (
+                  <TaskActionsMenu task={task} onEdit={() => onEdit?.(task)} onDeleted={() => onDeleted?.(task.id)} />
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    )}
     </div>
   );
 }

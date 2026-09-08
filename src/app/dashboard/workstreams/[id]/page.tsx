@@ -41,6 +41,7 @@ import { WorkstreamActivityTasks } from "@/components/workstreams/workstream-act
 import { TaskFormDialog } from "@/components/tasks/task-form-dialog";
 import type { TaskWithRelations } from "@/lib/data/providers/tasks-provider";
 import { STATUS_COLOR_VAR } from "@/components/tasks/task-status-badge";
+import { useToastManager } from "@/components/ui/toast";
 
 import { getInitials as initials } from "@/lib/initials";
 
@@ -48,7 +49,7 @@ const STATUS_STRIP = [
   { key: "open" as const, label: "Open", icon: Circle, color: STATUS_COLOR_VAR["not-started"] },
   { key: "inProgress" as const, label: "In Progress", icon: PlayCircle, color: STATUS_COLOR_VAR["in-progress"] },
   { key: "blockedWaiting" as const, label: "Blocked / Waiting", icon: AlertTriangle, color: STATUS_COLOR_VAR.blocked },
-  { key: "done" as const, label: "Done", icon: CheckCircle2, color: STATUS_COLOR_VAR.completed },
+  { key: "done" as const, label: "Completed", icon: CheckCircle2, color: STATUS_COLOR_VAR.completed },
 ];
 
 type TabKey = "overview" | "activities" | "team" | "schedule";
@@ -98,6 +99,7 @@ function LoadedWorkstreamDetailPage({
   const searchParams = useSearchParams();
   const { company } = useCompany(workstream.companyId);
   const { project } = useProject(workstream.projectId ?? "");
+  const toastManager = useToastManager();
   const { tasks, isLoading: tasksLoading, refresh: refreshTasks } = useTasks({ workstreamId: workstream.id });
   const { departments: activityDepartments, isLoading: activitiesLoading } = useWorkstreamActivities(workstream);
   const { staffing: serviceStaffing } = useServiceLineStaffing(workstream.serviceLineId ? [workstream.serviceLineId] : []);
@@ -118,7 +120,15 @@ function LoadedWorkstreamDetailPage({
   const [generateOpen, setGenerateOpen] = useState(false);
   const [quickAddOpen, setQuickAddOpen] = useState(false);
 
+  // Product Owner acceptance correction, Section 16 — an Archived client workspace never receives
+  // new operational work until it's Reactivated. Centralized so every Task-creation entry point on
+  // this page (the fallback "Add task" button, and each configured Activity's own "+ Add Task")
+  // is guarded the same way, with a clear explanation rather than a silently-missing control.
   function openAddTask(activityId?: string) {
+    if (project?.status === "archived") {
+      toastManager.add({ description: "This client is archived. Reactivate the client to add new work." });
+      return;
+    }
     setTaskDialogActivityId(activityId);
     setTaskDialogOpen(true);
   }
@@ -266,18 +276,24 @@ function LoadedWorkstreamDetailPage({
           <div className="flex items-center justify-between gap-2">
             <span className="font-mono text-xs tracking-wider text-muted-foreground uppercase">Activities</span>
             <div className="flex items-center gap-2">
-              {canManage && (
-                <Button size="sm" variant="outline" onClick={() => setQuickAddOpen(true)}>
-                  <Sparkles /> Add from activity
-                </Button>
-              )}
-              {/* Every configured Activity already has its own "+ Add Task" — that's now the
-                  primary creation path. This generic fallback only remains for a Service with
-                  genuinely zero configured Activities, so Task creation is never blocked. */}
-              {!hasConfiguredActivities && (
-                <Button size="sm" variant="outline" onClick={() => openAddTask()} data-shortcut="new-task">
-                  <Plus /> Add task
-                </Button>
+              {project?.status === "archived" ? (
+                <span className="text-xs text-muted-foreground">Archived — reactivate to add new work.</span>
+              ) : (
+                <>
+                  {canManage && (
+                    <Button size="sm" variant="outline" onClick={() => setQuickAddOpen(true)}>
+                      <Sparkles /> Add from activity
+                    </Button>
+                  )}
+                  {/* Every configured Activity already has its own "+ Add Task" — that's now the
+                      primary creation path. This generic fallback only remains for a Service with
+                      genuinely zero configured Activities, so Task creation is never blocked. */}
+                  {!hasConfiguredActivities && (
+                    <Button size="sm" variant="outline" onClick={() => openAddTask()} data-shortcut="new-task">
+                      <Plus /> Add task
+                    </Button>
+                  )}
+                </>
               )}
             </div>
           </div>

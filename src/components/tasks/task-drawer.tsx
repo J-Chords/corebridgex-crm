@@ -15,6 +15,7 @@ import { TaskPriorityBadge } from "@/components/tasks/task-priority-badge";
 import { TaskTimerControl } from "@/components/tasks/task-timer-control";
 import { TaskFormDialog } from "@/components/tasks/task-form-dialog";
 import { TaskActionsMenu } from "@/components/tasks/task-actions-menu";
+import { workstreamDisplayHeading } from "@/lib/data/workstream-name";
 import {
   DetailDrawer,
   DetailDrawerHeader,
@@ -131,7 +132,7 @@ function LoadedTaskQuickView({
           }
           secondaryContext={
             <>
-              {task.workstream.name}
+              {workstreamDisplayHeading(task.workstream.name, task.workstream.serviceLineName)}
               {task.activity && ` · ${task.activity.name}`}
             </>
           }

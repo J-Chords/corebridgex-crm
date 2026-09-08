@@ -3,7 +3,6 @@ import type {
   ProjectComment,
   ProjectGroup,
   ProjectIssue,
-  ProjectStatus,
   ProjectTemplate,
   ProjectTemplateApplyStep,
   ProjectTemplateServiceConfig,
@@ -120,24 +119,15 @@ export interface ClientProjectInput {
 }
 
 /**
- * What a "Renew Project" call carries forward from the source Project into a brand-new one under
- * the SAME Company — never mutating/deleting the source. `workstreamIdsToCarryForward` is an
- * explicit, reviewable subset of the source Project's own Services (see docs/current-project-
- * state.md's Phase 8E notes for exactly what does/doesn't copy with each carried Service).
- */
-export interface ProjectRenewalInput {
-  name: string;
-  contractStartDate: string | null;
-  contractMonths: number;
-  contractEndDate: string | null;
-  ownerId: string;
-  memberUserIds: string[];
-  workstreamIdsToCarryForward: string[];
-}
-
-/**
  * Contract every provider (mock, Supabase, future AWS) must implement. Phase 8A was a read-only
- * surface; Phase 8E adds Superadmin-only creation, editing, and annual renewal.
+ * surface; Phase 8E added Superadmin-only creation, editing, and annual renewal. Product Owner
+ * Final Lifecycle Integrity correction — "Renew Project" (creating a new Project each year for the
+ * same Company) is a rejected product capability: Project IS the ongoing Client/Company workspace,
+ * never re-created annually. `renewProject`/`ProjectRenewalInput` and their one UI consumer
+ * (`project-renewal-dialog.tsx`, never actually imported/rendered anywhere) were removed — an
+ * exhaustive search found zero other callers. The corresponding hosted RPC is left in place,
+ * dormant/unreachable (no migration to drop it — nothing calls it, so nothing requires one); no
+ * historical Project ever created by it was touched.
  */
 export interface ProjectsProvider {
   listProjects(viewer: User): Promise<ProjectWithRelations[]>;
@@ -148,21 +138,21 @@ export interface ProjectsProvider {
    * best-effort rollback on failure). See `ClientProjectInput`. */
   createClientProject(viewer: User, input: ClientProjectInput): Promise<ProjectWithRelations>;
   updateProject(viewer: User, id: string, input: ProjectInput): Promise<ProjectWithRelations>;
-  /** Creates a new Project under the same Company as `sourceProjectId`, carrying forward only the
-   * explicitly selected current configuration — see `ProjectRenewalInput`. The source Project is
-   * never modified. */
-  renewProject(viewer: User, sourceProjectId: string, input: ProjectRenewalInput): Promise<ProjectWithRelations>;
 
   /**
-   * Project Level Stage C — lifecycle status transitions, Admin-only. Never covers "trash" (use
-   * `trashProject`) and never restores out of trash (use `restoreProject`) — status-select is
-   * never a substitute for the explicit destructive/restorative action. `reason` is required by
-   * the underlying RPC for "on-hold"/"cancelled" and ignored otherwise.
+   * Project Level Stage C, narrowed by the Product Owner's Final Lifecycle Integrity correction —
+   * Admin-only lifecycle transition, now Active <-> Archived only ("on-hold"/"completed"/
+   * "cancelled" are retired as normal targets; both the hosted RPC and the mock provider reject
+   * any other value at runtime — see `set_project_status`'s own doc comment). Never covers "trash"
+   * (use `trashProject`) and never restores out of trash (use `restoreProject`). Archiving
+   * atomically stamps `completionDate`/`completion_date` as the persisted archive date — never
+   * cleared by any later transition. `reason` is accepted for signature stability but ignored
+   * (the retired on-hold/cancelled reason requirement no longer applies to any reachable target).
    */
   setProjectStatus(
     viewer: User,
     id: string,
-    status: Exclude<ProjectStatus, "trash">,
+    status: "active" | "archived",
     reason?: string
   ): Promise<ProjectWithRelations>;
   /** Explicit, deliberately destructive-feeling action even though Trash is technically a status. */

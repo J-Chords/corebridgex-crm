@@ -43,13 +43,6 @@ interface ProjectFormDialogProps {
   defaultCompanyId?: string;
 }
 
-/** Suggests "{Company} {startYear}-{endYear}" once a real contract start date exists — the same
- * naming convention the Phase 8A backfill already established — never forced, always editable. */
-function suggestedName(companyName: string, contractStartDate: string) {
-  const startYear = new Date(contractStartDate).getUTCFullYear();
-  return `${companyName} ${startYear}-${startYear + 1}`;
-}
-
 function addMonths(dateStr: string, months: number): string {
   const d = new Date(dateStr);
   d.setUTCMonth(d.getUTCMonth() + months);
@@ -137,10 +130,11 @@ function CollapsibleSection({
 /**
  * Superadmin-only Project create/edit. Title (`name`) is the only required field — everything else,
  * including which Company this belongs to, is either optional or resolved automatically. Status is
- * deliberately absent here — a new Project always starts Active, and every lifecycle change
- * (On Hold/Canceled with a required reason, Completed, Archived, Trash/Restore as separate explicit
- * actions) only ever goes through the dedicated ProjectStatusControl, never this generic metadata
- * form. Owner defaults to the creating Admin when left unset at creation.
+ * deliberately absent here — a new Project always starts Active, and every lifecycle change (Archive/
+ * Reactivate, Trash/Restore, each its own dedicated action; legacy On Hold/Canceled kept reachable
+ * only for an already-existing row in that state) only ever goes through the dedicated
+ * ProjectStatusControl, never this generic metadata form. Owner defaults to the creating Admin when
+ * left unset at creation.
  *
  * Manual Acceptance Step 2 Correction — the normal global entry point
  * (`/dashboard/projects → New Project`, no `defaultCompanyId`) never shows a Company/"client" concept
@@ -214,16 +208,16 @@ export function ProjectFormDialog({ open, onOpenChange, mode, project, onSaved, 
     }
   }, [open, project, user, defaultCompanyId]);
 
-  // Keeps the suggested name in sync with Company/start-date choices until the user types their
-  // own name — the exact same "smart default until manually overridden" pattern the qualifier
-  // field on WorkstreamFormDialog established, just applied to a full name instead of a suffix.
-  // Never fires for the normal global flow (no Company resolved until after submit).
+  // Keeps the suggested Title in sync with which Company was chosen, until the user types their own
+  // — Project IS the visible Client identity (Product Owner correction), so the smart default is
+  // simply the Company's own name, never a generated "{Company} {startYear}-{endYear}" range. Never
+  // fires for the normal global flow (no Company resolved until after submit).
   useEffect(() => {
-    if (nameTouched || mode === "edit" || !selectedCompany || !form.contractStartDate) return;
+    if (nameTouched || mode === "edit" || !selectedCompany) return;
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setForm((p) => ({ ...p, name: suggestedName(selectedCompany.name, form.contractStartDate) }));
+    setForm((p) => ({ ...p, name: selectedCompany.name }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedCompany?.name, form.contractStartDate, nameTouched, mode]);
+  }, [selectedCompany?.name, nameTouched, mode]);
 
   const suggestedEnd =
     form.contractStartDate && form.contractMonths
@@ -412,7 +406,14 @@ export function ProjectFormDialog({ open, onOpenChange, mode, project, onSaved, 
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="flex w-full flex-col gap-0 p-0 sm:max-w-4xl">
+      {/* Task Level Phase 2, Section 28 — Product Owner-confirmed width correction. `SheetContent`'s
+          own default hardcodes `data-[side=right]:sm:max-w-sm`; a plain `sm:max-w-4xl` here has a
+          shorter modifier chain (no `data-[side=right]:` prefix), so tailwind-merge never recognizes
+          it as the same utility group and CSS specificity lets the narrower default win — the drawer
+          silently stayed ~24rem wide regardless of this className. Matching the exact modifier chain
+          makes this the one utility tailwind-merge dedupes correctly, and is what New Project and
+          Edit Project now consistently render at (same component, same shell, same width). */}
+      <SheetContent side="right" className="flex w-full flex-col gap-0 p-0 data-[side=right]:sm:max-w-4xl">
         <form onSubmit={handleSubmit} className="flex h-full min-h-0 flex-col">
           <div className="min-h-0 flex-1 overflow-y-auto">
             <div className="flex flex-col gap-2 px-6 pt-6 pb-2">
@@ -450,24 +451,16 @@ export function ProjectFormDialog({ open, onOpenChange, mode, project, onSaved, 
                 description={
                   isGlobalCreate
                     ? "Partner Brand, contact, contract/renewal."
-                    : "Company, contract term."
+                    : "Contract term."
                 }
                 expanded={expandedSections.has("administrative")}
                 onToggle={() => toggleSection("administrative")}
               >
-                {requiresExistingCompany && (
-                  <div className="flex flex-col gap-1.5">
-                    <Label htmlFor="project-company">Company</Label>
-                    <p id="project-company" className="rounded-md border bg-muted/40 px-3 py-2 text-sm">
-                      {mode === "edit" ? project?.companyName : companies.find((c) => c.id === defaultCompanyId)?.name ?? "This company"}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      A Project is the operational workspace for one Company — the Company itself is permanent and
-                      unaffected by which Projects it has.
-                    </p>
-                  </div>
-                )}
-
+                {/* Product Owner acceptance correction — Project IS the visible Client/Company
+                    identity (the Title above already shows it); a separate read-only "Company"
+                    field here just repeated it. companyId is still resolved/submitted internally
+                    (from `project.companyId` on edit, `defaultCompanyId` on create) — this only
+                    removes the redundant on-screen field, not the underlying relationship. */}
                 {isGlobalCreate && (
                   <>
                     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -616,39 +609,15 @@ export function ProjectFormDialog({ open, onOpenChange, mode, project, onSaved, 
                       </div>
                     )}
                   </div>
-                  <div className="flex flex-col gap-1.5">
-                    <Label htmlFor="project-completion">Completion Date</Label>
-                    <Input
-                      id="project-completion"
-                      type="date"
-                      value={form.completionDate}
-                      onChange={(e) => setForm((p) => ({ ...p, completionDate: e.target.value }))}
-                    />
-                  </div>
-                  <div className="flex flex-col gap-1.5">
-                    <Label htmlFor="project-start">Start Date</Label>
-                    <Input
-                      id="project-start"
-                      type="date"
-                      value={form.startDate}
-                      onChange={(e) => setForm((p) => ({ ...p, startDate: e.target.value }))}
-                    />
-                  </div>
-                  <div className="flex flex-col gap-1.5">
-                    <Label htmlFor="project-end">End Date</Label>
-                    <Input
-                      id="project-end"
-                      type="date"
-                      value={form.endDate}
-                      onChange={(e) => setForm((p) => ({ ...p, endDate: e.target.value }))}
-                    />
-                  </div>
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  Start/End are this Project&apos;s own planned work timeline — distinct from the Contract term below.
-                  Completion date is the real, actual date work finished, and is set automatically the first time this
-                  Project moves to Completed if not already set here. All three are optional and independently stored.
-                </p>
+                {/* Product Owner acceptance correction (Project = Client model) — Start/End Date have
+                    no downstream consumer beyond this form and the Overview page's own already-
+                    conditional display, so both are removed from create/edit for V1 (the `startDate`/
+                    `endDate`/`completionDate` columns and any already-set legacy value are untouched —
+                    only these input paths are gone). Completion Date is gone too: a client workspace
+                    doesn't get manually marked "completed" — its Archived-On date is now recorded
+                    automatically from the dedicated Archive action (`ProjectStatusControl`), never a
+                    freely-editable field here. */}
 
                 <div className="flex flex-col gap-1.5">
                   <Label htmlFor="project-tags">Tags</Label>
@@ -725,7 +694,7 @@ export function ProjectFormDialog({ open, onOpenChange, mode, project, onSaved, 
                       </div>
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      Feeds &quot;Renew Project&quot;&apos;s suggested next term — never this Project&apos;s own work timeline above.
+                      The client&apos;s own contract/renewal term — never this Project&apos;s own work timeline above.
                     </p>
                   </div>
                 )}

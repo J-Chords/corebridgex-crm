@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import type { TaskGroupBy, TaskPriority, TaskStatus } from "@/lib/data/types";
 import type { TaskWithRelations } from "@/lib/data/providers/tasks-provider";
 import { TASK_STATUS_SELECT_ITEMS } from "@/components/tasks/task-status-badge";
+import { workstreamDisplayHeading } from "@/lib/data/workstream-name";
 
 export interface TaskFilters {
   search: string;
@@ -38,6 +39,7 @@ export function filterTasks(tasks: TaskWithRelations[], filters: TaskFilters): T
       !task.title.toLowerCase().includes(query) &&
       !task.company.name.toLowerCase().includes(query) &&
       !task.workstream.name.toLowerCase().includes(query) &&
+      !(task.workstream.serviceLineName && task.workstream.serviceLineName.toLowerCase().includes(query)) &&
       !(task.activity && task.activity.name.toLowerCase().includes(query))
     ) {
       return false;
@@ -73,7 +75,7 @@ export function useCompanyOptionsFromTasks(tasks: TaskWithRelations[]) {
 export function useWorkstreamOptionsFromTasks(tasks: TaskWithRelations[]) {
   return useMemo(() => {
     const byId = new Map<string, string>();
-    for (const task of tasks) byId.set(task.workstream.id, task.workstream.name);
+    for (const task of tasks) byId.set(task.workstream.id, workstreamDisplayHeading(task.workstream.name, task.workstream.serviceLineName));
     return Array.from(byId, ([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
   }, [tasks]);
 }
@@ -138,7 +140,7 @@ export function groupTasksBy(tasks: TaskWithRelations[], groupBy: TaskGroupBy): 
         addTo(task.company.id, task.company.name, task);
         break;
       case "workstream":
-        addTo(task.workstream.id, task.workstream.name, task);
+        addTo(task.workstream.id, workstreamDisplayHeading(task.workstream.name, task.workstream.serviceLineName), task);
         break;
       case "activity":
         if (task.activity) addTo(task.activity.id, `${task.activity.departmentName}: ${task.activity.name}`, task);

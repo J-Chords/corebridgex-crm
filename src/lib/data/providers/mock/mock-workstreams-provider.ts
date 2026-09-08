@@ -249,6 +249,11 @@ export const mockWorkstreamsProvider: WorkstreamsProvider = {
         throw new Error("You can only lead this yourself or assign one of your own direct reports.");
       }
     }
+    // Product Owner Final Lifecycle Integrity correction — authoritative enforcement (not just
+    // hidden UI) that a new Service can never be attached to an Archived client workspace.
+    if (project.status === "archived") {
+      throw new Error("This client is archived. Reactivate the client to add new work.");
+    }
     const company = db.companies.find((c) => c.id === resolved.companyId);
     if (!company) throw new Error("Company not found.");
     if (!company.brandId) {
@@ -337,6 +342,11 @@ export const mockWorkstreamsProvider: WorkstreamsProvider = {
     );
     if (!allowed) {
       throw new Error("You don't have permission to configure this service's activities.");
+    }
+    // Product Owner Final Lifecycle Integrity correction — authoritative enforcement (not just
+    // hidden UI) that Activity configuration is new operational setup, blocked while Archived.
+    if (project?.status === "archived") {
+      throw new Error("This client is archived. Reactivate the client to add new work.");
     }
     requireActivitiesBelongToService(activityIds, workstream.serviceLineId);
     syncWorkstreamActivities(workstreamId, activityIds);

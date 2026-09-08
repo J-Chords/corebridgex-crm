@@ -1,4 +1,4 @@
-import type { ProjectsProvider, ProjectWithRelations, ProjectTaskSummary, ProjectInput, ClientProjectInput, ProjectRenewalInput } from "../projects-provider";
+import type { ProjectsProvider, ProjectWithRelations, ProjectTaskSummary, ProjectInput, ClientProjectInput } from "../projects-provider";
 import type { Project, ProjectGroup, ProjectStatus, ProjectTrashSettings } from "../../types";
 import { createClient } from "@/lib/supabase/client";
 import { resolveProfileDirectory } from "./profile-directory";
@@ -339,22 +339,5 @@ export const supabaseProjectsProvider: ProjectsProvider = {
     const { data, error } = await supabase.from("project_groups").insert({ name: name.trim() }).select("id, name").single();
     if (error) throw new Error(error.message);
     return data as ProjectGroup;
-  },
-
-  async renewProject(_viewer, sourceProjectId, input: ProjectRenewalInput) {
-    const supabase = createClient();
-    const { data, error } = await supabase.rpc("renew_project", {
-      p_source_project_id: sourceProjectId,
-      p_name: input.name,
-      p_contract_start_date: input.contractStartDate,
-      p_contract_months: input.contractMonths,
-      p_contract_end_date: input.contractEndDate,
-      p_owner_id: input.ownerId,
-      p_member_user_ids: input.memberUserIds,
-      p_workstream_ids_to_carry: input.workstreamIdsToCarryForward,
-    });
-    if (error) throw new Error(error.message);
-    const [hydrated] = await hydrate([toProject(data)]);
-    return hydrated;
   },
 };

@@ -7,6 +7,7 @@ import { TaskPriorityBadge } from "@/components/tasks/task-priority-badge";
 import { TaskStatusAvatar } from "@/components/tasks/task-status-avatar";
 import { isTaskOverdue, formatDueDateShort } from "@/lib/data/task-display";
 import { isLikelyInternalTask } from "@/lib/data/identity-color";
+import { workstreamDisplayHeading } from "@/lib/data/workstream-name";
 import { STAGGER_ITEM_CLASS, staggerDelay } from "@/lib/stagger";
 import { cn } from "@/lib/utils";
 import { TaskActionsMenu } from "@/components/tasks/task-actions-menu";
@@ -156,8 +157,11 @@ function ContextCell({ task, context, projectIsInternal }: { task: TaskWithRelat
             {task.company.name}
           </span>
         )}
-        <span className="block truncate" title={`${task.workstream.name}${task.activity ? ` · ${task.activity.name}` : ""}`}>
-          {task.workstream.name}
+        <span
+          className="block truncate"
+          title={`${workstreamDisplayHeading(task.workstream.name, task.workstream.serviceLineName)}${task.activity ? ` · ${task.activity.name}` : ""}`}
+        >
+          {workstreamDisplayHeading(task.workstream.name, task.workstream.serviceLineName)}
           {task.activity && ` · ${task.activity.name}`}
         </span>
       </div>
@@ -230,7 +234,7 @@ export function TaskListRow({
             <TaskPriorityBadge priority={task.priority} />
             {context !== "service" && (
               <span className="truncate text-xs text-muted-foreground">
-                {context === "global" ? task.company.name : task.workstream.name}
+                {context === "global" ? task.company.name : workstreamDisplayHeading(task.workstream.name, task.workstream.serviceLineName)}
               </span>
             )}
             <span className={cn("ml-auto text-xs", overdue ? "font-medium text-warning" : "text-muted-foreground")}>

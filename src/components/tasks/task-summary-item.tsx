@@ -10,6 +10,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { CompanyProjectAvatar } from "@/components/companies/company-project-avatar";
 import { TaskStatusAvatar } from "@/components/tasks/task-status-avatar";
 import { isTaskOverdue, formatDueDateShort } from "@/lib/data/task-display";
+import { workstreamDisplayHeading } from "@/lib/data/workstream-name";
 import { isLikelyInternalTask } from "@/lib/data/identity-color";
 import { TaskActionsMenu } from "@/components/tasks/task-actions-menu";
 
@@ -93,9 +94,9 @@ export function TaskSummaryItem({ task, onOpen, isRunning, variant = "row", show
           <CompanyProjectAvatar companyId={task.company.id} companyName={task.company.name} size="sm" isInternal={isLikelyInternalTask(task)} />
           <span
             className="truncate"
-            title={`${task.company.name} · ${task.workstream.name}${task.activity ? ` · ${task.activity.name}` : ""}`}
+            title={`${task.company.name} · ${workstreamDisplayHeading(task.workstream.name, task.workstream.serviceLineName)}${task.activity ? ` · ${task.activity.name}` : ""}`}
           >
-            {task.company.name} · {task.workstream.name}
+            {task.company.name} · {workstreamDisplayHeading(task.workstream.name, task.workstream.serviceLineName)}
             {task.activity && <> · {task.activity.name}</>}
           </span>
         </p>

@@ -12,6 +12,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToastManager } from "@/components/ui/toast";
+import { operationalProjectIdentity } from "@/lib/data/project-display";
 import { ScheduleFormDialog } from "./schedule-form-dialog";
 
 const WEEKDAY_LABELS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
@@ -48,7 +49,19 @@ export function ClientReportSchedulesPanel({ onReportGenerated }: ClientReportSc
   const [editingSchedule, setEditingSchedule] = useState<ClientReportSchedule | undefined>(undefined);
   const [busyId, setBusyId] = useState<string | null>(null);
 
-  const projectNameById = useMemo(() => new Map(projects.map((p) => [p.projectId, `${p.companyName} — ${p.projectName}`])), [projects]);
+  // Project IS the visible Client identity (Product Owner acceptance correction) — only append the
+  // Project's own name when it genuinely says something the Company name doesn't (e.g. a renewed
+  // annual term), never a plain "Company — Company" repeat.
+  const projectNameById = useMemo(
+    () =>
+      new Map(
+        projects.map((p) => {
+          const identity = operationalProjectIdentity(p.companyName, p.projectName);
+          return [p.projectId, identity.secondary ? `${identity.primary} — ${identity.secondary}` : identity.primary];
+        })
+      ),
+    [projects]
+  );
 
   function openCreate() {
     setEditingSchedule(undefined);

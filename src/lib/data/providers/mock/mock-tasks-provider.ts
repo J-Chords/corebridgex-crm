@@ -43,6 +43,19 @@ function requireWorkstreamAccess(viewer: User, workstream: Workstream) {
 }
 
 /**
+ * Product Owner Final Lifecycle Integrity correction — authoritative enforcement (not just hidden
+ * UI) that new operational work can never be created in an Archived client workspace. A Workstream
+ * with no Project link at all (legacy data) has no status to check, so it's never blocked here.
+ */
+function requireProjectNotArchivedForWorkstream(workstream: Workstream) {
+  if (!workstream.projectId) return;
+  const project = db.projects.find((p) => p.id === workstream.projectId);
+  if (project?.status === "archived") {
+    throw new Error("This client is archived. Reactivate the client to add new work.");
+  }
+}
+
+/**
  * A tagged activity must be one the workstream actually enabled — never silently attached outside
  * that set. A workstream with NO persisted associations yet (legacy data, or a service/brand with no
  * catalog) has nothing to check against, so anything goes there — same permissive behavior every
@@ -358,6 +371,7 @@ export const mockTasksProvider: TasksProvider = {
     const workstream = db.workstreams.find((e) => e.id === input.workstreamId);
     if (!workstream) throw new Error("Service not found.");
     requireWorkstreamAccess(viewer, workstream);
+    requireProjectNotArchivedForWorkstream(workstream);
     resolveActivityForTaskCreation(viewer, workstream, input.activityId);
     requireActiveActivityIfNewlySelected(input.activityId, null);
     const statusReason = resolveStatusReason(input.status, input.statusReason);

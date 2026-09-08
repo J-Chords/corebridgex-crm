@@ -1,4 +1,5 @@
 import type { TaskWithRelations } from "@/lib/data/providers/tasks-provider";
+import { workstreamDisplayHeading } from "@/lib/data/workstream-name";
 
 /**
  * Phase 12B — pure presentation helpers pulled out of `TaskGridCard`/`TaskSummaryItem`/
@@ -20,10 +21,10 @@ export function formatDueDateShort(value: string): string {
   return new Date(value).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
-/** "Service performed for" — Workstream is the user-facing Service value; falls back to the
- * Company name only for the rare workstream with no resolvable project context. */
+/** Task Level Phase 2, Section 19 — the global Service name is always primary; falls back to the
+ * Workstream's own stored name only for the rare Workstream with no Service Line set. */
 export function taskServiceLabel(task: Pick<TaskWithRelations, "workstream">): string {
-  return task.workstream.name;
+  return workstreamDisplayHeading(task.workstream.name, task.workstream.serviceLineName);
 }
 
 /** Compact "Client · Activity"-style secondary line, omitting whichever part is unavailable. */

@@ -5,6 +5,9 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import {
   ArrowLeft,
+  GanttChart,
+  LayoutGrid,
+  List as ListIcon,
   Pencil,
   Plus,
   Search,
@@ -48,6 +51,7 @@ import { ProjectCommentsSection } from "@/components/projects/project-comments-s
 import { ProjectIssuesSection } from "@/components/projects/project-issues-section";
 import { ProjectDocumentsSection } from "@/components/projects/project-documents-section";
 import { TaskListSection } from "@/components/tasks/task-list-section";
+import { TaskBoard } from "@/components/tasks/task-board";
 import { TaskTimeline } from "@/components/tasks/task-timeline";
 import { TaskFormDialog } from "@/components/tasks/task-form-dialog";
 import { SharedNotesSection } from "@/components/notes/shared-notes-section";
@@ -70,7 +74,7 @@ function formatDate(value: string | null) {
 // Notes panel; Completed Work dropped as a dedicated panel — redundant with Tasks' own "Done"
 // status group; Client Reports -> Reports; Time & Team -> Time); Comments/Documents/Issues are new.
 type TabKey = "overview" | "services" | "tasks" | "members" | "comments" | "documents" | "time" | "issues" | "reports";
-type TaskView = "list" | "timeline";
+type TaskView = "list" | "board" | "timeline";
 const TABS: { key: TabKey; label: string }[] = [
   { key: "overview", label: "Overview" },
   { key: "services", label: "Services" },
@@ -331,7 +335,7 @@ function LoadedProjectDetailPage({
   const [taskSearch, setTaskSearch] = useState("");
   const [taskView, setTaskView] = useState<TaskView>(() => {
     const viewParam = searchParams.get("view");
-    return viewParam === "list" || viewParam === "timeline" ? viewParam : "list";
+    return viewParam === "list" || viewParam === "board" || viewParam === "timeline" ? viewParam : "list";
   });
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
   const [createTaskOpen, setCreateTaskOpen] = useState(false);
@@ -346,7 +350,15 @@ function LoadedProjectDetailPage({
   const [roleDraft, setRoleDraft] = useState("");
   const [savingRole, setSavingRole] = useState(false);
 
+  // Product Owner acceptance correction, Section 16 — an Archived client workspace never receives
+  // new operational work until it's Reactivated. Centralized here so every entry point that creates
+  // a Task (the header button below, and each status group's own "+" in the Tasks tab) is guarded
+  // the same way, with a clear explanation rather than a silently-missing/disabled control.
   function openCreateTask(defaultStatus?: TaskStatus) {
+    if (project.status === "archived") {
+      toastManager.add({ description: "This client is archived. Reactivate the client to add new work." });
+      return;
+    }
     setCreateTaskDefaultStatus(defaultStatus);
     setCreateTaskOpen(true);
   }
@@ -495,10 +507,15 @@ function LoadedProjectDetailPage({
           <ProjectStatusControl project={project} onChanged={refreshProject} />
         </div>
         <div className="flex items-center gap-2">
-          {workstreams.length > 0 && project.status !== "trash" && (
-            <Button size="sm" onClick={() => openCreateTask()} data-shortcut="new-task">
-              <Plus /> New Task
-            </Button>
+          {project.status === "archived" ? (
+            <span className="text-xs text-muted-foreground">Archived — reactivate to add new work.</span>
+          ) : (
+            workstreams.length > 0 &&
+            project.status !== "trash" && (
+              <Button size="sm" onClick={() => openCreateTask()} data-shortcut="new-task">
+                <Plus /> New Task
+              </Button>
+            )
           )}
           {canManageProjects(user) && (
             <Button size="sm" variant="outline" onClick={() => setEditOpen(true)}>
@@ -678,11 +695,26 @@ function LoadedProjectDetailPage({
               a grid of "Not set"/"—" placeholders. Read-only for everyone except via the header's
               own Admin-only Edit button. */}
           {(() => {
+            // Product Owner Final Lifecycle Integrity correction — "Client Since" (from
+            // `contractStartDate`, never fabricated) reads as a client-relationship fact, never a
+            // finite-project date. "Archived On" reuses the existing `completionDate` field (proven
+            // to have no other accepted consumer) — `ProjectStatusControl`'s Archive action is the
+            // only thing that ever writes it now, so it persists across a later Reactivate instead of
+            // being lost the way `statusChangedAt` would be (that field gets overwritten by every
+            // status change, including Reactivate itself). A currently-Active client that was
+            // archived before shows the same persisted date as "Previously Archived On" — the one
+            // latest date available, never a full history, per the locked "no lifecycle-event-history
+            // table" instruction.
             const detailItems = [
               project.projectGroupId && { label: "Project Group", value: projectGroups.find((g) => g.id === project.projectGroupId)?.name },
               project.startDate && { label: "Start date", value: formatDate(project.startDate) },
               project.endDate && { label: "End date", value: formatDate(project.endDate) },
-              project.completionDate && { label: "Completion date", value: formatDate(project.completionDate) },
+              project.status === "active" &&
+                project.contractStartDate && { label: "Client Since", value: formatDate(project.contractStartDate) },
+              project.status === "active" &&
+                project.completionDate && { label: "Previously Archived On", value: formatDate(project.completionDate) },
+              project.status === "archived" &&
+                project.completionDate && { label: "Archived On", value: formatDate(project.completionDate) },
             ].filter((x): x is { label: string; value: string | undefined } => !!x);
             const hasMoreDetails = detailItems.length > 0 || project.tags.length > 0;
             return (
@@ -746,9 +778,9 @@ function LoadedProjectDetailPage({
                 aria-label="Search tasks"
               />
             </div>
-            {/* Compact internal switcher — List stays the default everywhere, including here;
-                Timeline is this Project's own Task Gantt (real startDate/dueDate only), never the
-                global Tasks page's default. */}
+            {/* Task Level Phase 2, Section 17 — aligned to the shared Task viewing model
+                (List/Board/Timeline), same as the global Tasks page. List stays the default
+                everywhere; Timeline is this Project's own Task Gantt (real startDate/dueDate only). */}
             <div className="flex items-center gap-1 rounded-md border p-0.5">
               <Button
                 size="sm"
@@ -756,7 +788,15 @@ function LoadedProjectDetailPage({
                 aria-pressed={taskView === "list"}
                 onClick={() => setTaskView("list")}
               >
-                List
+                <ListIcon /> List
+              </Button>
+              <Button
+                size="sm"
+                variant={taskView === "board" ? "secondary" : "ghost"}
+                aria-pressed={taskView === "board"}
+                onClick={() => setTaskView("board")}
+              >
+                <LayoutGrid /> Board
               </Button>
               <Button
                 size="sm"
@@ -764,13 +804,15 @@ function LoadedProjectDetailPage({
                 aria-pressed={taskView === "timeline"}
                 onClick={() => setTaskView("timeline")}
               >
-                Timeline
+                <GanttChart /> Timeline
               </Button>
             </div>
           </div>
 
           {tasksLoading ? (
             <p className="p-6 text-sm text-muted-foreground">Loading tasks…</p>
+          ) : taskView === "board" ? (
+            <TaskBoard user={user} tasks={filteredTasks} onChanged={refreshTasks} runningTaskId={runningTaskId} />
           ) : taskView === "timeline" ? (
             <TaskTimeline tasks={filteredTasks} onEdit={setEditingTask} onDeleted={refreshTasks} />
           ) : taskGroups.length === 0 ? (
@@ -799,10 +841,15 @@ function LoadedProjectDetailPage({
       {tab === "services" && (
         <div className="flex flex-col gap-4">
           <div className="flex items-center justify-end gap-2">
-            {canAddService && company && (
-              <Button size="sm" onClick={() => setAddServiceOpen(true)}>
-                <Plus /> Add Service
-              </Button>
+            {project.status === "archived" ? (
+              <span className="text-xs text-muted-foreground">Archived — reactivate to add new work.</span>
+            ) : (
+              canAddService &&
+              company && (
+                <Button size="sm" onClick={() => setAddServiceOpen(true)}>
+                  <Plus /> Add Service
+                </Button>
+              )
             )}
           </div>
           <Card>
@@ -833,12 +880,13 @@ function LoadedProjectDetailPage({
                       <div className="flex items-center gap-3">
                         <span className="text-xs text-muted-foreground">{openTaskCount} open</span>
                         <WorkstreamStatusBadge status={workstream.status} />
-                        {canConfigureWorkstreamActivities(
-                          user,
-                          { leadUserId: workstream.leadUserId },
-                          project.members,
-                          { companyId: project.companyId, ownerId: project.ownerId, memberUserIds: project.members.map((m) => m.id) }
-                        ) && (
+                        {project.status !== "archived" &&
+                          canConfigureWorkstreamActivities(
+                            user,
+                            { leadUserId: workstream.leadUserId },
+                            project.members,
+                            { companyId: project.companyId, ownerId: project.ownerId, memberUserIds: project.members.map((m) => m.id) }
+                          ) && (
                           <button
                             type="button"
                             onClick={(e) => {

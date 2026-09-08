@@ -83,18 +83,15 @@ export function TaskTimerControl({ timer, taskId, companyId, onTaskChanged, onTi
     );
   }
 
-  // Rail variant — Part 30's stacked idle/running/paused mockups.
+  // Rail variant — Part 30's stacked idle/running/paused mockups. Task Level Phase 2, Section 8 —
+  // the static "Tracked" total is now the Properties rail's own single row (right above this block);
+  // this control never repeats it, so idle state shows only the action buttons below. The live
+  // elapsed clock while actively running is genuinely different, real-time information that IS still
+  // shown here — Properties' own "Tracked" figure only updates once the timer stops.
   return (
     <div className="flex flex-col gap-2.5">
       <span className="font-mono text-[10px] tracking-wider text-muted-foreground uppercase">Time Tracking</span>
-      {isRunningHere ? (
-        <div className="font-mono text-2xl font-semibold tabular-nums">{formatElapsed(elapsedSeconds)}</div>
-      ) : (
-        <div className="flex flex-col gap-0.5">
-          {totalMinutes > 0 && <span className="text-xs text-muted-foreground">Tracked</span>}
-          <span className="font-mono text-xl font-semibold">{trackedLabel}</span>
-        </div>
-      )}
+      {isRunningHere && <div className="font-mono text-2xl font-semibold tabular-nums">{formatElapsed(elapsedSeconds)}</div>}
       {canLog && (
         <div className="flex items-center gap-2">
           {isRunningHere ? (

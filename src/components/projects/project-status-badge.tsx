@@ -3,6 +3,9 @@ import type { ProjectStatus } from "@/lib/data/types";
 
 // Visible label uses the product-locked "Canceled" (single L) spelling; the underlying DB value
 // stays "cancelled" (unchanged, avoiding schema churn) — see docs/project-level-product-architecture.md.
+// "completed" is retired as a normal, selectable target (Project = Client workspace — a client
+// relationship becomes Archived, not "Completed"; see `ProjectStatusControl`) — this entry stays only
+// so an already-existing legacy row still renders a real, correct label instead of an unknown status.
 export const PROJECT_STATUS_META: Record<ProjectStatus, { label: string; variant: "success" | "info" | "warning" | "destructive" | "neutral" }> = {
   active: { label: "Active", variant: "success" },
   "on-hold": { label: "On Hold", variant: "warning" },

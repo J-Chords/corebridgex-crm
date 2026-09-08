@@ -7,6 +7,7 @@ import { timeEntriesProvider } from "@/lib/data/providers";
 import type { TimeEntryWithUserAndTask } from "@/lib/data/providers/time-entries-provider";
 import { isEmployee, isSuperadmin, isSupervisor } from "@/lib/data/permissions";
 import { isTaskClosed } from "@/lib/data/task-display";
+import { workstreamDisplayHeading } from "@/lib/data/workstream-name";
 import { formatMinutes } from "@/lib/format-minutes";
 import { todayDateOnly, dateKeyFromTimestamp, formatDateOnly, addDays, startOfMonth } from "@/lib/planner-dates";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -87,7 +88,7 @@ export function ProjectTimeTeam({ user, tasks }: ProjectTimeTeamProps) {
     const totals = new Map<string, number>();
     for (const e of inRange) {
       const task = taskMap.get(e.taskId);
-      const label = task?.workstream.name ?? "Unknown service";
+      const label = task ? workstreamDisplayHeading(task.workstream.name, task.workstream.serviceLineName) : "Unknown service";
       totals.set(label, (totals.get(label) ?? 0) + (e.durationMinutes ?? 0));
     }
     return Array.from(totals, ([label, minutes]) => ({ label, minutes })).sort((a, b) => b.minutes - a.minutes);

@@ -15,6 +15,7 @@ import type { TaskStatus, User } from "@/lib/data/types";
 import { CompanyProjectAvatar } from "@/components/companies/company-project-avatar";
 import { TaskStatusAvatar } from "@/components/tasks/task-status-avatar";
 import { isLikelyInternalTask } from "@/lib/data/identity-color";
+import { workstreamDisplayHeading, splitWorkstreamQualifier } from "@/lib/data/workstream-name";
 import { TaskFormDialog } from "@/components/tasks/task-form-dialog";
 import { TaskActionsMenu } from "@/components/tasks/task-actions-menu";
 import { TaskDetailContent } from "@/components/tasks/task-detail-content";
@@ -79,6 +80,7 @@ function LoadedTaskDetailPage({ task, user, refresh }: { task: TaskWithRelations
   const assigneeIds = task.assignees.map((a) => a.id);
   const canEdit = canEditTask(user, { ...task, assigneeIds }, assignableStaff);
   const canProgress = canProgressTask(user, { assigneeIds, companyId: task.companyId }, assignableStaff);
+  const workstreamQualifier = splitWorkstreamQualifier(task.workstream.name, task.workstream.serviceLineName);
 
   async function applyStatusChange(status: TaskStatus, statusReason?: string) {
     setStatusPending(true);
@@ -122,12 +124,21 @@ function LoadedTaskDetailPage({ task, user, refresh }: { task: TaskWithRelations
               <span className="font-medium text-foreground">{task.company.name}</span>
             )}
             <span className="text-muted-foreground/60">→</span>
-            <Link href={`/dashboard/workstreams/${task.workstream.id}`} className="hover:underline">
-              {task.workstream.name}
+            {/* Product Owner acceptance correction, Section 9 — Project → Service → Activity is the
+                primary hierarchy and must read immediately; the Project-Service qualifier/reference
+                is secondary metadata, moved to a hover tooltip (the same low-emphasis treatment
+                already used for this exact qualifier in the List view's ContextCell) instead of a
+                visible parenthetical competing with the hierarchy chain. Data is never removed. */}
+            <Link
+              href={`/dashboard/workstreams/${task.workstream.id}`}
+              className="hover:underline"
+              title={workstreamQualifier ? `Reference: ${workstreamQualifier}` : undefined}
+            >
+              {workstreamDisplayHeading(task.workstream.name, task.workstream.serviceLineName)}
             </Link>
             {task.activity && (
               <>
-                <span className="text-muted-foreground/60">·</span>
+                <span className="text-muted-foreground/60">→</span>
                 <span>{task.activity.name}</span>
               </>
             )}
@@ -166,6 +177,7 @@ function LoadedTaskDetailPage({ task, user, refresh }: { task: TaskWithRelations
               canProgress={canProgress}
               onStatusChange={handleStatusChange}
               statusPending={statusPending}
+              timer={timer}
             />
           </div>
           <TaskTimerControl timer={timer} taskId={task.id} companyId={task.companyId} onTaskChanged={refresh} />

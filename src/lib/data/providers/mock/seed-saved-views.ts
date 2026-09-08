@@ -21,7 +21,7 @@ export const seedSavedViews: SavedView[] = [
   {
     id: "saved-view-2",
     userId: "user-employee-1",
-    name: "Waiting on client",
+    name: "Waiting",
     filters: {
       search: "",
       companyId: "all",

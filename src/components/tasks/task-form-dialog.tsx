@@ -20,6 +20,7 @@ import { TaskStatusPicker } from "@/components/tasks/task-status-picker";
 import { TaskPriorityPicker } from "@/components/tasks/task-priority-picker";
 import { MultiSelect } from "@/components/ui/multi-select";
 import { ChecklistBuilder, type ChecklistBuilderRow } from "@/components/tasks/checklist-builder";
+import { ExpectedTimeInput } from "@/components/ui/expected-time-input";
 import { ReusePastTaskDialog } from "@/components/tasks/reuse-past-task-dialog";
 import {
   FormDrawerHeader,
@@ -139,15 +140,23 @@ export function TaskFormDialog({
   onSaved,
 }: TaskFormDialogProps) {
   const { user } = useAuth();
-  const { projects } = useProjects();
+  const { projects: fetchedProjects } = useProjects();
+  // Product Owner acceptance correction, Section 4 — an Archived client is never offered as a
+  // destination for brand-new work; editing an already-existing Task's own context is unaffected
+  // (that Task's Project may since have been Archived, and should still resolve/display correctly).
+  const projects = mode === "create" ? fetchedProjects.filter((p) => p.status !== "archived") : fetchedProjects;
   // Phase 13B pre-apply correction (Correction 2) — ordinary Task Create/Edit picks a Project by its
   // Company name, never the redundant "Company + year range" form. See `project-display.ts` for the
   // (currently inert — every Company has exactly one Project today) same-Company collision fallback.
   const projectLabels = operationalProjectPickerLabels(projects);
   const [form, setForm] = useState(() => emptyForm(user?.id ?? "", defaultWorkstreamId, defaultActivityId, defaultStatus));
-  const { workstreams } = useWorkstreams({
+  const { workstreams: fetchedWorkstreams } = useWorkstreams({
     projectId: form.projectId === ALL_PROJECTS ? undefined : form.projectId,
   });
+  // Same Archived exclusion, applied to the actual Service/Workstream picker — a legacy Workstream
+  // with no Project link at all is never excluded (there's no Project status to check).
+  const workstreams =
+    mode === "create" ? fetchedWorkstreams.filter((w) => !w.projectId || projects.some((p) => p.id === w.projectId)) : fetchedWorkstreams;
   const { assignableStaff } = useCompanyLookups();
   const router = useRouter();
 
@@ -652,6 +661,17 @@ export function TaskFormDialog({
                   type="date"
                   value={form.dueDate}
                   onChange={(e) => setForm((p) => ({ ...p, dueDate: e.target.value }))}
+                />
+              </FormDrawerField>
+              <FormDrawerField label="Estimated time" htmlFor="task-expected-minutes" className="col-span-2">
+                {/* ExpectedTimeInput owns its own local amount/unit state (see its own doc comment) —
+                    keyed on which Task is open so switching Tasks without unmounting the dialog (the
+                    Edit entry point never itself unmounts) can never leave a stale typed amount. */}
+                <ExpectedTimeInput
+                  key={task?.id ?? "create"}
+                  id="task-expected-minutes"
+                  valueMinutes={form.expectedMinutes}
+                  onChange={(minutes) => setForm((p) => ({ ...p, expectedMinutes: minutes }))}
                 />
               </FormDrawerField>
             </FormDrawerPropertyGrid>

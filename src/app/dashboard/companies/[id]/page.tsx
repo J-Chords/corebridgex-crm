@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { ArrowLeft, Pencil, Plus, Sparkles, Star } from "lucide-react";
 import { useAuth } from "@/lib/auth/auth-context";
 import { useCompany } from "@/lib/data/hooks/use-companies";
+import { useProjects } from "@/lib/data/hooks/use-projects";
 import { useWorkstreams } from "@/lib/data/hooks/use-workstreams";
 import { useTasks } from "@/lib/data/hooks/use-tasks";
 import { canManageCompanies, canManageWorkstreams, isSuperadmin } from "@/lib/data/permissions";
@@ -54,6 +55,12 @@ export default function CompanyDetailPage({ params }: { params: Promise<{ id: st
   const { workstreams, isLoading: workstreamsLoading, refresh: refreshWorkstreams } = useWorkstreams({ companyId: id });
   const { tasks, isLoading: tasksLoading, refresh: refreshTasks } = useTasks({ companyId: id });
   const { notes, refresh: refreshNotes } = useCompanyNotes(id);
+  // Product Owner acceptance correction, Section 16 — Project IS this Company's own client
+  // workspace (one Project per Company today), so its Archived status gates new-work entry points
+  // here exactly like it does on the Project detail page itself.
+  const { projects } = useProjects();
+  const companyProject = projects.find((p) => p.companyId === id);
+  const isCompanyArchived = companyProject?.status === "archived";
 
   const [editOpen, setEditOpen] = useState(false);
   const [createProjectOpen, setCreateProjectOpen] = useState(false);
@@ -210,15 +217,19 @@ export default function CompanyDetailPage({ params }: { params: Promise<{ id: st
       <Card>
         <CardHeader className="flex items-center justify-between">
           <CardTitle className="text-base">Services</CardTitle>
-          {canManageWorkstreams(user) && (
-            <div className="flex items-center gap-2">
-              <Button size="sm" variant="outline" onClick={() => setApplyTemplateOpen(true)}>
-                <Sparkles /> Apply template
-              </Button>
-              <Button size="sm" variant="outline" onClick={() => setWorkstreamDialogOpen(true)}>
-                <Plus /> Add Service
-              </Button>
-            </div>
+          {isCompanyArchived ? (
+            <span className="text-xs text-muted-foreground">Archived — reactivate to add new work.</span>
+          ) : (
+            canManageWorkstreams(user) && (
+              <div className="flex items-center gap-2">
+                <Button size="sm" variant="outline" onClick={() => setApplyTemplateOpen(true)}>
+                  <Sparkles /> Apply template
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => setWorkstreamDialogOpen(true)}>
+                  <Plus /> Add Service
+                </Button>
+              </div>
+            )
           )}
         </CardHeader>
         <CardContent className="flex flex-col gap-1">
@@ -324,8 +335,14 @@ export default function CompanyDetailPage({ params }: { params: Promise<{ id: st
             size="sm"
             variant="outline"
             onClick={() => setTaskDialogOpen(true)}
-            disabled={workstreams.length === 0}
-            title={workstreams.length === 0 ? "Add a Service first to be able to add tasks." : undefined}
+            disabled={workstreams.length === 0 || isCompanyArchived}
+            title={
+              isCompanyArchived
+                ? "This client is archived. Reactivate the client to add new work."
+                : workstreams.length === 0
+                  ? "Add a Service first to be able to add tasks."
+                  : undefined
+            }
             data-shortcut="new-task"
           >
             <Plus /> Add task

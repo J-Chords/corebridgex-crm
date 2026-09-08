@@ -1,14 +1,10 @@
 "use client";
 
-import { useState } from "react";
 import { ArrowRight, CheckCheck } from "lucide-react";
-import { useAuth } from "@/lib/auth/auth-context";
-import { taskHandoffsProvider } from "@/lib/data/providers";
 import type { TaskHandoffWithUsers } from "@/lib/data/providers/task-handoffs-provider";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 
 import { getInitials as initials } from "@/lib/initials";
@@ -26,40 +22,24 @@ function formatDateTime(iso: string) {
 interface TaskHandoffSectionProps {
   taskId: string;
   handoffs: TaskHandoffWithUsers[];
-  onChanged: () => void;
 }
 
 /**
- * Task Level Phase 1, Section 8 — Handoff creation is retired (ownership transfer is now: change
- * Assignee(s) + add a Comment). This section is read-only history plus the one still-live action on
- * an already-existing Handoff (Acknowledge) — there is no "Hand off task" authoring entry point here
- * anymore. `taskId` is kept in the props for the historical-list query the parent already performs.
+ * Task Level Phase 2, Product Owner acceptance correction — Handoff is not an active Corebridge X
+ * workflow at all, only preserved history (ownership transfer is now: change Assignee(s) + add a
+ * Comment). Purely read-only, including previously-unacknowledged records — no acknowledge control,
+ * consistent with Handoff having no other live entry point anywhere in the product. `taskId` is kept
+ * in the props for the historical-list query the parent already performs.
  */
-export function TaskHandoffSection({ handoffs, onChanged }: TaskHandoffSectionProps) {
-  const { user } = useAuth();
-  const [acknowledgingId, setAcknowledgingId] = useState<string | null>(null);
-
-  if (!user) return null;
-
-  async function handleAcknowledge(handoffId: string) {
-    if (!user) return;
-    setAcknowledgingId(handoffId);
-    try {
-      await taskHandoffsProvider.acknowledgeHandoff(user, handoffId);
-      onChanged();
-    } finally {
-      setAcknowledgingId(null);
-    }
-  }
-
+export function TaskHandoffSection({ handoffs }: TaskHandoffSectionProps) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">Handoffs</CardTitle>
+        <CardTitle className="text-base">Previous assignment history</CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col gap-1">
         {handoffs.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No handoffs recorded yet.</p>
+          <p className="text-sm text-muted-foreground">No previous assignment history.</p>
         ) : (
           handoffs.map((handoff, i) => (
             <div key={handoff.id}>
@@ -104,19 +84,7 @@ export function TaskHandoffSection({ handoffs, onChanged }: TaskHandoffSectionPr
                       {handoff.acknowledgedBy.fullName} · {formatDateTime(handoff.acknowledgedAt)}
                     </Badge>
                   ) : (
-                    <>
-                      <Badge variant="warning">Awaiting acknowledgment</Badge>
-                      {handoff.handedToId === user.id && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={acknowledgingId === handoff.id}
-                          onClick={() => handleAcknowledge(handoff.id)}
-                        >
-                          {acknowledgingId === handoff.id ? "Acknowledging…" : "Acknowledge"}
-                        </Button>
-                      )}
-                    </>
+                    <Badge variant="warning">Awaiting acknowledgment</Badge>
                   )}
                 </div>
               </div>

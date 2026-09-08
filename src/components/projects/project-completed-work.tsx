@@ -5,6 +5,7 @@ import Link from "next/link";
 import type { TaskWithRelations } from "@/lib/data/providers/tasks-provider";
 import { TaskStatusAvatar } from "@/components/tasks/task-status-avatar";
 import { monthKeyFromTimestamp, parseDateOnly } from "@/lib/planner-dates";
+import { workstreamDisplayHeading } from "@/lib/data/workstream-name";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card } from "@/components/ui/card";
 
@@ -63,7 +64,7 @@ export function ProjectCompletedWork({ tasks }: ProjectCompletedWorkProps) {
 
   const serviceOptions = useMemo(() => {
     const byId = new Map<string, string>();
-    for (const t of completedTopLevel) byId.set(t.workstream.id, t.workstream.name);
+    for (const t of completedTopLevel) byId.set(t.workstream.id, workstreamDisplayHeading(t.workstream.name, t.workstream.serviceLineName));
     return Array.from(byId, ([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
   }, [completedTopLevel]);
 
@@ -165,7 +166,7 @@ export function ProjectCompletedWork({ tasks }: ProjectCompletedWorkProps) {
                         {task.title}
                       </span>
                       <span className="truncate text-xs text-muted-foreground">
-                        {task.workstream.name}
+                        {workstreamDisplayHeading(task.workstream.name, task.workstream.serviceLineName)}
                         {task.activity && ` · ${task.activity.name}`}
                       </span>
                     </div>

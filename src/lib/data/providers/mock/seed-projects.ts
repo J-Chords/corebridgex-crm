@@ -15,7 +15,9 @@ import { projectIdForCompany } from "./project-id-for-company";
  *   fact that was never actually recorded.
  * - Internal/Non-billable gets null contract dates unconditionally — internal work is not a
  *   one-year client contract.
- * - name only encodes a year range when a real contractStartDate exists to justify it.
+ * - name is simply the Company's own name — Product Owner acceptance correction: Project IS the
+ *   visible Client/Company identity, so the app must never generate a "{Company} {year}-{year}"
+ *   label itself (a real year-suffixed name a person typed by hand is a different, untouched case).
  * - owner/createdBy resolve to whichever seeded Workstream already leads that Company (earliest
  *   by createdAt), falling back to the earliest-created Supervisor — never hardcoded.
  */
@@ -28,12 +30,6 @@ function ownerFor(companyId: string): string {
   return companyWorkstreams[0]?.leadUserId ?? earliestSupervisorId;
 }
 
-function nameFor(companyName: string, contractStartDate: string | null, isInternal: boolean): string {
-  if (isInternal || !contractStartDate) return companyName;
-  const startYear = new Date(contractStartDate).getUTCFullYear();
-  return `${companyName} ${startYear}-${startYear + 1}`;
-}
-
 export const seedProjects: Project[] = seedCompanies.map((company) => {
   const isInternal = company.id === INTERNAL_COMPANY_ID;
   const owner = ownerFor(company.id);
@@ -43,7 +39,7 @@ export const seedProjects: Project[] = seedCompanies.map((company) => {
   return {
     id: projectIdForCompany(company.id),
     companyId: company.id,
-    name: nameFor(company.name, contractStartDate, isInternal),
+    name: company.name,
     ownerId: owner,
     status: "active",
     contractStartDate,

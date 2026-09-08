@@ -15,6 +15,7 @@ import { useElapsedSeconds } from "@/lib/data/hooks/use-elapsed-seconds";
 import { useRecentHandoffs } from "@/lib/data/hooks/use-task-handoffs";
 import { timeEntriesProvider } from "@/lib/data/providers";
 import { isTaskClosed } from "@/lib/data/task-display";
+import { workstreamDisplayHeading } from "@/lib/data/workstream-name";
 import { formatMinutes } from "@/lib/format-minutes";
 import { GreetingText } from "@/components/dashboard/greeting-heading";
 import { SearchTriggerBar } from "@/components/dashboard/search-trigger-bar";
@@ -261,7 +262,7 @@ export function SupervisorDashboard({ user }: { user: User }) {
               isLoading={myTasksLoading}
               emptyMessage="Nothing assigned to you right now — add your own task to get started."
               subtitleFor={(task) =>
-                `${task.company.name} · ${task.workstream.name}${task.activity ? ` · ${task.activity.name}` : ""}`
+                `${task.company.name} · ${workstreamDisplayHeading(task.workstream.name, task.workstream.serviceLineName)}${task.activity ? ` · ${task.activity.name}` : ""}`
               }
               onOpen={setDrawerTaskId}
             />
@@ -329,7 +330,7 @@ export function SupervisorDashboard({ user }: { user: User }) {
           isLoading={myTasksLoading}
           emptyMessage="Nothing assigned to you right now — add your own task to get started."
           subtitleFor={(task) =>
-            `${task.company.name} · ${task.workstream.name}${task.activity ? ` · ${task.activity.name}` : ""}`
+            `${task.company.name} · ${workstreamDisplayHeading(task.workstream.name, task.workstream.serviceLineName)}${task.activity ? ` · ${task.activity.name}` : ""}`
           }
           onOpen={setDrawerTaskId}
         />

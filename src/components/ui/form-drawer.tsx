@@ -109,10 +109,11 @@ export function FormDrawerPropertyGrid({ children }: { children: ReactNode }) {
 }
 
 /** One field: a small label, `gap-1.5` above its control (6px), matching the locked
- * label-to-control spacing. */
-export function FormDrawerField({ label, htmlFor, children }: { label: string; htmlFor?: string; children: ReactNode }) {
+ * label-to-control spacing. Pass `className="col-span-2"` inside a `FormDrawerPropertyGrid` for a
+ * field whose control is too wide to share a row with another (e.g. a multi-part input). */
+export function FormDrawerField({ label, htmlFor, className, children }: { label: string; htmlFor?: string; className?: string; children: ReactNode }) {
   return (
-    <div className="flex flex-col gap-1.5">
+    <div className={cn("flex flex-col gap-1.5", className)}>
       <label htmlFor={htmlFor} className="text-xs font-medium text-muted-foreground">
         {label}
       </label>

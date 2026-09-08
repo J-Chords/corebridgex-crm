@@ -12,6 +12,7 @@ import { STATUS_COLOR_VAR, TASK_STATUS_SELECT_ITEMS } from "@/components/tasks/t
 import { ChecklistProgress } from "@/components/ui/checklist-progress";
 import { Checkbox } from "@/components/ui/checkbox";
 import { isTaskOverdue, isTaskClosed, formatDueDateShort } from "@/lib/data/task-display";
+import { workstreamDisplayHeading } from "@/lib/data/workstream-name";
 import { cn } from "@/lib/utils";
 import { TaskActionsMenu } from "@/components/tasks/task-actions-menu";
 
@@ -110,9 +111,9 @@ export function TaskGridCard({ task, className, style, isFocusTask, onMarkDone, 
 
       <p
         className="truncate text-xs text-muted-foreground"
-        title={`${task.company.name} · ${task.workstream.name}${task.activity ? ` · ${task.activity.name}` : ""}`}
+        title={`${task.company.name} · ${workstreamDisplayHeading(task.workstream.name, task.workstream.serviceLineName)}${task.activity ? ` · ${task.activity.name}` : ""}`}
       >
-        {task.company.name} · {task.workstream.name}
+        {task.company.name} · {workstreamDisplayHeading(task.workstream.name, task.workstream.serviceLineName)}
         {task.activity && <> · {task.activity.name}</>}
       </p>
 
