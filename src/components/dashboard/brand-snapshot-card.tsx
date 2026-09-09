@@ -6,7 +6,7 @@ import type { Brand } from "@/lib/data/types";
 import type { CompanyWithRelations } from "@/lib/data/providers/companies-provider";
 import type { TaskWithRelations } from "@/lib/data/providers/tasks-provider";
 import { INTERNAL_BRAND_ID } from "@/lib/data/constants";
-import { isTaskClosed } from "@/lib/data/task-display";
+import { isTaskActiveWork } from "@/lib/data/task-display";
 import { Card, CardContent, CardHeader, CardTitle, CardAction } from "@/components/ui/card";
 import { CardExpandButton } from "@/components/dashboard/card-expand-button";
 import { DashboardWidgetFocusDialog } from "@/components/dashboard/dashboard-widget-focus-dialog";
@@ -28,7 +28,7 @@ export function BrandSnapshotCard({ brands, companies, tasks }: BrandSnapshotCar
 
   const rows = partnerBrands.map((brand) => {
     const clientCount = companies.filter((c) => c.brandId === brand.id).length;
-    const activeTaskCount = tasks.filter((t) => t.company.brandId === brand.id && !isTaskClosed(t.status)).length;
+    const activeTaskCount = tasks.filter((t) => t.company.brandId === brand.id && isTaskActiveWork(t)).length;
     return { brand, clientCount, activeTaskCount };
   });
 

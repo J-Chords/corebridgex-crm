@@ -17,7 +17,7 @@ import {
   useActivityOptionsFromTasks,
 } from "@/lib/data/hooks/use-task-filters";
 import { isEmployee } from "@/lib/data/permissions";
-import { isAssigneeColumnRedundantForViewer, isTaskClosed } from "@/lib/data/task-display";
+import { isAssigneeColumnRedundantForViewer, isTaskActiveWork } from "@/lib/data/task-display";
 import type { TaskStatus } from "@/lib/data/types";
 import type { TaskWithRelations } from "@/lib/data/providers/tasks-provider";
 import { Card } from "@/components/ui/card";
@@ -130,10 +130,14 @@ function TasksPageContent() {
   const beforeStatusFilter = useMemo(() => filterTasks(tasks, { ...filters, status: "all" }), [tasks, filters]);
   const filtered = useMemo(() => {
     let result = filterTasks(tasks, filters);
-    if (activeOnly) result = result.filter((t) => !isTaskClosed(t.status));
+    // Final V1 Regression correction — the Active/Overdue/Due Today quick filters are an "active
+    // work" claim, so each excludes a Task whose own Project has been Archived/Trashed; the base
+    // list (no quick filter, or Running) is a plain browse/history view and stays untouched — an
+    // Archived client's Task must still be findable there, never globally hidden.
+    if (activeOnly) result = result.filter((t) => isTaskActiveWork(t));
     if (runningOnly) result = result.filter((t) => t.id === runningTaskId);
-    if (overdueOnly) result = result.filter((t) => !isTaskClosed(t.status) && t.dueDate != null && t.dueDate < today);
-    if (dueTodayOnly) result = result.filter((t) => !isTaskClosed(t.status) && t.dueDate === today);
+    if (overdueOnly) result = result.filter((t) => isTaskActiveWork(t) && t.dueDate != null && t.dueDate < today);
+    if (dueTodayOnly) result = result.filter((t) => isTaskActiveWork(t) && t.dueDate === today);
     return result;
   }, [tasks, filters, activeOnly, runningOnly, overdueOnly, dueTodayOnly, runningTaskId, today]);
   const groups = useMemo(
@@ -156,8 +160,8 @@ function TasksPageContent() {
     completed: 0,
     canceled: 0,
     running: beforeStatusFilter.filter((t) => t.id === runningTaskId).length,
-    overdue: beforeStatusFilter.filter((t) => !isTaskClosed(t.status) && t.dueDate != null && t.dueDate < today).length,
-    dueToday: beforeStatusFilter.filter((t) => !isTaskClosed(t.status) && t.dueDate === today).length,
+    overdue: beforeStatusFilter.filter((t) => isTaskActiveWork(t) && t.dueDate != null && t.dueDate < today).length,
+    dueToday: beforeStatusFilter.filter((t) => isTaskActiveWork(t) && t.dueDate === today).length,
   };
   for (const task of beforeStatusFilter) statusCounts[task.status]++;
 

@@ -116,7 +116,7 @@ export default function PlannerPage() {
                 : "Planned work across the organization."}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {supervisorView && (
             <div className="flex items-center gap-0.5 rounded-lg border p-0.5">
               <Button size="sm" variant={ownOnly ? "secondary" : "ghost"} aria-pressed={ownOnly} onClick={() => setTeamScope(false)}>

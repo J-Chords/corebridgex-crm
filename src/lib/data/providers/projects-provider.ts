@@ -3,6 +3,7 @@ import type {
   ProjectComment,
   ProjectGroup,
   ProjectIssue,
+  ProjectStatus,
   ProjectTemplate,
   ProjectTemplateApplyStep,
   ProjectTemplateServiceConfig,
@@ -140,19 +141,19 @@ export interface ProjectsProvider {
   updateProject(viewer: User, id: string, input: ProjectInput): Promise<ProjectWithRelations>;
 
   /**
-   * Project Level Stage C, narrowed by the Product Owner's Final Lifecycle Integrity correction —
-   * Admin-only lifecycle transition, now Active <-> Archived only ("on-hold"/"completed"/
-   * "cancelled" are retired as normal targets; both the hosted RPC and the mock provider reject
-   * any other value at runtime — see `set_project_status`'s own doc comment). Never covers "trash"
-   * (use `trashProject`) and never restores out of trash (use `restoreProject`). Archiving
-   * atomically stamps `completionDate`/`completion_date` as the persisted archive date — never
-   * cleared by any later transition. `reason` is accepted for signature stability but ignored
-   * (the retired on-hold/cancelled reason requirement no longer applies to any reachable target).
+   * Project Level Stage C, restored by the Product Owner's Boss-Aligned Project Status Restoration
+   * — Admin-only lifecycle transition across the full normal business-state set: Active/On Hold/
+   * Completed/Canceled/Archived. Never covers "trash" (use `trashProject`) and never restores out
+   * of trash (use `restoreProject`). `reason` is required for "on-hold"/"cancelled" (both providers
+   * reject an empty one) and ignored otherwise. Archiving atomically stamps `archivedAt`/
+   * `archived_at` (always the latest archive date); moving to "completed" stamps `completionDate`/
+   * `completion_date` only the first time (never overwritten by a later transition) — the two dates
+   * are intentionally distinct fields, never conflated under one label.
    */
   setProjectStatus(
     viewer: User,
     id: string,
-    status: "active" | "archived",
+    status: Exclude<ProjectStatus, "trash">,
     reason?: string
   ): Promise<ProjectWithRelations>;
   /** Explicit, deliberately destructive-feeling action even though Trash is technically a status. */

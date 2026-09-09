@@ -30,6 +30,7 @@ import { GreetingText } from "@/components/dashboard/greeting-heading";
 import { SearchTriggerBar } from "@/components/dashboard/search-trigger-bar";
 import { myDaySubtitle } from "@/lib/my-day-greeting";
 import { findFocusTask } from "@/lib/my-day-focus";
+import { isTaskClosed, isTaskInActiveProject } from "@/lib/data/task-display";
 import { STAGGER_ITEM_CLASS, staggerDelay } from "@/lib/stagger";
 
 function todayDateString() {
@@ -69,6 +70,10 @@ export function SupervisorMyDay({ user }: SupervisorMyDayProps) {
   // view might carry (search/company/workstream/priority still apply) so the two mechanisms never
   // fight over which tasks are showing.
   const filteredTasks = filterTasks(tasks, { ...filters, status: "all" });
+  // Final V1 Regression correction — an open Task whose own Project has been Archived/Trashed must
+  // not keep showing as "active work" in these buckets; a Completed/Canceled Task's own historical
+  // status bucket is untouched either way (Task Completed/Canceled semantics never change).
+  const visibleTasks = filteredTasks.filter((t) => isTaskClosed(t.status) || isTaskInActiveProject(t));
   const countByStatus: Record<TaskStatus, number> = {
     "not-started": 0,
     "in-progress": 0,
@@ -77,8 +82,8 @@ export function SupervisorMyDay({ user }: SupervisorMyDayProps) {
     completed: 0,
     canceled: 0,
   };
-  for (const task of filteredTasks) countByStatus[task.status]++;
-  const bucketTasks = filteredTasks.filter((t) => t.status === selectedStatus);
+  for (const task of visibleTasks) countByStatus[task.status]++;
+  const bucketTasks = visibleTasks.filter((t) => t.status === selectedStatus);
   const focusTask = findFocusTask(tasks, today);
 
   const hasAnyTasks = tasks.length > 0;

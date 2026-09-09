@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import type { WorkstreamWithRelations } from "@/lib/data/providers/workstreams-provider";
 import { formatRecurrenceDate, formatRecurrenceSummary } from "@/lib/data/recurrence";
+import { workstreamDisplayHeading } from "@/lib/data/workstream-name";
 import { Card, CardContent, CardHeader, CardTitle, CardAction } from "@/components/ui/card";
 import { CardExpandButton } from "@/components/dashboard/card-expand-button";
 import { DashboardWidgetFocusDialog } from "@/components/dashboard/dashboard-widget-focus-dialog";
@@ -37,7 +38,9 @@ export function RecurringWorkDueCard({ workstreams }: RecurringWorkDueCardProps)
         style={staggerDelay(i)}
       >
         <div className="flex min-w-0 flex-col gap-0.5">
-          <span className="truncate text-sm font-medium group-hover/row:underline">{workstream.name}</span>
+          <span className="truncate text-sm font-medium group-hover/row:underline">
+            {workstreamDisplayHeading(workstream.name, workstream.serviceLine?.name ?? null)}
+          </span>
           <span className="truncate text-xs text-muted-foreground">
             {workstream.company.name} · {formatRecurrenceSummary(workstream.recurrence!.frequency, workstream.recurrence!.customIntervalDays)}
           </span>

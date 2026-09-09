@@ -153,6 +153,7 @@ export const mockProjectsProvider: ProjectsProvider = {
       contractEndDate: input.contractEndDate,
       description: input.description,
       completionDate: input.completionDate,
+      archivedAt: null,
       startDate: input.startDate,
       endDate: input.endDate,
       projectGroupId: input.projectGroupId,
@@ -294,30 +295,33 @@ export const mockProjectsProvider: ProjectsProvider = {
     return updated;
   },
 
-  async setProjectStatus(viewer, id, status) {
+  async setProjectStatus(viewer, id, status, reason) {
     requireAdmin(viewer);
-    // Product Owner Final Lifecycle Integrity correction — Project = Client workspace; the normal
-    // lifecycle is Active <-> Archived only. "on-hold"/"completed"/"cancelled" are retired as
-    // normal targets (mirrors the hosted `set_project_status` RPC exactly) — an existing legacy row
-    // in one of those states is untouched (this function is never called with a target it isn't
-    // asked to move TO); it can still move forward into Active, Archived, or Trash like any other
-    // Project.
-    if (status !== "active" && status !== "archived") {
+    // Boss-Aligned Project Status Restoration — the normal Project business-state set is Active/On
+    // Hold/Completed/Canceled/Archived (mirrors the hosted `set_project_status` RPC exactly).
+    if (status !== "active" && status !== "on-hold" && status !== "completed" && status !== "cancelled" && status !== "archived") {
       throw new Error(`Invalid status for this action: ${status}`);
     }
     const existing = db.projects.find((p) => p.id === id);
     if (!existing) throw new Error("Project not found.");
     if (existing.status === "trash") throw new Error("This project is in Trash — restore it first.");
+    if ((status === "on-hold" || status === "cancelled") && !reason?.trim()) {
+      throw new Error(`A reason is required when moving a project to ${status}.`);
+    }
 
     const updated: Project = {
       ...existing,
       status,
-      statusReason: null,
+      statusReason: status === "on-hold" || status === "cancelled" ? reason!.trim() : null,
       statusChangedAt: new Date().toISOString(),
       statusChangedById: viewer.id,
-      // Archive atomically stamps the persisted archive/relationship-end date — never cleared by
-      // any other transition (Reactivate simply never sets it, so it survives untouched).
-      completionDate: status === "archived" ? new Date().toISOString().slice(0, 10) : existing.completionDate,
+      // Two intentionally distinct dates, never conflated: completionDate is a genuine successful
+      // completion, stamped once and never overwritten by any later transition (including a later
+      // Archive/Cancel/re-Active); archivedAt is the Archive lifecycle's own date, always updated to
+      // the latest Archive (so a later re-Archive correctly reflects the newest date) and never
+      // touched by Reactivate (so "Previously Archived On" survives it).
+      completionDate: status === "completed" && !existing.completionDate ? new Date().toISOString().slice(0, 10) : existing.completionDate,
+      archivedAt: status === "archived" ? new Date().toISOString() : existing.archivedAt,
       updatedAt: new Date().toISOString(),
     };
     db.projects = db.projects.map((p) => (p.id === id ? updated : p));

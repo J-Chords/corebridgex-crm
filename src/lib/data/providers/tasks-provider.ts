@@ -1,6 +1,7 @@
 import type {
   ChecklistItem,
   Company,
+  ProjectStatus,
   Task,
   TaskPriority,
   TaskStatus,
@@ -17,9 +18,20 @@ export interface TaskWithRelations extends Task {
    * Task surface should show THIS as the primary Service identity, with `name` (the Workstream's own
    * instance qualifier, e.g. "Accounting 2026") only as secondary context, matching
    * `workstreamDisplayHeading`'s existing convention. Null only for a Workstream with no Service Line
-   * set (a legitimate legacy case, same as `projectName`).
+   * set (a legitimate legacy case, same as `projectName`). `projectStatus` (Final V1 Regression
+   * correction) is the Project's own current lifecycle status — null for the same legacy no-Project
+   * case; lets `isTaskInActiveProject`/`isTaskActiveWork` (see `task-display.ts`) exclude a Task
+   * whose Project is Archived/Trashed from operational "active work" surfaces without a second fetch,
+   * while every historical/within-Project read stays completely untouched.
    */
-  workstream: { id: string; name: string; projectId: string | null; projectName: string | null; serviceLineName: string | null };
+  workstream: {
+    id: string;
+    name: string;
+    projectId: string | null;
+    projectName: string | null;
+    projectStatus: ProjectStatus | null;
+    serviceLineName: string | null;
+  };
   /**
    * Light reference, not the full Activity — includes departmentName because activity names
    * repeat across departments (every department ends in its own "Other"), so the bare name

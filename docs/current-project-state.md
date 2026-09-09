@@ -386,77 +386,80 @@ Edit Task dialog, the existing Board/List, `TaskTimeline`) rather than rebuildin
   large Task-dialog layout polish, a distinct Canceled status color, Timeline dependency/critical-path
   features — none were requested or built).
 
-## Project Level — Final Lifecycle Correction (Project = Client Workspace)
+## Project Level — Boss-Aligned Project Status Restoration (Project = Client Workspace)
 
 **Locked business rule**: a Project IS the client/company workspace, not a finite piece of work.
-Final user-facing lifecycle: **Active → Archived → (Reactivate) → Active**, the same workspace every
-time — never a new/cloned Project, never a year-suffixed name. Trash stays a completely separate,
-still-destructive-feeling removal workflow (`ProjectStatusControl`'s own dedicated Trash/Restore
-actions, untouched). The Archived-write invariant is now **authoritative in both Mock and Supabase**
-— see the new migration below, applied with explicit Product Owner approval after a full read-only
-hosted audit (all 4 hosted Projects were `active` with `completion_date IS NULL` — zero ambiguity).
+Normal user-facing lifecycle is the full boss-required business-state set: **Active, On Hold,
+Completed, Canceled, Archived** — Trash stays a completely separate, still-destructive-feeling
+removal workflow (`ProjectStatusControl`'s own dedicated Trash/Restore actions). A prior pass had
+over-simplified this to just Active↔Archived; the Product Owner has now restored the full set, and
+this correction also fixes the date-model conflict that simplification introduced (see below).
+"Active-only for new work" is now **authoritative in both Mock and Supabase** — see the new migration
+below, applied after a full read-only hosted audit (all 4 hosted Projects were `active` with
+`completion_date IS NULL` and `status_changed_at IS NULL` — zero ambiguity, purely additive/
+restorative, no destructive rewrite).
 
-- **Archive/Reactivate** — `ProjectStatusControl`'s dedicated "Archive" (lightweight, non-destructive
-  confirm dialog) and "Reactivate" actions make exactly ONE authoritative `setProjectStatus` call each
-  — no separate client-side orchestration. Admin-only, unchanged.
-- **"Completed"/"On Hold"/"Canceled" retired as normal targets, now at every layer.** An exhaustive
-  application-layer search found no feature reading a Project's own status for any of the three
-  (unlike Workstream/Project-Issue status, unrelated entities with their own vocabulary), and hosted
-  data confirmed zero rows in any of those states. Removed from `ProjectStatusControl` (no dropdown at
-  all now — Active shows only the badge plus dedicated Archive/Trash buttons) and from the Projects
-  list's normal KPI tiles (a tile reappears automatically the instant a real record in that state
-  exists — never hardcoded to zero). **Now also rejected at the data layer**: both the hosted
-  `set_project_status` RPC and the mock provider's `setProjectStatus` only accept `'active'`/
-  `'archived'` as a transition target — a direct API/RPC call using a retired value fails just like
-  the UI already did. Any already-existing legacy row is untouched and can still move forward into
-  Active, Archived, or Trash exactly like any other Project. `PROJECT_STATUS_META`'s entries for all
-  three remain so a legacy row still renders a real label. Task "Completed" is unrelated and untouched.
-- **"Archived On" / "Client Since" / "Previously Archived On" — now atomic.** Reuses the existing
-  `completionDate`/`completion_date` column (proven to have no other accepted consumer) as the
-  persisted archive/relationship-end date. Both `set_project_status` (hosted RPC) and the mock
-  provider's `setProjectStatus` now stamp it in the SAME atomic write as the status transition itself
-  — archiving can no longer partially succeed (status changed but date not stamped); Reactivate never
-  touches the column, so it survives; a later re-Archive updates it to the newest date. The Project
-  Details card shows "Client Since" (Active, `contractStartDate`, only if truthfully set), "Archived
-  On" (Archived, `completionDate`), and "Previously Archived On" (Active-but-previously-archived, same
-  `completionDate`) — no "Completion date" row, no manual entry field, no lifecycle-event-history
-  table (only the single latest date is retained, as instructed). No DB column renamed/dropped/added.
-- **New work blocked while Archived — UI, mock provider, AND hosted database, all three layers.**
-  New Task (Project/Workstream/Company pages, the shared `TaskFormDialog` picker), Add Service
-  (Project/Company pages), Apply Template (Company page), Configure Activities (Project page) all
-  check status client-side with a clear explanation. `mock-tasks-provider.ts`'s `createTask` and
-  `mock-workstreams-provider.ts`'s `createWorkstream`/`setWorkstreamActivities` independently reject
-  the same three operations (proven via a temporary, deleted-afterward debug route calling the
-  provider directly). The hosted `create_task`/`create_workstream` RPCs and the
-  `workstream_activities_write` RLS policy now carry the identical rejection, applied via migration
-  `20260908140000_project_lifecycle_authoritative_hardening.sql` — read from the ACTUAL live hosted
-  function/policy bodies via `pg_get_functiondef`/`pg_policies` (not stale migration-file text;
-  `create_task`'s hosted signature had already drifted to include `p_start_date`/`p_status_reason`
-  from a later Task Phase 1 migration, confirming why this mattered) and read back after applying to
-  confirm the exact change landed. The separate `workstream_activities_select` policy (reads) is
-  untouched. History (Overview/Services/Tasks/Members/Comments/Time/Issues/Reports) remains fully
-  readable while Archived, everywhere.
-- **Archived visibility widened for Team Lead/Employee** — the Projects list's non-Admin visible-
-  status set now includes `archived` (previously Admin-only, bundled with Trash); Trash alone stays
-  Admin-only. Archive/Reactivate authority itself is unchanged (Admin-only, enforced server-side).
-- **Annual "Renew Project" fully retired — UI, provider, AND hosted RPC.** The dead UI/provider layer
-  (`project-renewal-dialog.tsx`, `nextAnnualName()`, `ProjectsProvider.renewProject`,
-  `ProjectRenewalInput`) was already removed with zero consumers found. The hosted `renew_project` RPC
-  — still `EXECUTE`-granted to `authenticated` and capable of creating a duplicate annual Project if
-  called directly, regardless of the UI — was **dropped outright** in the same migration (zero
-  dependents found; superadmin-gated already, self-contained). No historical Project row it ever
-  created was touched.
-- **Known, disclosed limitation**: a full live authenticated negative-path test directly against the
-  hosted PostgREST/RPC endpoint (Section 17 of the correction) was not performed — simulating a
-  superadmin session via raw JWT-claim impersonation was correctly blocked by this environment's
-  safety classifier as a privilege-escalation-shaped action, and no real hosted user credentials were
-  available to authenticate a genuine session. Confidence instead comes from (a) exact hosted
-  read-back of the installed function/policy bodies via `pg_get_functiondef`/`pg_policies`, (b) the
-  identical business logic already proven live end-to-end on the mock provider, and (c) the migration
-  applying without error (proving valid, executable SQL).
-- **Explicitly NOT done this pass**: On Hold/Canceled's reason-required validation and any
-  already-existing legacy row's data were left completely alone; no lifecycle-event-history table;
-  Task Completed semantics untouched; no unrelated schema touched.
+- **Status control restored** — `ProjectStatusControl` shows one ordinary dropdown (Active/On
+  Hold/Completed/Canceled) plus two dedicated action pairs: Archive/Reactivate and Move to Trash/
+  Restore, never mixed into the ordinary dropdown. On Hold/Canceled require a non-empty reason
+  (restored, matching the original pre-simplification behavior exactly); the reason displays as a
+  small line under the badge. Admin-only; Team Lead/Employee see a read-only badge (plus the reason,
+  where applicable) — no lifecycle mutation authority for either.
+- **Two intentionally distinct dates — a real architecture fix, not just presentation.** The prior
+  pass had repurposed `completionDate`/`completion_date` to also mean "Archived On", which stopped
+  being safe once Completed was restored as a real target. This correction adds a genuinely NEW,
+  dedicated column — `archivedAt`/`archived_at` (nullable, no default; the ONE new migration this
+  correction required, pre-approved by the Product Owner after the hosted audit above) — so the two
+  concepts never collide again: `completionDate` is the true successful-completion date, stamped
+  once by `setProjectStatus` the first time status moves to `'completed'` and never overwritten by
+  any later transition (including a later Cancel/Archive/Active move — history is never erased);
+  `archivedAt` is the true Archive date, stamped fresh every time status moves to `'archived'`
+  (always the latest) and never touched by any other transition (so Reactivate preserves it). The
+  Project Details card shows "Client Since" (Active/On Hold, `contractStartDate`, only if truthfully
+  set), "Completed On" (Completed, `completionDate`), "Archived On" (Archived, `archivedAt`), and
+  "Previously Archived On" (Active-but-previously-archived, same `archivedAt`) — Canceled shows
+  neither completion label, since a canceled engagement was never a successful completion. No
+  lifecycle-event-history table (only the single latest Archive date is retained, as instructed); no
+  DB column renamed or dropped — `completionDate` keeps its original meaning, restored.
+- **New operational work now requires Active — not just "not Archived" — at every layer.** New Task
+  (Project/Workstream/Company pages, the shared `TaskFormDialog` picker), Add Service (Project/
+  Company pages), Configure Activities (Project page) all check `project.status === "active"`
+  client-side via one shared helper (`isProjectActiveForNewWork`/`projectNotActiveMessage` in
+  `project-display.ts`) with a status-specific explanation ("This project is on hold…"/"…is
+  completed…"/"…is canceled…"/"…is archived…"/"…is in Trash…"). `mock-tasks-provider.ts`'s
+  `createTask`, `mock-workstreams-provider.ts`'s `createWorkstream`/`setWorkstreamActivities`
+  independently enforce the identical rule server-side (mock). The hosted `create_task`/
+  `create_workstream` RPCs and the `workstream_activities_write` RLS policy were widened from
+  "reject only Archived" to "require Active", via migration
+  `20260908150000_restore_project_status_lifecycle.sql` — every function/policy body was read fresh
+  from the ACTUAL live hosted definition via `pg_get_functiondef`/`pg_policies` immediately before
+  writing the migration (confirmed byte-identical to the prior `20260908140000` pass — nothing else
+  had touched them since), and read back again after applying to confirm the exact change landed.
+  The separate `workstream_activities_select` policy (reads) is untouched. History (Overview/
+  Services/Tasks/Members/Comments/Time/Issues/Reports) remains fully readable regardless of status.
+- **Active-only Task operational-visibility, restored to the correct boundary.** The shared
+  `isTaskInActiveProject`/`isTaskActiveWork` helpers (`task-display.ts`) now require
+  `project.status === "active"` (previously "not archived/trashed") — a Task whose Project is On
+  Hold/Completed/Canceled/Archived/Trash no longer counts toward Active Tasks/overdue/attention KPIs
+  on any dashboard, My Day's open-status buckets, or the Global Tasks page's Active/Overdue/Due-Today
+  quick filters, while its own historical display (that Project's own Tasks tab, Task Detail, time,
+  reports) is completely unaffected.
+- **Projects list portfolio cards restored to always-shown.** All five normal statuses (Active/On
+  Hold/Completed/Canceled/Archived) render as their own KPI tile/status-group unconditionally, even
+  at zero count — a "0" is still meaningful portfolio information, never dynamically hidden (this
+  reverses the prior pass's "only show a tile when a real record exists" rule specifically for these
+  five; Trash stays its own Admin-only view). The Status filter includes all seven values (All
+  Statuses + the five normal statuses + Trash). Team Lead/Employee see the same five normal statuses
+  for any Project they already have legitimate access to; only Admin gets lifecycle mutation
+  authority, unchanged.
+- **Individual Project Overview KPIs are a completely different surface, untouched.** Services/Open
+  Work/Attention/Next Due remain exactly as before — never replaced by or confused with the
+  portfolio-level lifecycle cards above.
+- **Annual "Renew Project" remains fully retired — UI, provider, AND hosted RPC** (unchanged from the
+  prior pass; re-confirmed this pass that the hosted `renew_project` function no longer exists at
+  all, and no new capability of this kind was reintroduced by restoring Completed/On Hold/Canceled).
+- **Explicitly NOT done this pass**: no unrelated schema touched; no lifecycle-event-history table;
+  Task Completed/Canceled semantics completely untouched; no widened role authority.
 
 ## Roles and access
 

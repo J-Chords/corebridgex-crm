@@ -8,7 +8,7 @@ import type { User } from "@/lib/data/types";
 import type { TaskWithRelations } from "@/lib/data/providers/tasks-provider";
 import type { CompanyWithRelations } from "@/lib/data/providers/companies-provider";
 import { projectHrefForCompany } from "@/lib/data/project-display";
-import { isTaskClosed } from "@/lib/data/task-display";
+import { isTaskClosed, isTaskInActiveProject } from "@/lib/data/task-display";
 import { badgeVariants } from "@/components/ui/badge";
 import { ContainedIcon } from "@/components/ui/contained-icon";
 import { STAGGER_ITEM_CLASS, staggerDelay } from "@/lib/stagger";
@@ -69,7 +69,9 @@ function buildStaffCategory(teamMembers: User[], teamTasks: TaskWithRelations[])
   const today = todayDateString();
   const items = teamMembers
     .map((member) => {
-      const memberTasks = teamTasks.filter((t) => t.assignees.some((a) => a.id === member.id));
+      // Final V1 Regression correction — a member's blocked/overdue "needs attention" figures must
+      // not count a Task whose own Project has been Archived/Trashed.
+      const memberTasks = teamTasks.filter((t) => t.assignees.some((a) => a.id === member.id) && isTaskInActiveProject(t));
       const blocked = memberTasks.filter((t) => t.status === "blocked").length;
       const overdue = memberTasks.filter((t) => !isTaskClosed(t.status) && t.dueDate && t.dueDate < today).length;
       return { member, blocked, overdue, total: blocked + overdue };

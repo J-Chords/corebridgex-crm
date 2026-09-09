@@ -16,7 +16,7 @@ import {
   useWorkstreamOptionsFromTasks,
 } from "@/lib/data/hooks/use-task-filters";
 import { timeEntriesProvider } from "@/lib/data/providers";
-import { isTaskClosed } from "@/lib/data/task-display";
+import { isTaskActiveWork } from "@/lib/data/task-display";
 import { workstreamDisplayHeading } from "@/lib/data/workstream-name";
 import { formatMinutes } from "@/lib/format-minutes";
 import { Button } from "@/components/ui/button";
@@ -83,7 +83,7 @@ export function EmployeeDashboard({ user }: { user: User }) {
 
   const activeWorkstreams = workstreams.filter((w) => w.status === "active");
 
-  const openTasks = tasks.filter((t) => !isTaskClosed(t.status));
+  const openTasks = tasks.filter((t) => isTaskActiveWork(t));
   const dueTodayTasks = openTasks.filter((t) => t.dueDate === today);
   const overdueTasks = openTasks.filter((t) => t.dueDate && t.dueDate < today);
   const dueTodayCount = dueTodayTasks.length;

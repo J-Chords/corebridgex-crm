@@ -7,6 +7,7 @@ import { ArrowLeft, Pencil, Plus, Sparkles, Star } from "lucide-react";
 import { useAuth } from "@/lib/auth/auth-context";
 import { useCompany } from "@/lib/data/hooks/use-companies";
 import { useProjects } from "@/lib/data/hooks/use-projects";
+import { isProjectActiveForNewWork, projectNotActiveMessage } from "@/lib/data/project-display";
 import { useWorkstreams } from "@/lib/data/hooks/use-workstreams";
 import { useTasks } from "@/lib/data/hooks/use-tasks";
 import { canManageCompanies, canManageWorkstreams, isSuperadmin } from "@/lib/data/permissions";
@@ -55,12 +56,12 @@ export default function CompanyDetailPage({ params }: { params: Promise<{ id: st
   const { workstreams, isLoading: workstreamsLoading, refresh: refreshWorkstreams } = useWorkstreams({ companyId: id });
   const { tasks, isLoading: tasksLoading, refresh: refreshTasks } = useTasks({ companyId: id });
   const { notes, refresh: refreshNotes } = useCompanyNotes(id);
-  // Product Owner acceptance correction, Section 16 — Project IS this Company's own client
-  // workspace (one Project per Company today), so its Archived status gates new-work entry points
-  // here exactly like it does on the Project detail page itself.
+  // Boss-Aligned Project Status Restoration — Project IS this Company's own client workspace (one
+  // Project per Company today), so it must be Active for new-work entry points here, exactly like
+  // the Project detail page itself.
   const { projects } = useProjects();
   const companyProject = projects.find((p) => p.companyId === id);
-  const isCompanyArchived = companyProject?.status === "archived";
+  const companyProjectActive = isProjectActiveForNewWork(companyProject?.status ?? null);
 
   const [editOpen, setEditOpen] = useState(false);
   const [createProjectOpen, setCreateProjectOpen] = useState(false);
@@ -217,8 +218,8 @@ export default function CompanyDetailPage({ params }: { params: Promise<{ id: st
       <Card>
         <CardHeader className="flex items-center justify-between">
           <CardTitle className="text-base">Services</CardTitle>
-          {isCompanyArchived ? (
-            <span className="text-xs text-muted-foreground">Archived — reactivate to add new work.</span>
+          {!companyProjectActive ? (
+            <span className="text-xs text-muted-foreground">{projectNotActiveMessage(companyProject?.status ?? null)}</span>
           ) : (
             canManageWorkstreams(user) && (
               <div className="flex items-center gap-2">
@@ -335,10 +336,10 @@ export default function CompanyDetailPage({ params }: { params: Promise<{ id: st
             size="sm"
             variant="outline"
             onClick={() => setTaskDialogOpen(true)}
-            disabled={workstreams.length === 0 || isCompanyArchived}
+            disabled={workstreams.length === 0 || !companyProjectActive}
             title={
-              isCompanyArchived
-                ? "This client is archived. Reactivate the client to add new work."
+              !companyProjectActive
+                ? projectNotActiveMessage(companyProject?.status ?? null)
                 : workstreams.length === 0
                   ? "Add a Service first to be able to add tasks."
                   : undefined

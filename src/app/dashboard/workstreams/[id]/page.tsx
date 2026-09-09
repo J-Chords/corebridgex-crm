@@ -18,6 +18,7 @@ import { useAuth } from "@/lib/auth/auth-context";
 import { useWorkstream } from "@/lib/data/hooks/use-workstreams";
 import { useCompany, useCompanyLookups } from "@/lib/data/hooks/use-companies";
 import { useProject } from "@/lib/data/hooks/use-projects";
+import { isProjectActiveForNewWork, projectNotActiveMessage } from "@/lib/data/project-display";
 import { useTasks } from "@/lib/data/hooks/use-tasks";
 import { useWorkstreamActivities } from "@/lib/data/hooks/use-workstream-activities";
 import { useServiceLineStaffing } from "@/lib/data/hooks/use-service-membership";
@@ -120,13 +121,13 @@ function LoadedWorkstreamDetailPage({
   const [generateOpen, setGenerateOpen] = useState(false);
   const [quickAddOpen, setQuickAddOpen] = useState(false);
 
-  // Product Owner acceptance correction, Section 16 — an Archived client workspace never receives
-  // new operational work until it's Reactivated. Centralized so every Task-creation entry point on
-  // this page (the fallback "Add task" button, and each configured Activity's own "+ Add Task")
+  // Boss-Aligned Project Status Restoration — a non-Active client workspace never receives new
+  // operational work until it's returned to Active. Centralized so every Task-creation entry point
+  // on this page (the fallback "Add task" button, and each configured Activity's own "+ Add Task")
   // is guarded the same way, with a clear explanation rather than a silently-missing control.
   function openAddTask(activityId?: string) {
-    if (project?.status === "archived") {
-      toastManager.add({ description: "This client is archived. Reactivate the client to add new work." });
+    if (!isProjectActiveForNewWork(project?.status ?? null)) {
+      toastManager.add({ description: projectNotActiveMessage(project?.status ?? null) });
       return;
     }
     setTaskDialogActivityId(activityId);
@@ -276,8 +277,8 @@ function LoadedWorkstreamDetailPage({
           <div className="flex items-center justify-between gap-2">
             <span className="font-mono text-xs tracking-wider text-muted-foreground uppercase">Activities</span>
             <div className="flex items-center gap-2">
-              {project?.status === "archived" ? (
-                <span className="text-xs text-muted-foreground">Archived — reactivate to add new work.</span>
+              {!isProjectActiveForNewWork(project?.status ?? null) ? (
+                <span className="text-xs text-muted-foreground">{projectNotActiveMessage(project?.status ?? null)}</span>
               ) : (
                 <>
                   {canManage && (

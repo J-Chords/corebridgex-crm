@@ -96,3 +96,34 @@ export function operationalProjectPickerLabels<T extends { id: string; companyNa
   }
   return labels;
 }
+
+/**
+ * Boss-Aligned Project Status Restoration — a Project must be Active to receive new operational
+ * work (a new Task, a new Service, new Activity configuration). `null` (a legacy Workstream with no
+ * Project link at all) is treated as active — never blocked on that technicality.
+ */
+export function isProjectActiveForNewWork(status: string | null): boolean {
+  return status == null || status === "active";
+}
+
+/**
+ * The one shared "why can't I add new work here" explanation, mirroring exactly what the
+ * authoritative `create_task`/`create_workstream` hosted functions and their mock-provider
+ * equivalents raise — every UI guard should show this same text rather than inventing its own.
+ */
+export function projectNotActiveMessage(status: string | null): string {
+  switch (status) {
+    case "archived":
+      return "This client is archived. Reactivate the client to add new work.";
+    case "on-hold":
+      return "This project is on hold. Return it to Active to add new work.";
+    case "completed":
+      return "This project is completed. Return it to Active to add new work.";
+    case "cancelled":
+      return "This project is canceled. Return it to Active to add new work.";
+    case "trash":
+      return "This project is in Trash — restore it first.";
+    default:
+      return "This project must be Active to add new work.";
+  }
+}

@@ -1,5 +1,6 @@
 import type { TaskWithRelations } from "@/lib/data/providers/tasks-provider";
 import { workstreamDisplayHeading } from "@/lib/data/workstream-name";
+import { isProjectActiveForNewWork } from "@/lib/data/project-display";
 
 /**
  * Phase 12B — pure presentation helpers pulled out of `TaskGridCard`/`TaskSummaryItem`/
@@ -15,6 +16,29 @@ export function isTaskClosed(status: Pick<TaskWithRelations, "status">["status"]
 
 export function isTaskOverdue(task: Pick<TaskWithRelations, "status" | "dueDate">): boolean {
   return !isTaskClosed(task.status) && task.dueDate != null && task.dueDate < new Date().toISOString().slice(0, 10);
+}
+
+/**
+ * Boss-Aligned Project Status Restoration — a Task's own Project must be Active for the Task to
+ * count toward "active operational work" (dashboard/My Day/Planner active/overdue/attention counts);
+ * On Hold/Completed/Canceled/Archived/Trash all exclude it, even though its own history stays fully
+ * readable everywhere else (Project detail, Task detail, reports, time). A Task with no Project
+ * link at all (legacy data) is never excluded on that technicality. Reuses the same
+ * `isProjectActiveForNewWork` rule the authoritative create-Task/create-Service guards use, so the
+ * two "must be Active" concerns (new work vs. active-work visibility) never drift apart.
+ */
+export function isTaskInActiveProject(task: Pick<TaskWithRelations, "workstream">): boolean {
+  return isProjectActiveForNewWork(task.workstream.projectStatus);
+}
+
+/**
+ * The one shared "does this Task count as active operational work" rule — open status AND its own
+ * Project is Active. Every operational dashboard/My-Day/Planner active-work count should use this
+ * instead of re-deriving `!isTaskClosed(...)` alone, so the Project-lifecycle exclusion can never be
+ * silently forgotten at a new call site.
+ */
+export function isTaskActiveWork(task: Pick<TaskWithRelations, "status" | "workstream">): boolean {
+  return !isTaskClosed(task.status) && isTaskInActiveProject(task);
 }
 
 export function formatDueDateShort(value: string): string {

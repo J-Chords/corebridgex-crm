@@ -2,7 +2,7 @@
 
 import { Suspense, use, useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import {
   ArrowLeft,
   GanttChart,
@@ -23,7 +23,12 @@ import { useRunningTimer } from "@/lib/data/hooks/use-time-entries";
 import { projectsProvider, projectIssuesProvider } from "@/lib/data/providers";
 import { DEFAULT_TASK_FILTERS, filterTasks, groupTasksBy } from "@/lib/data/hooks/use-task-filters";
 import { isAssigneeColumnRedundantForViewer, isTaskClosed, isTaskOverdue } from "@/lib/data/task-display";
-import { operationalProjectIdentity, serviceLineDisplayName } from "@/lib/data/project-display";
+import {
+  operationalProjectIdentity,
+  serviceLineDisplayName,
+  isProjectActiveForNewWork,
+  projectNotActiveMessage,
+} from "@/lib/data/project-display";
 import { canConfigureWorkstreamActivities, canCreateWorkstreamInProject, canManageProjects, isEmployee, isSupervisor } from "@/lib/data/permissions";
 import { AddServiceActivitiesDialog } from "@/components/workstreams/add-service-activities-dialog";
 import type { WorkstreamWithRelations } from "@/lib/data/providers/workstreams-provider";
@@ -280,6 +285,8 @@ function LoadedProjectDetailPage({
   refreshProject: () => void;
 }) {
   const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
   const { workstreams, isLoading: workstreamsLoading, refresh: refreshWorkstreams } = useWorkstreams({ projectId: project.id });
   const { tasks, isLoading: tasksLoading, refresh: refreshTasks } = useTasks({ workstreamIds: workstreams.map((w) => w.id) });
   const { company, contacts: clientContacts, refresh: refreshCompany } = useCompany(project.companyId);
@@ -324,6 +331,25 @@ function LoadedProjectDetailPage({
     const tabParam = searchParams.get("tab");
     return TABS.some((t) => t.key === tabParam) ? (tabParam as TabKey) : "overview";
   });
+  // Final V1 Regression correction — the lazy initializer above only ever runs once, so it can't
+  // react to the URL changing later (browser Back/Forward, or a fresh link pasted into the same tab
+  // without a remount). This keeps `tab` honest against `?tab=` any time the URL changes out from
+  // under this component, not just on first load.
+  useEffect(() => {
+    const tabParam = searchParams.get("tab");
+    const next = TABS.some((t) => t.key === tabParam) ? (tabParam as TabKey) : "overview";
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setTab((current) => (current === next ? current : next));
+  }, [searchParams]);
+  // The one handler every tab button calls — updates the visible tab immediately AND pushes a real
+  // history entry (not `replace`) so browser Back/Forward restores the tab that was actually on
+  // screen, and the URL always matches what's visible (refresh/shared-link fidelity).
+  function handleTabChange(key: TabKey) {
+    setTab(key);
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("tab", key);
+    router.push(`${pathname}?${params.toString()}`, { scroll: false });
+  }
   const [addServiceOpen, setAddServiceOpen] = useState(false);
   const [generateReportOpen, setGenerateReportOpen] = useState(false);
   // Project Final Integration Correction — "Configure Activities" on an already-attached Service
@@ -350,13 +376,14 @@ function LoadedProjectDetailPage({
   const [roleDraft, setRoleDraft] = useState("");
   const [savingRole, setSavingRole] = useState(false);
 
-  // Product Owner acceptance correction, Section 16 — an Archived client workspace never receives
-  // new operational work until it's Reactivated. Centralized here so every entry point that creates
-  // a Task (the header button below, and each status group's own "+" in the Tasks tab) is guarded
-  // the same way, with a clear explanation rather than a silently-missing/disabled control.
+  // Boss-Aligned Project Status Restoration — a non-Active client workspace (On Hold/Completed/
+  // Canceled/Archived) never receives new operational work until it's returned to Active.
+  // Centralized here so every entry point that creates a Task (the header button below, and each
+  // status group's own "+" in the Tasks tab) is guarded the same way, with a clear explanation
+  // rather than a silently-missing/disabled control.
   function openCreateTask(defaultStatus?: TaskStatus) {
-    if (project.status === "archived") {
-      toastManager.add({ description: "This client is archived. Reactivate the client to add new work." });
+    if (!isProjectActiveForNewWork(project.status)) {
+      toastManager.add({ description: projectNotActiveMessage(project.status) });
       return;
     }
     setCreateTaskDefaultStatus(defaultStatus);
@@ -507,11 +534,10 @@ function LoadedProjectDetailPage({
           <ProjectStatusControl project={project} onChanged={refreshProject} />
         </div>
         <div className="flex items-center gap-2">
-          {project.status === "archived" ? (
-            <span className="text-xs text-muted-foreground">Archived — reactivate to add new work.</span>
+          {!isProjectActiveForNewWork(project.status) ? (
+            <span className="text-xs text-muted-foreground">{projectNotActiveMessage(project.status)}</span>
           ) : (
-            workstreams.length > 0 &&
-            project.status !== "trash" && (
+            workstreams.length > 0 && (
               <Button size="sm" onClick={() => openCreateTask()} data-shortcut="new-task">
                 <Plus /> New Task
               </Button>
@@ -525,14 +551,14 @@ function LoadedProjectDetailPage({
         </div>
       </div>
 
-      <div className="flex items-center gap-1 border-b">
+      <div className="flex items-center gap-1 overflow-x-auto border-b">
         {TABS.map((t) => (
           <button
             key={t.key}
             type="button"
-            onClick={() => setTab(t.key)}
+            onClick={() => handleTabChange(t.key)}
             className={
-              "-mb-px border-b-2 px-3 py-2 text-sm font-medium transition-colors " +
+              "-mb-px shrink-0 border-b-2 px-3 py-2 text-sm font-medium whitespace-nowrap transition-colors " +
               (tab === t.key
                 ? "border-primary text-foreground"
                 : "border-transparent text-muted-foreground hover:text-foreground")
@@ -695,26 +721,29 @@ function LoadedProjectDetailPage({
               a grid of "Not set"/"—" placeholders. Read-only for everyone except via the header's
               own Admin-only Edit button. */}
           {(() => {
-            // Product Owner Final Lifecycle Integrity correction — "Client Since" (from
-            // `contractStartDate`, never fabricated) reads as a client-relationship fact, never a
-            // finite-project date. "Archived On" reuses the existing `completionDate` field (proven
-            // to have no other accepted consumer) — `ProjectStatusControl`'s Archive action is the
-            // only thing that ever writes it now, so it persists across a later Reactivate instead of
-            // being lost the way `statusChangedAt` would be (that field gets overwritten by every
-            // status change, including Reactivate itself). A currently-Active client that was
-            // archived before shows the same persisted date as "Previously Archived On" — the one
-            // latest date available, never a full history, per the locked "no lifecycle-event-history
-            // table" instruction.
+            // Boss-Aligned Project Status Restoration — two intentionally distinct dates, never
+            // shown under one label, and never lost just because the CURRENT status has since moved
+            // on. "Completed On" (`completionDate`, stamped once, never overwritten by a later
+            // transition) is shown whenever it's genuinely set, regardless of current status — a
+            // Project that was Completed and later Archived (or Reactivated, or moved to On Hold/
+            // Canceled) must keep showing its real completion history, never silently lose it.
+            // "Archived On" / "Previously Archived On" (`archivedAt`, always the latest Archive) work
+            // the same way: shown whenever set, just re-labeled depending on whether the Project is
+            // CURRENTLY Archived or has since moved elsewhere. Both dates can and do coexist
+            // truthfully on the same Project. "Client Since" (from `contractStartDate`, never
+            // fabricated) reads as a client-relationship fact while the client is genuinely still
+            // engaged (Active/On Hold) — no lifecycle-event-history table (only the single latest
+            // Archive date is retained, as instructed).
             const detailItems = [
               project.projectGroupId && { label: "Project Group", value: projectGroups.find((g) => g.id === project.projectGroupId)?.name },
               project.startDate && { label: "Start date", value: formatDate(project.startDate) },
               project.endDate && { label: "End date", value: formatDate(project.endDate) },
-              project.status === "active" &&
+              (project.status === "active" || project.status === "on-hold") &&
                 project.contractStartDate && { label: "Client Since", value: formatDate(project.contractStartDate) },
-              project.status === "active" &&
-                project.completionDate && { label: "Previously Archived On", value: formatDate(project.completionDate) },
-              project.status === "archived" &&
-                project.completionDate && { label: "Archived On", value: formatDate(project.completionDate) },
+              project.completionDate && { label: "Completed On", value: formatDate(project.completionDate) },
+              project.status === "archived"
+                ? project.archivedAt && { label: "Archived On", value: formatDate(project.archivedAt) }
+                : project.archivedAt && { label: "Previously Archived On", value: formatDate(project.archivedAt) },
             ].filter((x): x is { label: string; value: string | undefined } => !!x);
             const hasMoreDetails = detailItems.length > 0 || project.tags.length > 0;
             return (
@@ -841,8 +870,8 @@ function LoadedProjectDetailPage({
       {tab === "services" && (
         <div className="flex flex-col gap-4">
           <div className="flex items-center justify-end gap-2">
-            {project.status === "archived" ? (
-              <span className="text-xs text-muted-foreground">Archived — reactivate to add new work.</span>
+            {!isProjectActiveForNewWork(project.status) ? (
+              <span className="text-xs text-muted-foreground">{projectNotActiveMessage(project.status)}</span>
             ) : (
               canAddService &&
               company && (
@@ -880,7 +909,7 @@ function LoadedProjectDetailPage({
                       <div className="flex items-center gap-3">
                         <span className="text-xs text-muted-foreground">{openTaskCount} open</span>
                         <WorkstreamStatusBadge status={workstream.status} />
-                        {project.status !== "archived" &&
+                        {isProjectActiveForNewWork(project.status) &&
                           canConfigureWorkstreamActivities(
                             user,
                             { leadUserId: workstream.leadUserId },

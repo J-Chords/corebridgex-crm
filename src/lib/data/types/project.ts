@@ -37,9 +37,16 @@ export interface Project {
   endDate: string | null;
   description: string | null;
   /** The real, actual-successful-completion date — distinct from `contractEndDate` (the planned
-   * end). Never fabricated; defaults to today only when a status transition to "completed" leaves
-   * it unset (see `set_project_status`). */
+   * end). Never fabricated; set once, the first time a status transition to "completed" leaves it
+   * unset (see `set_project_status`) — never overwritten by any later transition, including a later
+   * Canceled/Archived/Active move, so a genuine historical completion is never silently erased. */
   completionDate: string | null;
+  /** Boss-Aligned Project Status Restoration — the persisted Archive date, distinct from
+   * `completionDate` (Archived is not a "successful completion"; a Canceled or still-Active Project
+   * can be Archived too). Stamped to now() every time a status transition to "archived" happens
+   * (always the LATEST archive date, unlike `completionDate`'s set-once rule) — never cleared by
+   * Reactivate, so "Previously Archived On" stays available after returning to Active. */
+  archivedAt: string | null;
   projectGroupId: string | null;
   tags: string[];
   /** Present only while status is "on-hold"/"cancelled" (required at that transition) — cleared on

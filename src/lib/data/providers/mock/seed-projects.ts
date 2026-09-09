@@ -47,6 +47,7 @@ export const seedProjects: Project[] = seedCompanies.map((company) => {
     contractEndDate,
     description: isInternal ? "Internal operational work — not an annual client contract." : null,
     completionDate: null,
+    archivedAt: null,
     startDate: null,
     endDate: null,
     projectGroupId: null,

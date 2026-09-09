@@ -1,5 +1,5 @@
 import type { TasksProvider, TaskWithRelations, TaskReuseCandidate } from "../tasks-provider";
-import type { Task, TaskPriority, TaskStatus, User, Role, ChecklistItem } from "../../types";
+import type { Task, TaskPriority, TaskStatus, User, Role, ChecklistItem, ProjectStatus } from "../../types";
 import { assignableStaffFor } from "../../permissions";
 import { createClient } from "@/lib/supabase/client";
 import { resolveProfileDirectory } from "./profile-directory";
@@ -138,9 +138,9 @@ async function hydrate(tasks: Task[]): Promise<TaskWithRelations[]> {
   const workstreamRowsForProjects = (workstreamsRes.data ?? []) as { id: string; name: string; project_id: string | null; service_line_id: string | null }[];
   const projectIds = Array.from(new Set(workstreamRowsForProjects.map((w) => w.project_id).filter((x): x is string => x != null)));
   const projectsRes = projectIds.length
-    ? await supabase.from("projects").select("id, name").in("id", projectIds)
-    : { data: [] as { id: string; name: string }[] };
-  const projects = (projectsRes.data ?? []) as { id: string; name: string }[];
+    ? await supabase.from("projects").select("id, name, status").in("id", projectIds)
+    : { data: [] as { id: string; name: string; status: string }[] };
+  const projects = (projectsRes.data ?? []) as { id: string; name: string; status: string }[];
 
   // Section 20 — Service Identity data-shape prep: the global Service (line) name, alongside the
   // Project-Service qualifier name already fetched above, so Task surfaces can show both without an
@@ -219,6 +219,9 @@ async function hydrate(tasks: Task[]): Promise<TaskWithRelations[]> {
         name: workstreamRow.name,
         projectId: workstreamRow.project_id,
         projectName: workstreamRow.project_id ? (projects.find((p) => p.id === workstreamRow.project_id)?.name ?? null) : null,
+        projectStatus: workstreamRow.project_id
+          ? ((projects.find((p) => p.id === workstreamRow.project_id)?.status as ProjectStatus | undefined) ?? null)
+          : null,
         serviceLineName: workstreamRow.service_line_id
           ? (serviceLines.find((sl) => sl.id === workstreamRow.service_line_id)?.name ?? null)
           : null,

@@ -14,6 +14,7 @@ import {
 } from "../../permissions";
 import { computeWorkstreamBudget } from "../../time-budget";
 import { computeWorkstreamRecurrence } from "../../recurrence";
+import { isProjectActiveForNewWork, projectNotActiveMessage } from "../../project-display";
 import { db } from "./mock-db";
 
 function todayDateString(): string {
@@ -249,10 +250,10 @@ export const mockWorkstreamsProvider: WorkstreamsProvider = {
         throw new Error("You can only lead this yourself or assign one of your own direct reports.");
       }
     }
-    // Product Owner Final Lifecycle Integrity correction — authoritative enforcement (not just
-    // hidden UI) that a new Service can never be attached to an Archived client workspace.
-    if (project.status === "archived") {
-      throw new Error("This client is archived. Reactivate the client to add new work.");
+    // Boss-Aligned Project Status Restoration — authoritative enforcement (not just hidden UI)
+    // that a new Service can only be attached to an Active client workspace.
+    if (!isProjectActiveForNewWork(project.status)) {
+      throw new Error(projectNotActiveMessage(project.status));
     }
     const company = db.companies.find((c) => c.id === resolved.companyId);
     if (!company) throw new Error("Company not found.");
@@ -343,10 +344,10 @@ export const mockWorkstreamsProvider: WorkstreamsProvider = {
     if (!allowed) {
       throw new Error("You don't have permission to configure this service's activities.");
     }
-    // Product Owner Final Lifecycle Integrity correction — authoritative enforcement (not just
-    // hidden UI) that Activity configuration is new operational setup, blocked while Archived.
-    if (project?.status === "archived") {
-      throw new Error("This client is archived. Reactivate the client to add new work.");
+    // Boss-Aligned Project Status Restoration — authoritative enforcement (not just hidden UI)
+    // that Activity configuration is new operational setup, only allowed while Active.
+    if (!isProjectActiveForNewWork(project?.status ?? null)) {
+      throw new Error(projectNotActiveMessage(project?.status ?? null));
     }
     requireActivitiesBelongToService(activityIds, workstream.serviceLineId);
     syncWorkstreamActivities(workstreamId, activityIds);

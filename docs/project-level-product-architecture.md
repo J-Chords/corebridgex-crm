@@ -820,29 +820,30 @@ drawer regardless of its own `sm:max-w-4xl` className; New and Edit Project alre
 component and now render consistently wide. Task Level is not yet V1-final — a Final V1 Regression
 pass remains after this Phase 2 checkpoint.
 
-## Project Level — Final Lifecycle Correction (see `docs/current-project-state.md`'s own "Project
-Level — Final Lifecycle Correction" section for the full write-up)
+## Project Level — Boss-Aligned Project Status Restoration (see `docs/current-project-state.md`'s own
+"Project Level — Boss-Aligned Project Status Restoration" section for the full write-up)
 
-**Locked: Project = Client/Company workspace, not a finite piece of work.** Final lifecycle is
-**Active → Archived → Reactivate**, always the same workspace — never a new/cloned/year-suffixed
-Project. "Completed"/"On Hold"/"Canceled" are all retired as normal Project targets, now rejected as
-a transition target at every layer (UI, mock provider, and the hosted `set_project_status` RPC) —
-a legacy row in one of those states is never destroyed, just no longer a normal choice, and still
-gets a path forward via Archive/Trash. Archive/Reactivate reuse the already-hosted `archived` status
-value; the persisted "Archived On" date reuses the existing `completionDate` column (not
-`statusChangedAt`, which Reactivate would overwrite), stamped atomically inside `setProjectStatus`
-itself (both providers) — no separate client-side orchestration that could partially fail. New
-operational work (Task/Service/Activity creation) is now blocked authoritatively at **every** layer —
-UI, mock provider, and the hosted database — via one narrow forward migration
-(`20260908140000_project_lifecycle_authoritative_hardening.sql`), applied with explicit Product Owner
-approval after reading the ACTUAL live hosted function/policy bodies (not stale migration-file text —
-`create_task`'s hosted signature had already drifted since an earlier migration) and reading them back
-afterward to confirm. Archive is kept explicitly distinct from Trash (a separate, still-Admin-only
-deletion workflow, untouched). The "Renew Project" annual-cloning capability was removed at every
-layer too — the dead UI/provider code (`project-renewal-dialog.tsx`, `nextAnnualName()`,
-`ProjectsProvider.renewProject`) after an exhaustive search proved zero consumers, and the hosted
-`renew_project` RPC itself (still directly callable and capable of creating a duplicate annual Project
-regardless of the UI) was dropped in the same migration.
+**Locked: Project = Client/Company workspace, not a finite piece of work.** Normal lifecycle is the
+full restored business-state set — **Active, On Hold, Completed, Canceled, Archived** — always the
+same workspace, never a new/cloned/year-suffixed Project. A prior pass had over-simplified this to
+just Active↔Archived; that simplification is now reversed, restoring the boss-required states at
+every layer (UI dropdown, mock provider, hosted `set_project_status` RPC). This correction also fixes
+a real architecture conflict the simplification introduced: `completionDate`/`completion_date` had
+been repurposed to also mean "Archived On," which stopped being safe once Completed came back as a
+real target. A genuinely new, dedicated column — `archivedAt`/`archived_at` — now carries the Archive
+date exclusively (stamped fresh on every Archive, never touched by Reactivate); `completionDate`
+reverts to its original, sole meaning (a true successful completion, stamped once, never overwritten
+by a later transition). Both dates can coexist truthfully on the same Project (e.g. Completed, then
+later Archived). New operational work (Task/Service/Activity creation) now requires the Project to be
+Active specifically — not merely "not Archived" — enforced at **every** layer: UI, mock provider, and
+the hosted database, via one new narrow forward migration
+(`20260908150000_restore_project_status_lifecycle.sql`), applied after reading the ACTUAL live hosted
+function/policy bodies fresh (confirmed unchanged since the prior `20260908140000` pass) and reading
+them back afterward to confirm. Archive/Reactivate and Trash/Restore remain their own dedicated,
+separately-confirmed action pairs, never folded into the ordinary status dropdown. The Projects list's
+portfolio KPI tiles now always show all five normal statuses, even at zero count — reversing the prior
+pass's "hide an empty tile" rule specifically for these five. The "Renew Project" annual-cloning
+capability remains fully retired at every layer (re-confirmed, not reintroduced by this pass).
 
 ## Remaining gaps (explicit, not hidden)
 

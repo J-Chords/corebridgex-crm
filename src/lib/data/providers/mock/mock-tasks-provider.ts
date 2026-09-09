@@ -15,6 +15,7 @@ import {
   isSupervisor,
   managesUser,
 } from "../../permissions";
+import { isProjectActiveForNewWork, projectNotActiveMessage } from "../../project-display";
 import { db } from "./mock-db";
 
 function taskAssigneeIds(taskId: string): string[] {
@@ -43,15 +44,15 @@ function requireWorkstreamAccess(viewer: User, workstream: Workstream) {
 }
 
 /**
- * Product Owner Final Lifecycle Integrity correction — authoritative enforcement (not just hidden
- * UI) that new operational work can never be created in an Archived client workspace. A Workstream
+ * Boss-Aligned Project Status Restoration — authoritative enforcement (not just hidden UI) that new
+ * operational work can never be created unless the Workstream's own Project is Active. A Workstream
  * with no Project link at all (legacy data) has no status to check, so it's never blocked here.
  */
-function requireProjectNotArchivedForWorkstream(workstream: Workstream) {
+function requireActiveProjectForWorkstream(workstream: Workstream) {
   if (!workstream.projectId) return;
   const project = db.projects.find((p) => p.id === workstream.projectId);
-  if (project?.status === "archived") {
-    throw new Error("This client is archived. Reactivate the client to add new work.");
+  if (!isProjectActiveForNewWork(project?.status ?? null)) {
+    throw new Error(projectNotActiveMessage(project?.status ?? null));
   }
 }
 
@@ -154,6 +155,7 @@ function toTaskWithRelations(task: Task, viewer: User): TaskWithRelations {
     name: workstreamRecord.name,
     projectId: workstreamRecord.projectId,
     projectName: project?.name ?? null,
+    projectStatus: project?.status ?? null,
     serviceLineName: serviceLine?.name ?? null,
   };
   const activity = (() => {
@@ -371,7 +373,7 @@ export const mockTasksProvider: TasksProvider = {
     const workstream = db.workstreams.find((e) => e.id === input.workstreamId);
     if (!workstream) throw new Error("Service not found.");
     requireWorkstreamAccess(viewer, workstream);
-    requireProjectNotArchivedForWorkstream(workstream);
+    requireActiveProjectForWorkstream(workstream);
     resolveActivityForTaskCreation(viewer, workstream, input.activityId);
     requireActiveActivityIfNewlySelected(input.activityId, null);
     const statusReason = resolveStatusReason(input.status, input.statusReason);

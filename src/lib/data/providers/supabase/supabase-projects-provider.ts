@@ -23,6 +23,7 @@ interface ProjectRow {
   contract_end_date: string | null;
   description: string | null;
   completion_date: string | null;
+  archived_at: string | null;
   start_date: string | null;
   end_date: string | null;
   project_group_id: string | null;
@@ -49,6 +50,7 @@ function toProject(row: ProjectRow): Project {
     contractEndDate: row.contract_end_date,
     description: row.description,
     completionDate: row.completion_date,
+    archivedAt: row.archived_at,
     startDate: row.start_date,
     endDate: row.end_date,
     projectGroupId: row.project_group_id,

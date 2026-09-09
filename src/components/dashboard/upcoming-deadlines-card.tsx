@@ -3,7 +3,7 @@
 import { useState, type CSSProperties } from "react";
 import Link from "next/link";
 import type { TaskWithRelations } from "@/lib/data/providers/tasks-provider";
-import { isTaskClosed } from "@/lib/data/task-display";
+import { isTaskActiveWork } from "@/lib/data/task-display";
 import { Card, CardContent, CardHeader, CardTitle, CardAction } from "@/components/ui/card";
 import { CardExpandButton } from "@/components/dashboard/card-expand-button";
 import { DashboardWidgetFocusDialog } from "@/components/dashboard/dashboard-widget-focus-dialog";
@@ -54,7 +54,7 @@ export function UpcomingDeadlinesCard({ tasks, className, style }: UpcomingDeadl
   const weekEnd = addDays(today, 6);
 
   const upcoming = tasks
-    .filter((t): t is TaskWithRelations & { dueDate: string } => !isTaskClosed(t.status) && t.dueDate != null && t.dueDate >= today)
+    .filter((t): t is TaskWithRelations & { dueDate: string } => isTaskActiveWork(t) && t.dueDate != null && t.dueDate >= today)
     .sort((a, b) => a.dueDate.localeCompare(b.dueDate));
 
   function groupTasks(list: typeof upcoming): Record<UpcomingBucket, typeof upcoming> {

@@ -5,7 +5,7 @@ import Link from "next/link";
 import type { User } from "@/lib/data/types";
 import type { TaskWithRelations } from "@/lib/data/providers/tasks-provider";
 import { computeWorkload, type WorkloadLevel } from "@/lib/data/workload";
-import { isTaskClosed } from "@/lib/data/task-display";
+import { isTaskActiveWork } from "@/lib/data/task-display";
 import { Card, CardContent, CardHeader, CardTitle, CardAction } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -35,7 +35,7 @@ export function TeamWorkloadCard({ members, tasks }: TeamWorkloadCardProps) {
 
   const rows = members.map((member) => {
     const activeTasks = tasks.filter(
-      (t) => !isTaskClosed(t.status) && t.assignees.some((a) => a.id === member.id)
+      (t) => isTaskActiveWork(t) && t.assignees.some((a) => a.id === member.id)
     );
     return { member, activeCount: activeTasks.length, workload: computeWorkload(activeTasks.length) };
   });

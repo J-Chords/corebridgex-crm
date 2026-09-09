@@ -27,15 +27,15 @@ import { ProjectFormDialog } from "@/components/projects/project-form-dialog";
 import { PeopleInline, type PersonRef } from "@/components/projects/people-inline";
 import { cn } from "@/lib/utils";
 
-/** Product Owner Final Lifecycle Integrity correction — the normal client lifecycle is just Active
- * -> Archived -> Reactivate; Trash is its own separate removal workflow (Admin-only, kept distinct
- * from Archive). "on-hold"/"completed"/"cancelled" are legacy-only values: an exhaustive search found
- * no other feature reading a Project's own status for any of the three, so none is "a current
- * accepted business workflow" — they're deliberately NOT in this normal set. Team Lead/Employee may
- * view Archived Projects they already have legitimate access to; only Admin may Archive/Reactivate
- * (unchanged, gated entirely by `ProjectStatusControl`/`canManageProjects`, never by this list). */
-const NORMAL_PROJECT_STATUSES: ProjectStatus[] = ["active", "archived"];
-const LEGACY_PROJECT_STATUSES: ProjectStatus[] = ["on-hold", "completed", "cancelled"];
+/** Boss-Aligned Project Status Restoration — the normal Project portfolio lifecycle is the full
+ * business-state set: Active, On Hold, Completed, Canceled, Archived. Trash is its own separate
+ * removal workflow (Admin-only, kept distinct from Archive). Every one of these five is always
+ * shown as its own KPI/status-group, even at zero count — a "0" is still meaningful portfolio
+ * information, never dynamically hidden. Team Lead/Employee may view every one of these statuses
+ * for a Project they already have legitimate access to; only Admin may mutate status/Archive/
+ * Reactivate (unchanged, gated entirely by `ProjectStatusControl`/`canManageProjects`, never by
+ * this list's own visibility). */
+const NORMAL_PROJECT_STATUSES: ProjectStatus[] = ["active", "on-hold", "completed", "cancelled", "archived"];
 const PROJECT_STATUS_ICONS: Record<ProjectStatus, typeof PlayCircle> = {
   active: PlayCircle,
   "on-hold": PauseCircle,
@@ -103,21 +103,14 @@ export default function ProjectsPage() {
 
   // Employee/Supervisor never see the Internal/Non-billable Project as an ordinary row here — it
   // isn't real client delivery work. Superadmin keeps it visible (still distinguished, see the row
-  // rendering below) since they're the audience who administers/understands it. Computed BEFORE any
-  // status filtering so the legacy-status check below can honestly see the viewer's whole reachable
-  // set, not a set already narrowed by the very statuses it's deciding whether to show.
+  // rendering below) since they're the audience who administers/understands it.
   const roleScopedProjects = useMemo(() => (superadmin ? projects : projects.filter((p) => !p.isInternal)), [projects, superadmin]);
 
-  // A legacy status (on-hold/completed/cancelled) only earns a tile/filter entry when a real record
-  // in that state actually exists for this viewer — "keep discoverable, never advertise as a normal
-  // choice" (Product Owner correction). Trash stays Admin-only regardless of count.
-  const legacyStatusesPresent = useMemo(
-    () => LEGACY_PROJECT_STATUSES.filter((status) => roleScopedProjects.some((p) => p.status === status)),
-    [roleScopedProjects]
-  );
+  // All five normal statuses are always visible to every role with legitimate Project access —
+  // never dynamically hidden at zero count. Trash stays Admin-only.
   const visibleStatuses = useMemo(
-    () => [...NORMAL_PROJECT_STATUSES, ...legacyStatusesPresent, ...(canCreate ? (["trash"] as ProjectStatus[]) : [])],
-    [legacyStatusesPresent, canCreate]
+    () => [...NORMAL_PROJECT_STATUSES, ...(canCreate ? (["trash"] as ProjectStatus[]) : [])],
+    [canCreate]
   );
 
   const browsableProjects = useMemo(
@@ -281,13 +274,13 @@ export default function ProjectsPage() {
         )}
       </div>
 
-      {/* Normal tiles are just Active/Archived, plus Trash for Admin — a legacy status
-          (on-hold/completed/cancelled) only earns its own tile when a real record in that state
-          actually exists (`legacyStatusesPresent`), so an empty "Completed 0" tile never appears in
-          the ordinary product. Clicking a tile applies that status filter; clicking the
-          already-selected tile returns to "All Statuses" — one unified system, not a competing
-          second filter. Counts are truthful over exactly what's already role- and filter-scoped
-          (`filteredExceptStatus`) — never fabricated, never widened. */}
+      {/* All five normal Project business-state tiles (Active/On Hold/Completed/Canceled/Archived),
+          plus Trash for Admin — every one always shown, even at zero count, since a "0" is still
+          meaningful portfolio information (Boss-Aligned Project Status Restoration). Clicking a
+          tile applies that status filter; clicking the already-selected tile returns to "All
+          Statuses" — one unified system, not a competing second filter. Counts are truthful over
+          exactly what's already role- and filter-scoped (`filteredExceptStatus`) — never
+          fabricated, never widened. */}
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
         {visibleStatuses.map((status) => {
           const Icon = PROJECT_STATUS_ICONS[status];

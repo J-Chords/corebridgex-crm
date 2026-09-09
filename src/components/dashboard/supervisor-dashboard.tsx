@@ -14,7 +14,7 @@ import { useMyTimeEntries } from "@/lib/data/hooks/use-time-entries";
 import { useElapsedSeconds } from "@/lib/data/hooks/use-elapsed-seconds";
 import { useRecentHandoffs } from "@/lib/data/hooks/use-task-handoffs";
 import { timeEntriesProvider } from "@/lib/data/providers";
-import { isTaskClosed } from "@/lib/data/task-display";
+import { isTaskActiveWork } from "@/lib/data/task-display";
 import { workstreamDisplayHeading } from "@/lib/data/workstream-name";
 import { formatMinutes } from "@/lib/format-minutes";
 import { GreetingText } from "@/components/dashboard/greeting-heading";
@@ -89,7 +89,7 @@ export function SupervisorDashboard({ user }: { user: User }) {
   const today = todayDateString();
   const sevenDaysAgoIso = new Date(new Date().getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
 
-  const openTasks = tasks.filter((t) => !isTaskClosed(t.status));
+  const openTasks = tasks.filter((t) => isTaskActiveWork(t));
   const overdueTasks = openTasks.filter((t) => t.dueDate && t.dueDate < today);
   const overdueCount = overdueTasks.length;
   const completedThisWeek = tasks.filter(
@@ -99,7 +99,7 @@ export function SupervisorDashboard({ user }: { user: User }) {
   const clientsNeedingAttention = companies.filter((c) => c.health.status !== "on-track");
   const clientsNeedingAttentionCount = clientsNeedingAttention.length;
 
-  const myOpenTasks = myTasks.filter((t) => !isTaskClosed(t.status));
+  const myOpenTasks = myTasks.filter((t) => isTaskActiveWork(t));
   const weekEntries = myEntries.filter((e) => e.durationMinutes !== null && e.startTime >= sevenDaysAgoIso);
   const weekMinutes = weekEntries.reduce((sum, e) => sum + (e.durationMinutes ?? 0), 0);
   const weekEntriesSorted = [...weekEntries].sort((a, b) => b.startTime.localeCompare(a.startTime));

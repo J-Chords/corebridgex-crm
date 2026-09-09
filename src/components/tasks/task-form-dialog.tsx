@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { AlertCircle, History, X } from "lucide-react";
 import { useAuth } from "@/lib/auth/auth-context";
 import { todayDateOnly } from "@/lib/planner-dates";
-import { operationalProjectPickerLabels } from "@/lib/data/project-display";
+import { operationalProjectPickerLabels, isProjectActiveForNewWork } from "@/lib/data/project-display";
 import { workstreamDisplayHeading, splitWorkstreamQualifier } from "@/lib/data/workstream-name";
 import { useCompanyLookups } from "@/lib/data/hooks/use-companies";
 import { useProjects } from "@/lib/data/hooks/use-projects";
@@ -141,10 +141,11 @@ export function TaskFormDialog({
 }: TaskFormDialogProps) {
   const { user } = useAuth();
   const { projects: fetchedProjects } = useProjects();
-  // Product Owner acceptance correction, Section 4 — an Archived client is never offered as a
-  // destination for brand-new work; editing an already-existing Task's own context is unaffected
-  // (that Task's Project may since have been Archived, and should still resolve/display correctly).
-  const projects = mode === "create" ? fetchedProjects.filter((p) => p.status !== "archived") : fetchedProjects;
+  // Boss-Aligned Project Status Restoration — only an Active client is offered as a destination for
+  // brand-new work (On Hold/Completed/Canceled/Archived all excluded, same as the authoritative
+  // create-Task guard); editing an already-existing Task's own context is unaffected (that Task's
+  // Project may since have moved to a non-Active state, and should still resolve/display correctly).
+  const projects = mode === "create" ? fetchedProjects.filter((p) => isProjectActiveForNewWork(p.status)) : fetchedProjects;
   // Phase 13B pre-apply correction (Correction 2) — ordinary Task Create/Edit picks a Project by its
   // Company name, never the redundant "Company + year range" form. See `project-display.ts` for the
   // (currently inert — every Company has exactly one Project today) same-Company collision fallback.
