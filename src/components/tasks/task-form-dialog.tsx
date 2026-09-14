@@ -6,7 +6,7 @@ import { AlertCircle, History, X } from "lucide-react";
 import { useAuth } from "@/lib/auth/auth-context";
 import { todayDateOnly } from "@/lib/planner-dates";
 import { operationalProjectPickerLabels, isProjectActiveForNewWork } from "@/lib/data/project-display";
-import { workstreamDisplayHeading, splitWorkstreamQualifier } from "@/lib/data/workstream-name";
+import { workstreamDisplayHeading } from "@/lib/data/workstream-name";
 import { useCompanyLookups } from "@/lib/data/hooks/use-companies";
 import { useProjects } from "@/lib/data/hooks/use-projects";
 import { useWorkstreams } from "@/lib/data/hooks/use-workstreams";
@@ -151,13 +151,22 @@ export function TaskFormDialog({
   // (currently inert — every Company has exactly one Project today) same-Company collision fallback.
   const projectLabels = operationalProjectPickerLabels(projects);
   const [form, setForm] = useState(() => emptyForm(user?.id ?? "", defaultWorkstreamId, defaultActivityId, defaultStatus));
-  const { workstreams: fetchedWorkstreams } = useWorkstreams({
+  const { workstreams: fetchedWorkstreams, refresh: refreshWorkstreamsList } = useWorkstreams({
     projectId: form.projectId === ALL_PROJECTS ? undefined : form.projectId,
   });
-  // Same Archived exclusion, applied to the actual Service/Workstream picker — a legacy Workstream
-  // with no Project link at all is never excluded (there's no Project status to check).
-  const workstreams =
-    mode === "create" ? fetchedWorkstreams.filter((w) => !w.projectId || projects.some((p) => p.id === w.projectId)) : fetchedWorkstreams;
+  // Same Archived-Project exclusion, applied to the actual Service/Workstream picker — a legacy
+  // Workstream with no Project link at all is never excluded (there's no Project status to check).
+  // CD-162 final gap closure — an archived (cancelled) Service is never a valid NEW target either:
+  // always excluded on Create; on Edit, excluded unless it's this Task's own already-current
+  // Service, so editing a Task that already lives on an archived Service still works without
+  // letting anyone reassign a DIFFERENT Task there. Enforced again at the provider/RPC layer
+  // regardless — this is a UI convenience, not the real boundary.
+  const workstreams = fetchedWorkstreams.filter((w) => {
+    const isTasksCurrentService = mode === "edit" && task?.workstreamId === w.id;
+    if (w.status === "cancelled" && !isTasksCurrentService) return false;
+    if (mode === "create" && w.projectId && !projects.some((p) => p.id === w.projectId)) return false;
+    return true;
+  });
   const { assignableStaff } = useCompanyLookups();
   const router = useRouter();
 
@@ -175,9 +184,6 @@ export function TaskFormDialog({
   const showProjectContext = form.projectId === ALL_PROJECTS;
   function workstreamPrimaryLabel(w: typeof workstreams[number]): string {
     return workstreamDisplayHeading(w.name, w.serviceLine?.name ?? null);
-  }
-  function workstreamQualifierLabel(w: typeof workstreams[number]): string {
-    return splitWorkstreamQualifier(w.name, w.serviceLine?.name ?? null);
   }
   function workstreamProjectName(w: typeof workstreams[number]): string {
     return (w.projectId && projects.find((p) => p.id === w.projectId)?.name) || "No Project";
@@ -266,6 +272,13 @@ export function TaskFormDialog({
 
   useEffect(() => {
     if (!open || !user) return;
+    // CD-162 final gap closure — this dialog stays mounted (just hidden) for the lifetime of
+    // whichever page renders it, so its own `useWorkstreams()` fetch (an independent hook instance,
+    // not shared with the page's own) can otherwise go stale: e.g. an Admin archives a Service via
+    // the Services tab, then opens this same still-mounted dialog — without this, its Service picker
+    // would still show the Service exactly as it looked on the dialog's original mount. Re-fetching
+    // every time it actually opens keeps the picker (and its archived-Service exclusion) current.
+    refreshWorkstreamsList();
     // Reset the form to match whichever task (or blank) the dialog was opened for.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setError(null);
@@ -290,7 +303,7 @@ export function TaskFormDialog({
     } else {
       setForm(emptyForm(user.id, defaultWorkstreamId, defaultActivityId, defaultStatus));
     }
-  }, [open, task, user, defaultWorkstreamId, defaultActivityId, defaultStatus]);
+  }, [open, task, user, defaultWorkstreamId, defaultActivityId, defaultStatus, refreshWorkstreamsList]);
 
   // A brand-new task on a workstream that actually has activities to choose from must be tagged to
   // one — "Workstream → Activity → Task" is the real hierarchy for normal client service work now.
@@ -503,28 +516,14 @@ export function TaskFormDialog({
                               <SelectLabel>{group.projectName}</SelectLabel>
                               {group.items.map((workstream) => (
                                 <SelectItem key={workstream.id} value={workstream.id}>
-                                  <span className="flex flex-col py-0.5">
-                                    <span>{workstreamPrimaryLabel(workstream)}</span>
-                                    {workstreamQualifierLabel(workstream) && (
-                                      <span className="text-xs text-muted-foreground">
-                                        Reference: {workstreamQualifierLabel(workstream)}
-                                      </span>
-                                    )}
-                                  </span>
+                                  {workstreamPrimaryLabel(workstream)}
                                 </SelectItem>
                               ))}
                             </SelectGroup>
                           ))
                         : workstreams.map((workstream) => (
                             <SelectItem key={workstream.id} value={workstream.id}>
-                              <span className="flex flex-col py-0.5">
-                                <span>{workstreamPrimaryLabel(workstream)}</span>
-                                {workstreamQualifierLabel(workstream) && (
-                                  <span className="text-xs text-muted-foreground">
-                                    Reference: {workstreamQualifierLabel(workstream)}
-                                  </span>
-                                )}
-                              </span>
+                              {workstreamPrimaryLabel(workstream)}
                             </SelectItem>
                           ))}
                     </SelectContent>

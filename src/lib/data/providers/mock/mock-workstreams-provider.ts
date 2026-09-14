@@ -7,7 +7,6 @@ import {
   canCreateWorkstream,
   canCreateWorkstreamInProject,
   canManageWorkstreams,
-  isEmployee,
   isSuperadmin,
   isSupervisor,
   managesUser,
@@ -228,18 +227,11 @@ export const mockWorkstreamsProvider: WorkstreamsProvider = {
     const project = db.projects.find((p) => p.id === resolved.projectId)!;
 
     if (input.projectId) {
-      if (!canCreateWorkstreamInProject(viewer, { companyId: project.companyId, ownerId: project.ownerId, memberUserIds: projectMemberIds(project.id) }, db.users)) {
+      if (!canCreateWorkstreamInProject(viewer)) {
         throw new Error("You don't have access to create a service in that project.");
       }
-    } else if (!canCreateWorkstream(viewer, resolved.companyId, db.users)) {
+    } else if (!canCreateWorkstream(viewer)) {
       throw new Error("You don't have access to create a service for that company.");
-    }
-    if (isEmployee(viewer) && input.leadUserId !== viewer.id) {
-      // Mirrors the real workstreams_insert RLS check exactly — an Employee may only ever create
-      // a workstream they themselves lead, never one assigned to someone else. This is what makes
-      // the new workstream visible to them afterward (canAccessWorkstream's own lead/self check),
-      // without granting any broader staff-assignment power.
-      throw new Error("You can only create a service you lead yourself.");
     }
     if (isSupervisor(viewer)) {
       // Parity fix (Boss Feedback Alignment) — create_workstream's real hosted RPC has always
@@ -259,6 +251,19 @@ export const mockWorkstreamsProvider: WorkstreamsProvider = {
     if (!company) throw new Error("Company not found.");
     if (!company.brandId) {
       throw new Error("This client has no Brand set yet — add a Brand to this client before creating a Service.");
+    }
+    // CD-162 post-manual-QA pass — duplicate-active-service prevention, enforced here (not just by
+    // the picker hiding already-attached options) so a direct provider call can never create a
+    // second active Workstream for the same (Project, Service Line) pair. A Service whose earlier
+    // instance was archived (`status: "cancelled"`) is not "still active," so its Service Line is
+    // free to be re-added — this is a duplicate-*active*-service rule, not a duplicate-ever rule.
+    if (input.serviceLineId) {
+      const duplicateActive = db.workstreams.some(
+        (w) => w.projectId === resolved.projectId && w.serviceLineId === input.serviceLineId && w.status !== "cancelled"
+      );
+      if (duplicateActive) {
+        throw new Error("This Service is already active on this Project.");
+      }
     }
     requireActivitiesBelongToService(input.activityIds, input.serviceLineId);
 
@@ -306,6 +311,24 @@ export const mockWorkstreamsProvider: WorkstreamsProvider = {
     const newLead = db.users.find((u) => u.id === input.leadUserId);
     if (!newLead || !managesUser(viewer, newLead)) {
       throw new Error("You can only assign yourself or one of your own direct reports as Project Service Lead.");
+    }
+    // CD-162 database hardening — the same duplicate-active-service guard createWorkstream already
+    // enforces, applied here too: Reactivate (status "cancelled" -> anything else) — or any other
+    // edit that would leave this Workstream non-archived — must not create a second active
+    // Workstream for the same (Project, Service Line). Excludes this Workstream itself from the
+    // comparison (`w.id !== id`), so saving a currently-active Workstream's own unrelated fields
+    // never false-positives against itself.
+    if (input.status !== "cancelled" && existing.projectId && input.serviceLineId) {
+      const duplicateActive = db.workstreams.some(
+        (w) =>
+          w.id !== id &&
+          w.projectId === existing.projectId &&
+          w.serviceLineId === input.serviceLineId &&
+          w.status !== "cancelled"
+      );
+      if (duplicateActive) {
+        throw new Error("This Service is already active on this Project.");
+      }
     }
     requireActivitiesBelongToService(input.activityIds, input.serviceLineId);
 
@@ -422,5 +445,20 @@ export const mockWorkstreamsProvider: WorkstreamsProvider = {
     }
 
     return activity;
+  },
+
+  async deleteWorkstream(viewer, id) {
+    const existing = db.workstreams.find((w) => w.id === id);
+    if (!existing) throw new Error("Service not found.");
+    requireManage(viewer, existing);
+    // Re-verified here, not trusted from the caller — this is the one gate standing between
+    // "remove an empty Service" and destroying real Task/Time history.
+    const taskCount = db.tasks.filter((t) => t.workstreamId === id).length;
+    if (taskCount > 0) {
+      throw new Error(`This Service has ${taskCount} task${taskCount === 1 ? "" : "s"} and can't be removed — archive it instead.`);
+    }
+    db.workstreams = db.workstreams.filter((w) => w.id !== id);
+    db.workstreamMembers = db.workstreamMembers.filter((m) => m.workstreamId !== id);
+    db.workstreamActivities = db.workstreamActivities.filter((wa) => wa.workstreamId !== id);
   },
 };

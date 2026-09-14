@@ -134,9 +134,7 @@ export function TaskChecklist({ task, onChanged }: TaskChecklistProps) {
           <span className={cn("min-w-0 flex-1 truncate text-sm", item.isDone && "text-muted-foreground line-through")}>
             {item.description}
           </span>
-          <span className={cn("shrink-0 text-xs", item.isDone ? "text-success" : "text-muted-foreground")}>
-            {item.isDone ? "Completed" : "Open"}
-          </span>
+          {item.isDone && <span className="shrink-0 text-xs text-success">Completed</span>}
           {canEdit && (
             <Button
               variant="ghost"

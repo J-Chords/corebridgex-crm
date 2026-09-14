@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
+import { generateTemporaryPassword } from "@/lib/generate-temp-password";
 import type { Role } from "@/lib/data/types";
 
 /**
@@ -43,30 +44,31 @@ async function requireActiveSuperadmin() {
 export interface AdminCreateUserInput {
   fullName: string;
   email: string;
-  initialPassword: string;
   role: Role;
   serviceLeadershipIds?: string[];
   serviceMembershipIds?: string[];
 }
 
-export async function adminCreateUser(input: AdminCreateUserInput): Promise<{ id: string }> {
+export async function adminCreateUser(input: AdminCreateUserInput): Promise<{ id: string; temporaryPassword: string }> {
   const { supabase } = await requireActiveSuperadmin();
 
   const fullName = input.fullName.trim();
   const email = input.email.trim();
   if (!fullName) throw new Error("Name can't be empty.");
   if (!email) throw new Error("Email can't be empty.");
-  if (!input.initialPassword || input.initialPassword.length < 8) {
-    throw new Error("Initial password must be at least 8 characters.");
-  }
   if (!["employee", "supervisor", "superadmin"].includes(input.role)) {
     throw new Error("Invalid role.");
   }
 
+  // CD-162 post-manual-QA pass — generated server-side (never invented/typed by the Admin, never
+  // logged) so it's always a strong, unpredictable value; returned once below so the Admin can hand
+  // it to the new user, who must change it on first sign-in (must_change_password, set further down).
+  const temporaryPassword = generateTemporaryPassword();
+
   const admin = createServiceRoleClient();
   const { data: created, error: createError } = await admin.auth.admin.createUser({
     email,
-    password: input.initialPassword,
+    password: temporaryPassword,
     email_confirm: true,
     user_metadata: { full_name: fullName },
   });
@@ -112,7 +114,7 @@ export async function adminCreateUser(input: AdminCreateUserInput): Promise<{ id
     throw err instanceof Error ? err : new Error("Couldn't finish setting up the new account.");
   }
 
-  return { id: newUserId };
+  return { id: newUserId, temporaryPassword };
 }
 
 export async function adminResetPassword(userId: string, newPassword: string): Promise<void> {

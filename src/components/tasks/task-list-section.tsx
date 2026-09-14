@@ -67,7 +67,7 @@ export function TaskListSection({
           aria-hidden="true"
         />
         {statusColor && <span className="size-2 shrink-0 rounded-full" style={{ backgroundColor: statusColor }} aria-hidden="true" />}
-        <span className="text-sm font-medium">{group.label}</span>
+        <span className="text-sm font-semibold">{group.label}</span>
         <span className="font-mono text-xs text-muted-foreground">{group.tasks.length}</span>
         {onAddTask && groupBy === "status" && (
           <span
@@ -92,8 +92,28 @@ export function TaskListSection({
         )}
       </button>
       {!isCollapsed && (
-        <div>
-          <TaskListHeader context={context} showAssignee={showAssignee} showActions={Boolean(onEdit && onDeleted)} />
+        // Phase-2 CD-162 pass — indents the whole expanded block (column header + every row) under
+        // its own parent group header, so the relationship reads as a clean menu/submenu nesting
+        // instead of the header and its rows sharing the same left edge. UI polish pass — the
+        // spine is tinted to match the parent status (reinforcing which rows belong to which
+        // group) and each row gets its own small "├─" connector glyph (via `showTreeConnector`;
+        // Product Owner refinement pass — a continuing-branch glyph on every child row, not just
+        // the last one, since each Task is visibly one of several children of the Status), matching
+        // this component's own doc-comment example of a true tree hierarchy. Purely visual:
+        // navigation, filtering, grouping, and status semantics are all untouched — only
+        // "Group by: Status" (and any other grouped view) gets this treatment; `FlatTaskList`'s
+        // "Group by: None" is a different component entirely and is deliberately left flush, since
+        // it has no parent to nest under.
+        <div
+          className="border-l-2 border-border pl-3 sm:ml-1 sm:pl-4"
+          style={statusColor ? { borderColor: `color-mix(in oklch, ${statusColor} 35%, var(--border))` } : undefined}
+        >
+          <TaskListHeader
+            context={context}
+            showAssignee={showAssignee}
+            showActions={Boolean(onEdit && onDeleted)}
+            showTreeConnector
+          />
           {group.tasks.map((task, i) => (
             <TaskListRow
               key={task.id}
@@ -105,6 +125,7 @@ export function TaskListSection({
               showAssignee={showAssignee}
               onEdit={onEdit}
               onDeleted={onDeleted}
+              showTreeConnector
             />
           ))}
         </div>

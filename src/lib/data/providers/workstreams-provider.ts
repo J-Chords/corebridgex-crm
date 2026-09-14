@@ -105,4 +105,14 @@ export interface WorkstreamsProvider {
    * Activity — every id passed must already exist and belong to this Workstream's own service line.
    */
   setWorkstreamActivities(viewer: User, workstreamId: string, activityIds: string[]): Promise<void>;
+  /**
+   * CD-162 post-manual-QA pass — a true, permanent removal, allowed ONLY when this Workstream has
+   * never had a single Task created under it (re-verified server-side, never trusted from the
+   * caller — `tasks.workstream_id` cascade-deletes on the hosted schema, so this gate is the only
+   * thing standing between "remove an empty Service" and "silently destroy real operational
+   * history"). Admin-only (`canManageWorkstreams`), same boundary as `updateWorkstream`. A
+   * Workstream with any Task history must be archived (`updateWorkstream` with `status:
+   * "cancelled"`) instead — this method throws rather than silently archiving for you.
+   */
+  deleteWorkstream(viewer: User, id: string): Promise<void>;
 }

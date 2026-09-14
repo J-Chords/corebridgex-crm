@@ -1,6 +1,6 @@
 "use client";
 
-import type { CSSProperties } from "react";
+import { useState, type CSSProperties } from "react";
 import type { TaskStatus } from "@/lib/data/types";
 import { STATUS_COLOR_VAR, TASK_STATUS_SELECT_ITEMS } from "@/components/tasks/task-status-badge";
 import { cn } from "@/lib/utils";
@@ -8,6 +8,40 @@ import { cn } from "@/lib/utils";
 /** My Day's own personal "today" buckets — Canceled is deliberately excluded here (closed, not
  * actionable daily work); it still appears in the org-wide "Task(s) by Status" breakdown. */
 export const STATUS_ORDER: TaskStatus[] = ["not-started", "in-progress", "blocked", "waiting", "completed"];
+
+const STATUS_BUCKET_STORAGE_KEY = "my-day-status-bucket";
+
+function readPersistedStatusBucket(): TaskStatus | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.sessionStorage.getItem(STATUS_BUCKET_STORAGE_KEY);
+    return raw && (STATUS_ORDER as string[]).includes(raw) ? (raw as TaskStatus) : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * MVP Simplification Pass (boss feedback) — My Day's selected status bucket, persisted the same way
+ * `useTaskFilters`'s sessionStorage opt-in works, so opening a Task from a bucket and coming back
+ * doesn't silently reset the selection to "In Progress." Shared by every role's My Day so the
+ * behavior never drifts between them.
+ */
+export function usePersistedStatusBucket() {
+  const [status, setStatusState] = useState<TaskStatus>(() => readPersistedStatusBucket() ?? "in-progress");
+  function setStatus(next: TaskStatus) {
+    setStatusState(next);
+    if (typeof window !== "undefined") {
+      try {
+        window.sessionStorage.setItem(STATUS_BUCKET_STORAGE_KEY, next);
+      } catch {
+        // Storage can legitimately fail (private browsing, quota) — selection still works for the
+        // current mount, it just won't survive a navigate-away in that case.
+      }
+    }
+  }
+  return [status, setStatus] as const;
+}
 
 /** Full, warm empty-bucket sentences (each with its own natural ending, no shared suffix needed) — a touch of personality for a genuinely empty bucket, distinct from the plainer "no matches for your filters" case. */
 export const EMPTY_BUCKET_COPY: Record<TaskStatus, string> = {

@@ -24,7 +24,7 @@ import { useWorkstreamActivities } from "@/lib/data/hooks/use-workstream-activit
 import { useServiceLineStaffing } from "@/lib/data/hooks/use-service-membership";
 import { useRunningTimer } from "@/lib/data/hooks/use-time-entries";
 import { canManageWorkstreams } from "@/lib/data/permissions";
-import { workstreamDisplayHeading, splitWorkstreamQualifier } from "@/lib/data/workstream-name";
+import { workstreamDisplayHeading } from "@/lib/data/workstream-name";
 import { formatRecurrenceDate } from "@/lib/data/recurrence";
 import type { WorkstreamWithRelations } from "@/lib/data/providers/workstreams-provider";
 import type { User } from "@/lib/data/types";
@@ -32,8 +32,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { WorkstreamStatusBadge } from "@/components/workstreams/workstream-status-badge";
-import { CompanyProjectAvatar } from "@/components/companies/company-project-avatar";
+import { ServiceAvatar } from "@/components/workstreams/service-avatar";
 import { WorkstreamFormDialog } from "@/components/workstreams/workstream-form-dialog";
+import { WorkstreamLifecycleMenu } from "@/components/workstreams/workstream-lifecycle-menu";
 import { BudgetBar } from "@/components/ui/budget-bar";
 import { RecurrenceIndicator } from "@/components/workstreams/recurrence-indicator";
 import { GenerateOccurrenceDialog } from "@/components/workstreams/generate-occurrence-dialog";
@@ -53,10 +54,13 @@ const STATUS_STRIP = [
   { key: "done" as const, label: "Completed", icon: CheckCircle2, color: STATUS_COLOR_VAR.completed },
 ];
 
-type TabKey = "overview" | "activities" | "team" | "schedule";
+// MVP Simplification Pass (boss feedback) — Overview and Activities read as two thin, redundant
+// tabs (Overview showed only status counts/metadata with no actual work; Activities showed the
+// real actionable Task groups) — merged into one "Overview" tab so the Service's own snapshot and
+// its actual work live together. Team/Schedule stay separate — still genuinely useful on their own.
+type TabKey = "overview" | "team" | "schedule";
 const TABS: { key: TabKey; label: string }[] = [
   { key: "overview", label: "Overview" },
-  { key: "activities", label: "Activities" },
   { key: "team", label: "Team" },
   { key: "schedule", label: "Schedule" },
 ];
@@ -146,8 +150,6 @@ function LoadedWorkstreamDetailPage({
     blockedWaiting: tasks.filter((t) => t.status === "blocked" || t.status === "waiting").length,
     done: tasks.filter((t) => t.status === "completed").length,
   };
-  const qualifier = splitWorkstreamQualifier(workstream.name, workstream.serviceLine?.name ?? null);
-
   return (
     <div className="flex flex-col gap-5">
       <div className="flex flex-col gap-3">
@@ -156,32 +158,34 @@ function LoadedWorkstreamDetailPage({
           Back to {workstream.company.name}
         </Link>
 
-        {/* Project → Service hierarchy shown explicitly, labeled — Service Manual Acceptance
-            correction (Section 3): the Service's own global-catalog name ("Accounting") is the
-            primary identity here, never the Project-Service instance's own qualifier
-            ("Accounting 2026"), which stays secondary metadata below. */}
-        {workstream.projectId && (
-          <div className="flex flex-col gap-0.5">
-            <span className="font-mono text-[10px] tracking-wider text-muted-foreground uppercase">Project</span>
-            <Link
-              href={`/dashboard/projects/${workstream.projectId}`}
-              className="flex w-fit items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground hover:underline"
-            >
-              <CompanyProjectAvatar
-                companyId={workstream.company.id}
-                companyName={workstream.company.name}
-                size="sm"
-                isInternal={project?.isInternal}
-              />
-              {workstream.company.name}
-            </Link>
-          </div>
-        )}
-
+        {/* Product Owner refinement pass — the Service is the single dominant page identity now:
+            the Project used to get its own large avatar + name row here, competing with the
+            Service's own heading directly below it. That row is now a small/muted breadcrumb
+            (Project / Services) instead — still a real link back to this Project's Services tab,
+            just visually secondary to the Service heading. MVP Simplification Pass (boss feedback)
+            — the Service's own global-catalog name ("Accounting") stays the primary heading,
+            matching Task Detail's own established Company → Service pattern. MVP Gap Closure — the
+            Project-Service instance's own reference/qualifier ("Accounting 2026") is still not
+            surfaced here at all (not even as a hover tooltip): it had no demonstrable current-MVP
+            workflow attached to it on a read-only page like this one, and only invited "can I
+            switch years?" confusion. The underlying field is untouched and still editable from
+            Edit Service's own "Reference / qualifier" input — that's the one place it's a genuine,
+            self-explanatory, user-driven value. */}
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex flex-col gap-0.5">
-            <span className="font-mono text-[10px] tracking-wider text-muted-foreground uppercase">Service</span>
-            <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-col gap-1">
+            {workstream.projectId && (
+              <Link
+                href={backHref}
+                className="w-fit text-xs text-muted-foreground hover:text-foreground hover:underline"
+              >
+                {workstream.company.name} / Services
+              </Link>
+            )}
+            <div className="flex flex-wrap items-center gap-2.5">
+              <ServiceAvatar
+                serviceKey={workstream.serviceLineId ?? workstream.id}
+                serviceName={workstreamDisplayHeading(workstream.name, workstream.serviceLine?.name ?? null)}
+              />
               <h1 className="font-heading text-2xl font-semibold">
                 {workstreamDisplayHeading(workstream.name, workstream.serviceLine?.name ?? null)}
               </h1>
@@ -189,12 +193,14 @@ function LoadedWorkstreamDetailPage({
             </div>
           </div>
           {canManage && (
-            <Button variant="outline" onClick={() => setEditOpen(true)}>
-              <Pencil /> Edit Service
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" onClick={() => setEditOpen(true)}>
+                <Pencil /> Edit Service
+              </Button>
+              <WorkstreamLifecycleMenu workstream={workstream} onChanged={refresh} />
+            </div>
           )}
         </div>
-        {qualifier && <p className="text-sm text-muted-foreground">Reference / qualifier: {qualifier}</p>}
       </div>
 
       <div className="flex items-center gap-1 border-b">
@@ -234,90 +240,94 @@ function LoadedWorkstreamDetailPage({
             ))}
           </div>
 
-          <Card size="sm">
-            <CardContent className="flex flex-col gap-3 pt-4">
-              {workstream.description && <p className="text-sm text-muted-foreground">{workstream.description}</p>}
-              <div className="flex flex-col gap-1.5 text-sm">
-                <span>
+          {/* UI polish pass — Activities is the Service's actual work and now leads the tab,
+              directly under the status snapshot, instead of sitting below two secondary cards. */}
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center justify-between gap-2">
+              <span className="font-mono text-xs tracking-wider text-muted-foreground uppercase">Activities</span>
+              <div className="flex items-center gap-2">
+                {!isProjectActiveForNewWork(project?.status ?? null) ? (
+                  <span className="text-xs text-muted-foreground">{projectNotActiveMessage(project?.status ?? null)}</span>
+                ) : (
+                  <>
+                    {canManage && (
+                      <Button size="sm" variant="outline" onClick={() => setQuickAddOpen(true)}>
+                        <Sparkles /> Add from activity
+                      </Button>
+                    )}
+                    {/* Every configured Activity already has its own "+ Add Task" — that's now the
+                        primary creation path. This generic fallback only remains for a Service with
+                        genuinely zero configured Activities, so Task creation is never blocked. */}
+                    {!hasConfiguredActivities && (
+                      <Button size="sm" variant="outline" onClick={() => openAddTask()} data-shortcut="new-task">
+                        <Plus /> Add task
+                      </Button>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+            <WorkstreamActivityTasks
+              departments={activityDepartments}
+              catalogLoading={activitiesLoading}
+              tasks={tasks}
+              isLoading={tasksLoading}
+              runningTaskId={runningTaskId}
+              onAddTask={openAddTask}
+              onEdit={setEditingTask}
+              onDeleted={refreshTasks}
+            />
+          </div>
+
+          {/* UI polish pass — Service Details and Time vs. Budget are secondary, at-a-glance
+              reference info now that Activities leads the tab. Side-by-side on larger screens
+              (Employee never sees Time vs. Budget, so Service Details takes the full row for them),
+              stacked on small screens. */}
+          <div className={`grid grid-cols-1 gap-4 ${canManage ? "sm:grid-cols-2" : ""}`}>
+            {/* CD-162 post-manual-QA pass — "Global Team Leads" stays off this card: it's org-wide
+                staffing metadata, not this Project Service's own operational info, and is already
+                covered by the Team tab's own "Global Service Staffing" section. Created By is kept
+                but demoted to a quiet footer line — still useful for audit context, but shouldn't
+                compete visually with the Lead. */}
+            <Card size="sm">
+              <CardHeader className="pb-1">
+                <CardTitle className="text-sm text-muted-foreground">Service Details</CardTitle>
+              </CardHeader>
+              <CardContent className="flex flex-col gap-2 pt-0">
+                {workstream.description && <p className="text-sm text-muted-foreground">{workstream.description}</p>}
+                <span className="text-sm">
                   Project Service Lead: <span className="font-medium text-foreground">{workstream.lead.fullName}</span>
                 </span>
-                <span>
-                  Created By: <span className="font-medium text-foreground">{workstream.createdBy.fullName}</span>
-                </span>
-                <span>
-                  Global Team Leads:{" "}
-                  <span className="font-medium text-foreground">
-                    {globalStaffing && globalStaffing.teamLeadUserIds.length > 0
-                      ? globalStaffing.teamLeadUserIds.map(nameFor).join(", ")
-                      : "None"}
-                  </span>
-                </span>
-              </div>
-              {workstream.recurrence && <RecurrenceIndicator recurrence={workstream.recurrence} />}
-            </CardContent>
-          </Card>
-
-          {/* Employee never sees Time vs. Budget at all — Supervisor/Superadmin keep it, secondary
-              and compact. Still the same real, current, Task-derived budget rollup. */}
-          {canManage && (
-            <Card size="sm">
-              <CardHeader>
-                <CardTitle className="text-sm text-muted-foreground">Time vs. Budget</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <BudgetBar budget={workstream.budget} />
+                {workstream.recurrence && <RecurrenceIndicator recurrence={workstream.recurrence} />}
+                <span className="text-xs text-muted-foreground/70">Created by {workstream.createdBy.fullName}</span>
               </CardContent>
             </Card>
-          )}
-        </div>
-      )}
 
-      {tab === "activities" && (
-        <div className="flex flex-col gap-3">
-          <div className="flex items-center justify-between gap-2">
-            <span className="font-mono text-xs tracking-wider text-muted-foreground uppercase">Activities</span>
-            <div className="flex items-center gap-2">
-              {!isProjectActiveForNewWork(project?.status ?? null) ? (
-                <span className="text-xs text-muted-foreground">{projectNotActiveMessage(project?.status ?? null)}</span>
-              ) : (
-                <>
-                  {canManage && (
-                    <Button size="sm" variant="outline" onClick={() => setQuickAddOpen(true)}>
-                      <Sparkles /> Add from activity
-                    </Button>
-                  )}
-                  {/* Every configured Activity already has its own "+ Add Task" — that's now the
-                      primary creation path. This generic fallback only remains for a Service with
-                      genuinely zero configured Activities, so Task creation is never blocked. */}
-                  {!hasConfiguredActivities && (
-                    <Button size="sm" variant="outline" onClick={() => openAddTask()} data-shortcut="new-task">
-                      <Plus /> Add task
-                    </Button>
-                  )}
-                </>
-              )}
-            </div>
+            {/* Employee never sees Time vs. Budget at all — Supervisor/Superadmin keep it, secondary
+                and compact. Still the same real, current, Task-derived budget rollup. */}
+            {canManage && (
+              <Card size="sm">
+                <CardHeader className="pb-1">
+                  <CardTitle className="text-sm text-muted-foreground">Time vs. Budget</CardTitle>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  <BudgetBar budget={workstream.budget} className="gap-3" />
+                </CardContent>
+              </Card>
+            )}
           </div>
-          <WorkstreamActivityTasks
-            departments={activityDepartments}
-            catalogLoading={activitiesLoading}
-            tasks={tasks}
-            isLoading={tasksLoading}
-            runningTaskId={runningTaskId}
-            onAddTask={openAddTask}
-            onEdit={setEditingTask}
-            onDeleted={refreshTasks}
-          />
         </div>
       )}
 
       {tab === "team" && (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <Card size="sm">
-            <CardHeader>
-              <CardTitle className="text-sm text-muted-foreground">This Project</CardTitle>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-3">
+        // CD-162 post-manual-QA pass — the two Team-tab cards ("This Project" / "Global Service
+        // Staffing") were two full card frames around genuinely small amounts of content, reading
+        // as stretched/empty. One card with two clearly-labeled sections keeps the same information
+        // at a fraction of the visual weight.
+        <Card size="sm">
+          <CardContent className="grid grid-cols-1 gap-5 pt-4 sm:grid-cols-2">
+            <div className="flex flex-col gap-3">
+              <span className="font-mono text-[10px] tracking-wide text-muted-foreground uppercase">This Project</span>
               <div className="flex flex-col gap-1">
                 <span className="text-xs font-medium text-muted-foreground">Project Service Lead</span>
                 <span className="text-sm">{workstream.lead.fullName}</span>
@@ -339,14 +349,12 @@ function LoadedWorkstreamDetailPage({
                   </div>
                 )}
               </div>
-            </CardContent>
-          </Card>
+            </div>
 
-          <Card size="sm">
-            <CardHeader>
-              <CardTitle className="text-sm text-muted-foreground">Global Service Staffing</CardTitle>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-3">
+            <div className="flex flex-col gap-3 sm:border-l sm:pl-5">
+              <span className="font-mono text-[10px] tracking-wide text-muted-foreground uppercase">
+                Global Service Staffing
+              </span>
               <div className="flex flex-col gap-1">
                 <span className="text-xs font-medium text-muted-foreground">Global Team Leads</span>
                 <span className="text-sm">
@@ -364,17 +372,24 @@ function LoadedWorkstreamDetailPage({
                 </span>
               </div>
               <p className="text-xs text-muted-foreground italic">
-                Org-wide responsibility/membership for this Service — does not by itself grant access to this or any
-                other Project.
+                Org-wide — doesn&apos;t by itself grant access to this or any other Project.
               </p>
-            </CardContent>
-          </Card>
-        </div>
+            </div>
+          </CardContent>
+        </Card>
       )}
 
       {tab === "schedule" && (
         <Card size="sm">
           <CardContent className="flex flex-col gap-4 pt-4">
+            {/* CD-162 post-manual-QA pass — most Services have no dates/recurrence at all; showing a
+                full grid of "Not set" fields here read as a large, mostly-empty card. A single plain
+                line for the common no-schedule case, the real grid only when there's something to
+                show. */}
+            {!workstream.startDate && !workstream.endDate && !workstream.recurrence ? (
+              <p className="text-sm text-muted-foreground">No schedule configured for this service.</p>
+            ) : (
+              <>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="flex flex-col gap-1">
                 <span className="text-xs font-medium text-muted-foreground">Start date</span>
@@ -408,6 +423,8 @@ function LoadedWorkstreamDetailPage({
               <Button variant="outline" className="w-fit" onClick={() => setGenerateOpen(true)}>
                 <RefreshCw /> Generate next occurrence
               </Button>
+            )}
+              </>
             )}
           </CardContent>
         </Card>

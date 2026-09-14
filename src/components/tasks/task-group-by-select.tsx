@@ -36,7 +36,10 @@ export function TaskGroupBySelect({ value, onChange, options }: TaskGroupBySelec
         <SelectTrigger aria-label="Group by" className="w-36">
           <SelectValue />
         </SelectTrigger>
-        <SelectContent>
+        {/* MVP Gap Closure (boss feedback) — same fix as TaskStatusRail: anchor the whole popup
+            below-left of the trigger instead of aligning the selected item over it, so it reads as
+            attached to "Group by" instead of floating over the List/Board/Timeline toggle above it. */}
+        <SelectContent align="start" alignItemWithTrigger={false}>
           {entries.map(([itemValue, label]) => (
             <SelectItem key={itemValue} value={itemValue}>
               {label}

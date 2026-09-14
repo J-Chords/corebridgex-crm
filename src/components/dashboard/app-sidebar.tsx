@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
 import {
-  CalendarDays,
   ChevronsLeft,
   ChevronsRight,
   Clock,
@@ -86,10 +85,9 @@ export function AppSidebar() {
   // team" / "Superadmin = + org admin" principle. Team Time/Team Updates keep their existing
   // page-level visibility gates.
   const workspaceItems: NavItem[] = [
-    { href: "/dashboard", label: "Home", icon: Home },
+    { href: "/dashboard", label: "Dashboard", icon: Home },
     { href: "/dashboard/my-day", label: "My Day", icon: Sun },
     { href: "/dashboard/tasks", label: "Tasks", icon: ListChecks },
-    { href: "/dashboard/planner", label: "Planner", icon: CalendarDays },
     { href: "/dashboard/reports/client", label: "Reports", icon: ClipboardList },
   ];
   // Project Level consolidation — Projects is now the ONE primary client/company workspace

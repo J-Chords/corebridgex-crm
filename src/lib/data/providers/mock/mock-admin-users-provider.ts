@@ -1,6 +1,7 @@
-import type { AdminUsersProvider, AdminCreateUserInput, AdminUserRow } from "../admin-users-provider";
+import type { AdminUsersProvider, AdminCreateUserInput, AdminCreateUserResult, AdminUserRow } from "../admin-users-provider";
 import type { Role, User } from "../../types";
 import { canManageAdminUsers } from "../../permissions";
+import { generateTemporaryPassword } from "@/lib/generate-temp-password";
 import { db } from "./mock-db";
 
 function requireAdmin(viewer: User) {
@@ -46,18 +47,19 @@ export const mockAdminUsersProvider: AdminUsersProvider = {
     return db.users.map(toRow);
   },
 
-  async createUser(viewer, input: AdminCreateUserInput) {
+  async createUser(viewer, input: AdminCreateUserInput): Promise<AdminCreateUserResult> {
     requireAdmin(viewer);
     const fullName = input.fullName.trim();
     const email = input.email.trim();
     if (!fullName) throw new Error("Name can't be empty.");
     if (!email) throw new Error("Email can't be empty.");
-    if (!input.initialPassword || input.initialPassword.length < 8) {
-      throw new Error("Initial password must be at least 8 characters.");
-    }
     if (db.users.some((u) => u.email.toLowerCase() === email.toLowerCase())) {
       throw new Error("Another account already uses that email.");
     }
+    // CD-162 post-manual-QA pass — mock mode has no real credential store, but still generates a
+    // genuine one (never Math.random) so the create-user UI's reveal/copy flow demos identically to
+    // the real Supabase path.
+    const temporaryPassword = generateTemporaryPassword();
 
     const id = crypto.randomUUID();
     const user: User = {
@@ -86,7 +88,7 @@ export const mockAdminUsersProvider: AdminUsersProvider = {
         ...input.serviceMembershipIds.map((serviceLineId) => ({ serviceLineId, userId: id })),
       ];
     }
-    return toRow(user);
+    return { user: toRow(user), temporaryPassword };
   },
 
   async setFullName(viewer, userId, fullName) {

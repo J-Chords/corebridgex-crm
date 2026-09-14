@@ -336,7 +336,19 @@ export const supabaseWorkstreamsProvider: WorkstreamsProvider = {
       .eq("id", id)
       .select("*")
       .single();
-    if (error) throw new Error(error.message);
+    if (error) {
+      // CD-162 database hardening — the partial unique index
+      // (workstreams_project_service_line_active_unique_idx, see its own migration) is the real
+      // boundary preventing a Reactivate from creating a second active Workstream for the same
+      // (Project, Service Line); Postgres's own raw "duplicate key value violates unique
+      // constraint" text isn't a useful message to surface for that, so it's translated into the
+      // same friendly message create_workstream's own app-level check already uses for the create
+      // path.
+      if (error.code === "23505") {
+        throw new Error("This Service is already active on this Project.");
+      }
+      throw new Error(error.message);
+    }
 
     await syncTeam(id, input.teamUserIds);
     await syncActivities(id, input.activityIds);
@@ -362,5 +374,15 @@ export const supabaseWorkstreamsProvider: WorkstreamsProvider = {
     });
     if (error) throw new Error(error.message);
     return toActivity(data as ActivityRow);
+  },
+
+  async deleteWorkstream(_viewer, id) {
+    // Requires `delete_empty_workstream` — see
+    // supabase/migrations/20260911090000_workstream_lifecycle_and_duplicate_prevention.sql. Not yet
+    // applied to the hosted project as of this pass (see the final report's migration section); the
+    // RPC re-verifies zero Task history itself (never trusts the client) before deleting.
+    const supabase = createClient();
+    const { error } = await supabase.rpc("delete_empty_workstream", { p_workstream_id: id });
+    if (error) throw new Error(error.message);
   },
 };

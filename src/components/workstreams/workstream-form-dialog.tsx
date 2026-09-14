@@ -286,6 +286,12 @@ export function WorkstreamFormDialog({
               )}
             </div>
 
+            {/* MVP Gap Closure (boss feedback) — kept deliberately: this is the one place the
+                qualifier is a genuine, demonstrable, self-explanatory user-driven workflow (a
+                Supervisor/Superadmin choosing their own distinguishing label, e.g. across recurring
+                Service instances). Every passive DISPLAY of this same value elsewhere (Service
+                heading tooltip, Task Detail breadcrumb tooltip, Task Form's Service-picker caption)
+                was removed — those gave a reader no context and no way to act on it. */}
             <FormDrawerField label="Reference / qualifier (optional)" htmlFor="workstream-qualifier">
               <Input
                 id="workstream-qualifier"

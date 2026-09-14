@@ -29,6 +29,15 @@ export function identityColorForCompany(companyId: string): { background: string
   return IDENTITY_TOKENS[index];
 }
 
+/** Same deterministic palette/hash as `identityColorForCompany`, keyed by a Service's own stable
+ * identity instead — its global Service Line id where it has one, so every Project's instance of
+ * the same catalog Service (e.g. "Accounting") always resolves to the same color; callers fall
+ * back to the Workstream's own id for a custom/ad-hoc Service with no Service Line. */
+export function identityColorForServiceLine(serviceKey: string): { background: string; foreground: string } {
+  const index = stableHash(serviceKey) % IDENTITY_TOKENS.length;
+  return IDENTITY_TOKENS[index];
+}
+
 /**
  * Best-effort "is this Task's Company/Project the permanently-seeded Internal/Non-billable one"
  * check for surfaces that only have a `TaskWithRelations` in hand (no already-fetched

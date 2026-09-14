@@ -1,4 +1,4 @@
-import type { AdminUsersProvider, AdminCreateUserInput, AdminUserRow } from "../admin-users-provider";
+import type { AdminUsersProvider, AdminCreateUserInput, AdminCreateUserResult, AdminUserRow } from "../admin-users-provider";
 import type { Role } from "../../types";
 import { canManageAdminUsers } from "../../permissions";
 import { createClient } from "@/lib/supabase/client";
@@ -80,11 +80,11 @@ export const supabaseAdminUsersProvider: AdminUsersProvider = {
     return ((profiles ?? []) as ProfileRow[]).map((row) => toRow(row, leadershipByUser, membershipByUser));
   },
 
-  async createUser(viewer, input: AdminCreateUserInput) {
+  async createUser(viewer, input: AdminCreateUserInput): Promise<AdminCreateUserResult> {
     if (!canManageAdminUsers(viewer)) {
       throw new Error("Only an admin can manage users.");
     }
-    const { id } = await adminCreateUser(input);
+    const { id, temporaryPassword } = await adminCreateUser(input);
     const supabase = createClient();
     const { data: profile, error } = await supabase
       .from("profiles")
@@ -95,7 +95,7 @@ export const supabaseAdminUsersProvider: AdminUsersProvider = {
       .single<ProfileRow>();
     if (error || !profile) throw new Error("User created but couldn't be reloaded.");
     const { leadershipByUser, membershipByUser } = await fetchStaffingMaps();
-    return toRow(profile, leadershipByUser, membershipByUser);
+    return { user: toRow(profile, leadershipByUser, membershipByUser), temporaryPassword };
   },
 
   async setFullName(viewer, userId, fullName) {

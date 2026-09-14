@@ -55,10 +55,44 @@ export function filterTasks(tasks: TaskWithRelations[], filters: TaskFilters): T
   });
 }
 
-/** Shared filter state for any "list of tasks" screen — pair with `filterTasks` and `<TaskFilterBar>`. */
-export function useTaskFilters() {
-  const [filters, setFilters] = useState<TaskFilters>(DEFAULT_TASK_FILTERS);
-  const patch = (next: Partial<TaskFilters>) => setFilters((f) => ({ ...f, ...next }));
+function readPersistedFilters(storageKey: string): TaskFilters | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.sessionStorage.getItem(storageKey);
+    if (!raw) return null;
+    return { ...DEFAULT_TASK_FILTERS, ...(JSON.parse(raw) as Partial<TaskFilters>) };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Shared filter state for any "list of tasks" screen — pair with `filterTasks` and
+ * `<TaskFilterBar>`. MVP Simplification Pass (boss feedback) — filtering a list, opening a Task,
+ * then coming back must not silently reset to defaults. Passing a stable `storageKey` (unique per
+ * page) persists filters to `sessionStorage` so they survive the unmount/remount a full Task-detail
+ * navigation causes, for the lifetime of the browser tab; omitting it keeps the original
+ * in-memory-only behavior (still the right choice for a screen that shouldn't remember state, e.g.
+ * an ephemeral dialog). Each page needs its own key so unrelated screens never leak filters into
+ * each other.
+ */
+export function useTaskFilters(storageKey?: string) {
+  const [filters, setFilters] = useState<TaskFilters>(() =>
+    storageKey ? (readPersistedFilters(storageKey) ?? DEFAULT_TASK_FILTERS) : DEFAULT_TASK_FILTERS
+  );
+  const patch = (next: Partial<TaskFilters>) =>
+    setFilters((f) => {
+      const merged = { ...f, ...next };
+      if (storageKey && typeof window !== "undefined") {
+        try {
+          window.sessionStorage.setItem(storageKey, JSON.stringify(merged));
+        } catch {
+          // Storage can legitimately fail (private browsing, quota) — filtering still works for
+          // the current mount, it just won't survive a navigate-away in that case.
+        }
+      }
+      return merged;
+    });
   return { filters, patch };
 }
 

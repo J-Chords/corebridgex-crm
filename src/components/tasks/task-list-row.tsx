@@ -54,15 +54,21 @@ export function TaskListHeader({
   context = "global",
   showAssignee = true,
   showActions = false,
+  showTreeConnector = false,
 }: {
   context?: TaskListContext;
   showAssignee?: boolean;
   /** Reserves the same trailing width as each row's `TaskActionsMenu` kebab so the grid columns
    * above stay aligned with the rows below — never shown itself, just a spacer. */
   showActions?: boolean;
+  /** Mirrors each row's own `showTreeConnector` leading glyph column (grouped/nested Task lists
+   * only) so the column labels stay aligned with the row cells below them — never shown itself,
+   * just a matching spacer. */
+  showTreeConnector?: boolean;
 }) {
   return (
     <div className="hidden items-center gap-2 border-b bg-muted/20 px-3 sm:flex">
+      {showTreeConnector && <span className="w-5 shrink-0" aria-hidden="true" />}
       <div
         className={cn(
           "grid h-8 flex-1 items-center gap-3 font-mono text-[10px] tracking-wide text-muted-foreground uppercase",
@@ -104,6 +110,12 @@ interface TaskListRowProps {
    * to keep a row plain (no caller passes only one of the two). */
   onEdit?: (task: TaskWithRelations) => void;
   onDeleted?: (taskId: string) => void;
+  /** Grouped Task lists (Group by: Status) pass this so each row reads as a child nested under its
+   * parent group header — a small muted tree-connector glyph, matching the leading spacer
+   * `TaskListHeader` reserves via its own `showTreeConnector`. Defaults to false (today's exact
+   * behavior) — `FlatTaskList` and the Service Activity task lists have no parent group to nest
+   * under, so neither passes this. */
+  showTreeConnector?: boolean;
 }
 
 function isLikelyInternal(task: TaskWithRelations, projectIsInternal?: boolean): boolean {
@@ -202,6 +214,7 @@ export function TaskListRow({
   showAssignee = true,
   onEdit,
   onDeleted,
+  showTreeConnector = false,
 }: TaskListRowProps) {
   const router = useRouter();
   const overdue = isTaskOverdue(task);
@@ -226,6 +239,11 @@ export function TaskListRow({
       className={cn("flex w-full items-center gap-2 cursor-pointer border-b px-3 py-2 text-left text-sm transition-colors last:border-b-0 hover:bg-muted/50", STAGGER_ITEM_CLASS)}
       style={staggerDelay(index)}
     >
+      {showTreeConnector && (
+        <span className="flex w-5 shrink-0 items-center justify-center font-mono text-xs text-muted-foreground/50" aria-hidden="true">
+          ├─
+        </span>
+      )}
       <div className="min-w-0 flex-1">
         {/* Mobile — compact stacked block */}
         <div className="flex flex-col gap-1.5 sm:hidden">
