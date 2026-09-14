@@ -7,6 +7,7 @@ import type {
 } from "../time-entries-provider";
 import type { TimeEntry, TimeEntryCorrection, User, Role } from "../../types";
 import { createClient } from "@/lib/supabase/client";
+import { localDayBoundsUtc } from "@/lib/planner-dates";
 
 /**
  * Real Supabase Time Entries provider (Phase 7). Every mutation is a thin wrapper around the
@@ -165,11 +166,12 @@ export const supabaseTimeEntriesProvider: TimeEntriesProvider = {
 
   async listTimeEntriesForDate(_viewer, date) {
     const supabase = createClient();
+    const { startUtc, endUtc } = localDayBoundsUtc(date);
     const { data, error } = await supabase
       .from("time_entries")
       .select("*")
-      .gte("start_time", `${date}T00:00:00`)
-      .lt("start_time", `${date}T23:59:59.999`)
+      .gte("start_time", startUtc)
+      .lt("start_time", endUtc)
       .order("start_time", { ascending: false });
     if (error) throw new Error(error.message);
     return withUserAndTask((data ?? []).map(toTimeEntry));

@@ -627,6 +627,14 @@ export function canViewTeamTimePage(user: User): boolean {
   return isSupervisor(user) || isSuperadmin(user);
 }
 
+/** CD-190 — gates the merged "Team Activity" nav item/page (Updates + Time). Byte-for-byte the
+ * same predicate as `canViewTeamUpdatesPage`/`canViewTeamTimePage` — this is a UI/navigation
+ * consolidation only, never a widening of who could already reach either surface. Those two
+ * functions are kept as-is (not deleted) since nothing about their own underlying pages changed. */
+export function canViewTeamActivityPage(user: User): boolean {
+  return isSupervisor(user) || isSuperadmin(user);
+}
+
 /**
  * Correcting a completed time entry — deliberately narrower than `canViewTimeForUser`: viewing your
  * own time is always fine, but *correcting* is a second-party check, never self-service, for anyone,

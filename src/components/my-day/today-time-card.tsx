@@ -9,12 +9,9 @@ import { useElapsedSeconds } from "@/lib/data/hooks/use-elapsed-seconds";
 import { sumChainMinutes } from "@/lib/data/time-entry-chain";
 import { timeEntriesProvider } from "@/lib/data/providers";
 import { formatMinutes } from "@/lib/format-minutes";
+import { dateKeyFromTimestamp, todayDateOnly } from "@/lib/planner-dates";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-
-function todayDateString() {
-  return new Date().toISOString().slice(0, 10);
-}
 
 function formatElapsed(seconds: number) {
   const m = Math.floor(seconds / 60);
@@ -41,8 +38,8 @@ export function TodayTimeCard({ className, style }: TodayTimeCardProps) {
   const { pausedTimer, refresh: refreshPausedTimer } = usePausedTimer();
   const [isBusy, setIsBusy] = useState(false);
 
-  const today = todayDateString();
-  const todaysEntries = entries.filter((e) => e.startTime.slice(0, 10) === today && e.durationMinutes !== null);
+  const today = todayDateOnly();
+  const todaysEntries = entries.filter((e) => dateKeyFromTimestamp(e.startTime) === today && e.durationMinutes !== null);
   const todayTotal = todaysEntries.reduce((sum, e) => sum + (e.durationMinutes ?? 0), 0);
   const todayBillable = todaysEntries.filter((e) => e.billable).reduce((sum, e) => sum + (e.durationMinutes ?? 0), 0);
   const todayNonBillable = todayTotal - todayBillable;

@@ -8,6 +8,7 @@ import type {
 import type { TimeEntry, TimeEntryCorrection, User } from "../../types";
 import { canAccessTaskDirectly, canCorrectTimeEntry, canLogTime, canViewTimeForUser } from "../../permissions";
 import { INTERNAL_COMPANY_ID } from "../../constants";
+import { dateKeyFromTimestamp } from "@/lib/planner-dates";
 import { timeIntervalOverlapsVisit } from "./visit-time-overlap";
 import { db } from "./mock-db";
 import { mockTasksProvider } from "./mock-tasks-provider";
@@ -134,7 +135,7 @@ export const mockTimeEntriesProvider: TimeEntriesProvider = {
 
   async listTimeEntriesForDate(viewer, date) {
     return db.timeEntries
-      .filter((te) => te.startTime.slice(0, 10) === date && canViewTimeForUser(viewer, te.userId, db.users))
+      .filter((te) => dateKeyFromTimestamp(te.startTime) === date && canViewTimeForUser(viewer, te.userId, db.users))
       .sort((a, b) => (a.startTime < b.startTime ? 1 : -1))
       .map(toTimeEntryWithUserAndTask);
   },

@@ -5,6 +5,7 @@ import { AlertCircle } from "lucide-react";
 import { useAuth } from "@/lib/auth/auth-context";
 import { timeEntriesProvider } from "@/lib/data/providers";
 import { INTERNAL_COMPANY_ID } from "@/lib/data/constants";
+import { parseDateOnly, todayDateOnly } from "@/lib/planner-dates";
 import {
   Dialog,
   DialogContent,
@@ -28,14 +29,10 @@ interface ManualTimeEntryDialogProps {
   onSaved: () => void;
 }
 
-function todayDateString() {
-  return new Date().toISOString().slice(0, 10);
-}
-
 export function ManualTimeEntryDialog({ open, onOpenChange, taskId, companyId, onSaved }: ManualTimeEntryDialogProps) {
   const { user } = useAuth();
   const [mode, setMode] = useState<"range" | "duration">("range");
-  const [date, setDate] = useState(todayDateString());
+  const [date, setDate] = useState(todayDateOnly());
   const [startTime, setStartTime] = useState("");
   const [endTime, setEndTime] = useState("");
   const [durationMinutes, setDurationMinutes] = useState("");
@@ -49,7 +46,7 @@ export function ManualTimeEntryDialog({ open, onOpenChange, taskId, companyId, o
     // Reset the form each time the dialog opens, defaulting billable to the task's company.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setMode("range");
-    setDate(todayDateString());
+    setDate(todayDateOnly());
     setStartTime("");
     setEndTime("");
     setDurationMinutes("");
@@ -89,7 +86,12 @@ export function ManualTimeEntryDialog({ open, onOpenChange, taskId, companyId, o
         setError("Enter a date and a duration greater than 0.");
         return;
       }
-      startISO = new Date(`${date}T00:00:00`).toISOString();
+      // Local midnight of the selected calendar date, via the app's own date-only parser (never a
+      // raw `new Date(`${date}T00:00:00`)` string) — every date-scoped reader (My Day, Team
+      // Activity's Time tab, etc.) now classifies a timestamp by its LOCAL calendar date
+      // (`dateKeyFromTimestamp`/`localDayBoundsUtc`, not a UTC slice), so this always lands back on
+      // the exact date the user selected, regardless of the viewer's UTC offset.
+      startISO = parseDateOnly(date).toISOString();
       endISO = null;
       minutes = Math.round(parsed);
     }
