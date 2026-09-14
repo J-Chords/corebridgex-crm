@@ -231,55 +231,67 @@ function ServiceRow({
   onEdit: () => void;
   onChanged: () => void;
 }) {
+  const activityCount = workstream.activities.length;
+  const canConfigure =
+    isProjectActiveForNewWork(project.status) &&
+    canConfigureWorkstreamActivities(
+      user,
+      { leadUserId: workstream.leadUserId },
+      project.members,
+      { companyId: project.companyId, ownerId: project.ownerId, memberUserIds: project.members.map((m) => m.id) }
+    );
+
   return (
-    <div>
+    <div className="group rounded-lg transition-colors hover:bg-muted/40 focus-within:bg-muted/40">
       <Link
         href={`/dashboard/workstreams/${workstream.id}`}
-        className="flex flex-wrap items-center justify-between gap-3 rounded-md py-1 hover:underline"
+        className="flex flex-wrap items-center justify-between gap-3 rounded-lg px-2 py-2.5 outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
       >
-        <div className="flex flex-col gap-1">
-          <span className="text-sm font-medium">
-            {workstreamDisplayHeading(workstream.name, workstream.serviceLine?.name ?? null)}
-          </span>
-          <span className="text-xs text-muted-foreground">
-            Project Service Lead: {workstream.lead.fullName} · {workstream.activities.length} activit
-            {workstream.activities.length === 1 ? "y" : "ies"}
-          </span>
+        <div className="flex min-w-0 items-center gap-3">
+          <Avatar size="sm" className="shrink-0">
+            <AvatarFallback className="text-[0.65rem]">{initials(workstream.lead.fullName)}</AvatarFallback>
+          </Avatar>
+          <div className="flex min-w-0 flex-col gap-0.5">
+            <span className="truncate text-sm font-semibold text-foreground group-hover:underline">
+              {workstreamDisplayHeading(workstream.name, workstream.serviceLine?.name ?? null)}
+            </span>
+            <span className="truncate text-xs text-muted-foreground">
+              {workstream.lead.fullName} · {activityCount} activit{activityCount === 1 ? "y" : "ies"}
+            </span>
+          </div>
         </div>
-        <div className="flex items-center gap-3">
-          <span className="text-xs text-muted-foreground">{openTaskCount} open</span>
-          <WorkstreamStatusBadge status={workstream.status} />
-          {isProjectActiveForNewWork(project.status) &&
-            canConfigureWorkstreamActivities(
-              user,
-              { leadUserId: workstream.leadUserId },
-              project.members,
-              { companyId: project.companyId, ownerId: project.ownerId, memberUserIds: project.members.map((m) => m.id) }
-            ) && (
-            <button
-              type="button"
+        <div className="flex shrink-0 flex-wrap items-center gap-4">
+          <div className="flex flex-col items-end gap-1">
+            <span className="text-xs font-medium text-foreground">{openTaskCount} open</span>
+            <WorkstreamStatusBadge status={workstream.status} />
+          </div>
+          <div className="flex items-center gap-1.5 sm:border-l sm:pl-4">
+            {canConfigure && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onConfigureActivities();
+                }}
+                className="rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-background hover:text-foreground"
+              >
+                Configure Activities
+              </button>
+            )}
+            <span
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                onConfigureActivities();
               }}
-              className="text-xs text-muted-foreground hover:underline"
             >
-              Configure Activities
-            </button>
-          )}
-          <span
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-            }}
-          >
-            <WorkstreamLifecycleMenu workstream={workstream} onChanged={onChanged} onEdit={onEdit} />
-          </span>
+              <WorkstreamLifecycleMenu workstream={workstream} onChanged={onChanged} onEdit={onEdit} />
+            </span>
+          </div>
         </div>
       </Link>
       {workstream.serviceLine && staffing && (staffing.teamLeadUserIds.length > 0 || staffing.employeeUserIds.length > 0) && (
-        <div className="mt-2 flex flex-col gap-0.5 rounded-md border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+        <div className="mx-2 mb-2 flex flex-col gap-0.5 rounded-md border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
           <span className="font-mono text-[10px] tracking-wide uppercase">Global Service Staffing</span>
           <span>
             Global Team Leads: {staffing.teamLeadUserIds.length > 0 ? staffing.teamLeadUserIds.map(nameFor).join(", ") : "None"}
@@ -997,13 +1009,13 @@ function LoadedProjectDetailPage({
             )}
           </div>
           <Card>
-            <CardContent className="flex flex-col gap-1 pt-6">
+            <CardContent className="flex flex-col gap-0.5 py-2">
               {!workstreamsLoading && activeWorkstreams.length === 0 && (
-                <p className="text-sm text-muted-foreground">No services yet for this project.</p>
+                <p className="px-2 py-4 text-sm text-muted-foreground">No services yet for this project.</p>
               )}
               {activeWorkstreams.map((workstream, i) => (
                 <div key={workstream.id}>
-                  {i > 0 && <Separator className="my-3" />}
+                  {i > 0 && <Separator className="my-0.5" />}
                   <ServiceRow
                     workstream={workstream}
                     project={project}
@@ -1037,11 +1049,11 @@ function LoadedProjectDetailPage({
                 Archived Services ({archivedWorkstreams.length})
               </button>
               {showArchivedServices && (
-                <Card>
-                  <CardContent className="flex flex-col gap-1 pt-6">
+                <Card className="opacity-75">
+                  <CardContent className="flex flex-col gap-0.5 py-2">
                     {archivedWorkstreams.map((workstream, i) => (
                       <div key={workstream.id}>
-                        {i > 0 && <Separator className="my-3" />}
+                        {i > 0 && <Separator className="my-0.5" />}
                         <ServiceRow
                           workstream={workstream}
                           project={project}

@@ -240,41 +240,8 @@ function LoadedWorkstreamDetailPage({
             ))}
           </div>
 
-          {/* CD-162 post-manual-QA pass — "Global Team Leads" removed from here: it's org-wide
-              staffing metadata, not this Project Service's own operational info, and it was fully
-              duplicated by the Team tab's own dedicated "Global Service Staffing" card just below —
-              seeing the same fact rendered twice was exactly the kind of low-value repetition making
-              this page feel information-light despite the padding it consumed. */}
-          <Card size="sm">
-            <CardContent className="flex flex-col gap-3 pt-4">
-              {workstream.description && <p className="text-sm text-muted-foreground">{workstream.description}</p>}
-              <div className="flex flex-col gap-1.5 text-sm">
-                <span>
-                  Project Service Lead: <span className="font-medium text-foreground">{workstream.lead.fullName}</span>
-                </span>
-                <span>
-                  Created By: <span className="font-medium text-foreground">{workstream.createdBy.fullName}</span>
-                </span>
-              </div>
-              {workstream.recurrence && <RecurrenceIndicator recurrence={workstream.recurrence} />}
-            </CardContent>
-          </Card>
-
-          {/* Employee never sees Time vs. Budget at all — Supervisor/Superadmin keep it, secondary
-              and compact. Still the same real, current, Task-derived budget rollup. */}
-          {canManage && (
-            <Card size="sm">
-              <CardHeader>
-                <CardTitle className="text-sm text-muted-foreground">Time vs. Budget</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <BudgetBar budget={workstream.budget} />
-              </CardContent>
-            </Card>
-          )}
-
-          {/* MVP Simplification Pass — the Service's actual work (Activities/Tasks) now lives in
-              this same Overview tab, right below its snapshot, instead of a separate thin tab. */}
+          {/* UI polish pass — Activities is the Service's actual work and now leads the tab,
+              directly under the status snapshot, instead of sitting below two secondary cards. */}
           <div className="flex flex-col gap-3">
             <div className="flex items-center justify-between gap-2">
               <span className="font-mono text-xs tracking-wider text-muted-foreground uppercase">Activities</span>
@@ -310,6 +277,44 @@ function LoadedWorkstreamDetailPage({
               onEdit={setEditingTask}
               onDeleted={refreshTasks}
             />
+          </div>
+
+          {/* UI polish pass — Service Details and Time vs. Budget are secondary, at-a-glance
+              reference info now that Activities leads the tab. Side-by-side on larger screens
+              (Employee never sees Time vs. Budget, so Service Details takes the full row for them),
+              stacked on small screens. */}
+          <div className={`grid grid-cols-1 gap-4 ${canManage ? "sm:grid-cols-2" : ""}`}>
+            {/* CD-162 post-manual-QA pass — "Global Team Leads" stays off this card: it's org-wide
+                staffing metadata, not this Project Service's own operational info, and is already
+                covered by the Team tab's own "Global Service Staffing" section. Created By is kept
+                but demoted to a quiet footer line — still useful for audit context, but shouldn't
+                compete visually with the Lead. */}
+            <Card size="sm">
+              <CardHeader className="pb-1">
+                <CardTitle className="text-sm text-muted-foreground">Service Details</CardTitle>
+              </CardHeader>
+              <CardContent className="flex flex-col gap-2 pt-0">
+                {workstream.description && <p className="text-sm text-muted-foreground">{workstream.description}</p>}
+                <span className="text-sm">
+                  Project Service Lead: <span className="font-medium text-foreground">{workstream.lead.fullName}</span>
+                </span>
+                {workstream.recurrence && <RecurrenceIndicator recurrence={workstream.recurrence} />}
+                <span className="text-xs text-muted-foreground/70">Created by {workstream.createdBy.fullName}</span>
+              </CardContent>
+            </Card>
+
+            {/* Employee never sees Time vs. Budget at all — Supervisor/Superadmin keep it, secondary
+                and compact. Still the same real, current, Task-derived budget rollup. */}
+            {canManage && (
+              <Card size="sm">
+                <CardHeader className="pb-1">
+                  <CardTitle className="text-sm text-muted-foreground">Time vs. Budget</CardTitle>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  <BudgetBar budget={workstream.budget} className="gap-3" />
+                </CardContent>
+              </Card>
+            )}
           </div>
         </div>
       )}
