@@ -1,32 +1,17 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
-import { ListChecks, Plus, Square } from "lucide-react";
 import type { User } from "@/lib/data/types";
 import type { TaskWithRelations } from "@/lib/data/providers/tasks-provider";
 import { useMyTasks } from "@/lib/data/hooks/use-tasks";
 import { useWorkstreams } from "@/lib/data/hooks/use-workstreams";
 import { useMyTimeEntries } from "@/lib/data/hooks/use-time-entries";
-import { useElapsedSeconds } from "@/lib/data/hooks/use-elapsed-seconds";
-import {
-  useTaskFilters,
-  filterTasks,
-  useCompanyOptionsFromTasks,
-  useWorkstreamOptionsFromTasks,
-} from "@/lib/data/hooks/use-task-filters";
-import { timeEntriesProvider } from "@/lib/data/providers";
 import { isTaskActiveWork } from "@/lib/data/task-display";
-import { workstreamDisplayHeading } from "@/lib/data/workstream-name";
 import { formatMinutes } from "@/lib/format-minutes";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardAction } from "@/components/ui/card";
 import { StatCard } from "@/components/ui/stat-card";
 import { SectionBreak } from "@/components/ui/section-break";
-import { TaskRowList } from "@/components/tasks/task-row";
 import { TaskFormDialog } from "@/components/tasks/task-form-dialog";
-import { TaskFilterBar } from "@/components/tasks/task-filter-bar";
-import { SavedViewsBar } from "@/components/tasks/saved-views-bar";
 import { TaskStatusDonut } from "@/components/tasks/task-status-donut";
 import { TaskDrawer } from "@/components/tasks/task-drawer";
 import { RecentNotificationsCard } from "@/components/dashboard/recent-notifications-card";
@@ -42,41 +27,30 @@ import { STAGGER_ITEM_CLASS, staggerDelay } from "@/lib/stagger";
 import { cn } from "@/lib/utils";
 
 const MAX_WORKSTREAMS_PREVIEW = 6;
-const MAX_MY_TASKS_PREVIEW = 6;
 
 function todayDateString() {
   return new Date().toISOString().slice(0, 10);
 }
 
-function formatElapsed(seconds: number) {
-  const m = Math.floor(seconds / 60);
-  const s = seconds % 60;
-  return `${m}:${String(s).padStart(2, "0")}`;
-}
-
-function formatEntryDate(value: string) {
-  return new Date(value).toLocaleDateString("en-US", { month: "short", day: "numeric" });
-}
-
+/**
+ * MVP Simplification Pass (boss feedback) — Dashboard stays summary-oriented (counts, a status
+ * breakdown, a services reference); My Day is the one place to actually work a task or run a timer.
+ * The interactive "My Tasks" list (its own search/filter/save-view, editable inline) and the "Time
+ * this week" timer-control card were both genuine, fuller duplicates of My Day's own equivalents —
+ * removed here rather than kept as a second, less-capable copy. The KPI tiles below still let you
+ * open/edit a Task from their own drill-down (`TaskKpiDetail`), so nothing about "what needs my
+ * attention" is lost — only the always-on, execution-style list/timer duplication is.
+ */
 export function EmployeeDashboard({ user }: { user: User }) {
-  const { tasks, isLoading, refresh } = useMyTasks();
+  const { tasks, refresh } = useMyTasks();
   const { workstreams } = useWorkstreams();
   const { entries, refresh: refreshEntries } = useMyTimeEntries();
-  const [taskDialogOpen, setTaskDialogOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<TaskWithRelations | null>(null);
-  const [isStopping, setIsStopping] = useState(false);
   const [drawerTaskId, setDrawerTaskId] = useState<string | null>(null);
   const [workstreamsFocusOpen, setWorkstreamsFocusOpen] = useState(false);
-  const [myTasksFocusOpen, setMyTasksFocusOpen] = useState(false);
-  const [timeFocusOpen, setTimeFocusOpen] = useState(false);
   const [taskStatusFocusOpen, setTaskStatusFocusOpen] = useState(false);
-  const { filters, patch } = useTaskFilters();
-  const companyOptions = useCompanyOptionsFromTasks(tasks);
-  const workstreamOptions = useWorkstreamOptionsFromTasks(tasks);
-  const filteredTasks = filterTasks(tasks, filters);
 
   const runningEntry = entries.find((e) => e.durationMinutes === null) ?? null;
-  const elapsedSeconds = useElapsedSeconds(runningEntry?.startTime ?? null);
 
   const today = todayDateString();
   const sevenDaysAgoIso = new Date(new Date().getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
@@ -91,7 +65,6 @@ export function EmployeeDashboard({ user }: { user: User }) {
 
   const weekEntries = entries.filter((e) => e.durationMinutes !== null && e.startTime >= sevenDaysAgoIso);
   const weekMinutes = weekEntries.reduce((sum, e) => sum + (e.durationMinutes ?? 0), 0);
-  const weekEntriesSorted = [...weekEntries].sort((a, b) => b.startTime.localeCompare(a.startTime));
 
   // Peek content for the "Hours logged this week" KPI — per-task breakdown of the same entries.
   const minutesByTask = new Map<string, { title: string; minutes: number }>();
@@ -101,17 +74,6 @@ export function EmployeeDashboard({ user }: { user: User }) {
     else minutesByTask.set(entry.task.id, { title: entry.task.title, minutes: entry.durationMinutes ?? 0 });
   }
   const topTasksByTime = Array.from(minutesByTask.entries()).sort((a, b) => b[1].minutes - a[1].minutes);
-
-  async function handleStopTimer() {
-    if (!runningEntry) return;
-    setIsStopping(true);
-    try {
-      await timeEntriesProvider.stopTimer(user, runningEntry.id);
-      await refreshEntries();
-    } finally {
-      setIsStopping(false);
-    }
-  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -301,115 +263,21 @@ export function EmployeeDashboard({ user }: { user: User }) {
         )}
       </DashboardWidgetFocusDialog>
 
-      <SectionBreak num="02" label="Today" />
+      <SectionBreak num="02" label="Summary" />
 
-      <div className="grid gap-4 lg:grid-cols-3">
-        <Card className={cn("lg:col-span-2", STAGGER_ITEM_CLASS)} style={staggerDelay(0)}>
-          <CardHeader className="flex items-center justify-between">
-            <CardTitle className="flex items-center gap-2 text-base">
-              <ListChecks className="size-4 text-muted-foreground" aria-hidden="true" />
-              My Tasks
-            </CardTitle>
-            <div className="flex items-center gap-1">
-              <Button size="sm" variant="outline" onClick={() => setTaskDialogOpen(true)} data-shortcut="new-task">
-                <Plus /> Add task
-              </Button>
-              <CardExpandButton onClick={() => setMyTasksFocusOpen(true)} label="Expand My Tasks" />
-            </div>
+      <div className="grid gap-4 lg:grid-cols-2">
+        <UpcomingDeadlinesCard tasks={tasks} className={STAGGER_ITEM_CLASS} style={staggerDelay(0)} />
+        <Card className={cn(STAGGER_ITEM_CLASS)} style={staggerDelay(1)}>
+          <CardHeader>
+            <CardTitle className="text-base">My Tasks by Status</CardTitle>
+            <CardAction>
+              <CardExpandButton onClick={() => setTaskStatusFocusOpen(true)} label="Expand My Tasks by Status" />
+            </CardAction>
           </CardHeader>
-          <CardContent className="flex flex-col gap-4">
-            {tasks.length > 0 && (
-              <div className="flex flex-col gap-3">
-                <TaskFilterBar
-                  filters={filters}
-                  onChange={patch}
-                  fields={["search", "company", "workstream", "status", "priority"]}
-                  companies={companyOptions}
-                  workstreams={workstreamOptions}
-                />
-                <SavedViewsBar filters={filters} onApply={patch} />
-              </div>
-            )}
-            <TaskRowList
-              tasks={filteredTasks.slice(0, MAX_MY_TASKS_PREVIEW)}
-              isLoading={isLoading}
-              emptyMessage={
-                tasks.length === 0
-                  ? "Nothing assigned to you yet — add your own task to get started."
-                  : "No tasks match your filters."
-              }
-              subtitleFor={(task) =>
-                `${task.company.name} · ${workstreamDisplayHeading(task.workstream.name, task.workstream.serviceLineName)}${task.activity ? ` · ${task.activity.name}` : ""}`
-              }
-              onOpen={setDrawerTaskId}
-            />
-            {filteredTasks.length > MAX_MY_TASKS_PREVIEW && (
-              <button
-                type="button"
-                onClick={() => setMyTasksFocusOpen(true)}
-                className="self-start text-xs font-medium text-primary hover:underline"
-              >
-                +{filteredTasks.length - MAX_MY_TASKS_PREVIEW} more
-              </button>
-            )}
+          <CardContent>
+            <TaskStatusDonut tasks={tasks} />
           </CardContent>
         </Card>
-
-        <div className={cn("flex flex-col gap-4", STAGGER_ITEM_CLASS)} style={staggerDelay(1)}>
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Time this week</CardTitle>
-              <CardAction>
-                <CardExpandButton onClick={() => setTimeFocusOpen(true)} label="Expand Time this week" />
-              </CardAction>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-4">
-              <div>
-                <span className="font-heading text-2xl font-semibold tracking-tight text-primary">
-                  {formatMinutes(weekMinutes)}
-                </span>
-                <p className="mt-1 text-xs text-muted-foreground">Logged across the last 7 days.</p>
-              </div>
-              <div className="border-t pt-3">
-                <span className="mb-2 block font-mono text-xs tracking-wider text-muted-foreground uppercase">
-                  Running timer
-                </span>
-                {runningEntry ? (
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="flex flex-col gap-1">
-                      <Link
-                        href={`/dashboard/tasks/${runningEntry.task.id}`}
-                        className="text-sm font-medium hover:underline"
-                      >
-                        {runningEntry.task.title}
-                      </Link>
-                      <span className="font-mono text-lg text-primary">{formatElapsed(elapsedSeconds)}</span>
-                    </div>
-                    <Button variant="destructive" size="sm" onClick={handleStopTimer} disabled={isStopping}>
-                      <Square /> Stop
-                    </Button>
-                  </div>
-                ) : (
-                  <p className="text-sm text-muted-foreground">No timer running — start one from any task.</p>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-
-          <UpcomingDeadlinesCard tasks={tasks} />
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">My Tasks by Status</CardTitle>
-              <CardAction>
-                <CardExpandButton onClick={() => setTaskStatusFocusOpen(true)} label="Expand My Tasks by Status" />
-              </CardAction>
-            </CardHeader>
-            <CardContent>
-              <TaskStatusDonut tasks={tasks} />
-            </CardContent>
-          </Card>
-        </div>
       </div>
 
       <DashboardWidgetFocusDialog
@@ -432,96 +300,10 @@ export function EmployeeDashboard({ user }: { user: User }) {
         />
       </DashboardWidgetFocusDialog>
 
-      <DashboardWidgetFocusDialog
-        open={myTasksFocusOpen}
-        onOpenChange={setMyTasksFocusOpen}
-        title="My Tasks"
-        description={`${filteredTasks.length} task${filteredTasks.length === 1 ? "" : "s"} matching your current filters`}
-      >
-        <TaskFilterBar
-          filters={filters}
-          onChange={patch}
-          fields={["search", "company", "workstream", "status", "priority"]}
-          companies={companyOptions}
-          workstreams={workstreamOptions}
-        />
-        <SavedViewsBar filters={filters} onApply={patch} />
-        <TaskRowList
-          tasks={filteredTasks}
-          isLoading={isLoading}
-          emptyMessage={
-            tasks.length === 0
-              ? "Nothing assigned to you yet — add your own task to get started."
-              : "No tasks match your filters."
-          }
-          subtitleFor={(task) =>
-            `${task.company.name} · ${workstreamDisplayHeading(task.workstream.name, task.workstream.serviceLineName)}${task.activity ? ` · ${task.activity.name}` : ""}`
-          }
-          onOpen={setDrawerTaskId}
-        />
-      </DashboardWidgetFocusDialog>
-
-      <DashboardWidgetFocusDialog
-        open={timeFocusOpen}
-        onOpenChange={setTimeFocusOpen}
-        title="Time this week"
-        description={`${formatMinutes(weekMinutes)} logged across the last 7 days`}
-      >
-        <div className="border-b pb-4">
-          <span className="mb-2 block font-mono text-xs tracking-wider text-muted-foreground uppercase">
-            Running timer
-          </span>
-          {runningEntry ? (
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex flex-col gap-1">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setTimeFocusOpen(false);
-                    setDrawerTaskId(runningEntry.task.id);
-                  }}
-                  className="text-left text-sm font-medium hover:underline"
-                >
-                  {runningEntry.task.title}
-                </button>
-                <span className="font-mono text-lg text-primary">{formatElapsed(elapsedSeconds)}</span>
-              </div>
-              <Button variant="destructive" size="sm" onClick={handleStopTimer} disabled={isStopping}>
-                <Square /> Stop
-              </Button>
-            </div>
-          ) : (
-            <p className="text-sm text-muted-foreground">No timer running — start one from any task.</p>
-          )}
-        </div>
-        {weekEntriesSorted.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No time logged yet this week.</p>
-        ) : (
-          weekEntriesSorted.map((entry) => (
-            <button
-              key={entry.id}
-              type="button"
-              onClick={() => {
-                setTimeFocusOpen(false);
-                setDrawerTaskId(entry.task.id);
-              }}
-              className="flex items-center justify-between gap-3 rounded-lg border bg-card p-3 text-left transition-colors hover:bg-muted/40"
-            >
-              <div className="flex min-w-0 flex-col gap-0.5">
-                <span className="truncate text-sm font-medium">{entry.task.title}</span>
-                <span className="text-xs text-muted-foreground">{formatEntryDate(entry.startTime)}</span>
-              </div>
-              <span className="shrink-0 text-xs text-muted-foreground">{formatMinutes(entry.durationMinutes ?? 0)}</span>
-            </button>
-          ))
-        )}
-      </DashboardWidgetFocusDialog>
-
       <SectionBreak num="03" label="Activity" />
 
       <RecentNotificationsCard />
 
-      <TaskFormDialog open={taskDialogOpen} onOpenChange={setTaskDialogOpen} mode="create" onSaved={refresh} />
       {editingTask && (
         <TaskFormDialog
           open={Boolean(editingTask)}

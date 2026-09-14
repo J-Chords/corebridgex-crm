@@ -57,7 +57,13 @@ export function TaskStatusRail({ status, onChange, disabled }: TaskStatusRailPro
         <SelectTrigger aria-label="Task status" className="h-8 w-full" style={statusChipStyle(status)}>
           <SelectValue />
         </SelectTrigger>
-        <SelectContent>
+        {/* MVP Gap Closure (boss feedback) — the shared Select's default `alignItemWithTrigger`
+            aligns the currently-selected item over the trigger (native-<select> style), which for a
+            6-item list means the popup floats both above and below this one property row, overlapping
+            Priority/Assignees/Due date rather than reading as attached to Status. Anchoring the whole
+            popup below-left of the trigger instead makes it read as nested under the control it
+            belongs to. */}
+        <SelectContent align="start" alignItemWithTrigger={false}>
           {STATUS_ORDER.map((s) => (
             <SelectItem key={s} value={s}>
               <span className="flex items-center gap-1.5">

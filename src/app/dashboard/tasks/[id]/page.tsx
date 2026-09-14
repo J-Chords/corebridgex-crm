@@ -15,13 +15,44 @@ import type { TaskStatus, User } from "@/lib/data/types";
 import { CompanyProjectAvatar } from "@/components/companies/company-project-avatar";
 import { TaskStatusAvatar } from "@/components/tasks/task-status-avatar";
 import { isLikelyInternalTask } from "@/lib/data/identity-color";
-import { workstreamDisplayHeading, splitWorkstreamQualifier } from "@/lib/data/workstream-name";
+import { workstreamDisplayHeading } from "@/lib/data/workstream-name";
 import { TaskFormDialog } from "@/components/tasks/task-form-dialog";
 import { TaskActionsMenu } from "@/components/tasks/task-actions-menu";
 import { TaskDetailContent } from "@/components/tasks/task-detail-content";
 import { TaskTimerControl } from "@/components/tasks/task-timer-control";
 import { TaskPropertiesRail } from "@/components/tasks/task-properties-rail";
 import { Button } from "@/components/ui/button";
+
+/**
+ * MVP Gap Closure (boss feedback) — a Task can now be opened from several different origin screens
+ * (Tasks list, My Day Today/Week/Month, a Project's Tasks tab), so a hardcoded
+ * `href="/dashboard/tasks"` would silently strand a My Day visitor on the generic Tasks list instead
+ * of returning them to My Day. `router.back()` (falling back to the Tasks list only when there's no
+ * in-app history, e.g. a direct link or a new tab) returns to wherever the visitor actually came
+ * from, preserving that screen's own filter/view state exactly as left. The label is deliberately
+ * generic ("Back", not "Back to tasks") rather than guessing/naming a specific destination — the
+ * browser has no reliable, low-complexity way to know in advance which of several possible origin
+ * screens `back()` will land on, and a generic label is truthful regardless of which one it is.
+ */
+function BackLink({ className = "" }: { className?: string }) {
+  const router = useRouter();
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        if (typeof window !== "undefined" && window.history.length > 1) {
+          router.back();
+        } else {
+          router.push("/dashboard/tasks");
+        }
+      }}
+      className={`flex items-center text-sm text-muted-foreground hover:underline ${className}`}
+    >
+      <ArrowLeft className="mr-1 inline size-3.5" aria-hidden="true" />
+      Back
+    </button>
+  );
+}
 
 export default function TaskDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -30,8 +61,6 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
 
   if (!user) return null;
 
-  // Phase 8C — /dashboard/tasks is open to every role now, so "Back to tasks" is always correct;
-  // My Day never needed a separate fallback here once the Task Center gate was removed in 8B.
   if (isLoading) {
     return <p className="text-sm text-muted-foreground">Loading…</p>;
   }
@@ -39,10 +68,7 @@ export default function TaskDetailPage({ params }: { params: Promise<{ id: strin
   if (notFound || !task) {
     return (
       <div className="flex flex-col items-start gap-3">
-        <Link href="/dashboard/tasks" className="text-sm text-muted-foreground hover:underline">
-          <ArrowLeft className="mr-1 inline size-3.5" aria-hidden="true" />
-          Back to tasks
-        </Link>
+        <BackLink />
         <p className="text-sm text-muted-foreground">
           This task doesn&apos;t exist, or you don&apos;t have access to it.
         </p>
@@ -80,8 +106,6 @@ function LoadedTaskDetailPage({ task, user, refresh }: { task: TaskWithRelations
   const assigneeIds = task.assignees.map((a) => a.id);
   const canEdit = canEditTask(user, { ...task, assigneeIds }, assignableStaff);
   const canProgress = canProgressTask(user, { assigneeIds, companyId: task.companyId }, assignableStaff);
-  const workstreamQualifier = splitWorkstreamQualifier(task.workstream.name, task.workstream.serviceLineName);
-
   async function applyStatusChange(status: TaskStatus, statusReason?: string) {
     setStatusPending(true);
     try {
@@ -99,10 +123,7 @@ function LoadedTaskDetailPage({ task, user, refresh }: { task: TaskWithRelations
 
   return (
     <div className="flex flex-col gap-4">
-      <Link href="/dashboard/tasks" className="w-fit text-sm text-muted-foreground hover:underline">
-        <ArrowLeft className="mr-1 inline size-3.5" aria-hidden="true" />
-        Back to tasks
-      </Link>
+      <BackLink className="w-fit" />
 
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex flex-col gap-1.5">
@@ -125,15 +146,12 @@ function LoadedTaskDetailPage({ task, user, refresh }: { task: TaskWithRelations
             )}
             <span className="text-muted-foreground/60">→</span>
             {/* Product Owner acceptance correction, Section 9 — Project → Service → Activity is the
-                primary hierarchy and must read immediately; the Project-Service qualifier/reference
-                is secondary metadata, moved to a hover tooltip (the same low-emphasis treatment
-                already used for this exact qualifier in the List view's ContextCell) instead of a
-                visible parenthetical competing with the hierarchy chain. Data is never removed. */}
-            <Link
-              href={`/dashboard/workstreams/${task.workstream.id}`}
-              className="hover:underline"
-              title={workstreamQualifier ? `Reference: ${workstreamQualifier}` : undefined}
-            >
+                primary hierarchy and must read immediately. MVP Gap Closure — the Project-Service
+                qualifier/reference is no longer surfaced here at all (previously a hover tooltip):
+                it had no demonstrable current-MVP workflow on a read-only page like this one, and
+                only invited "what does this year-based reference mean?" confusion. Data is never
+                removed — it's still a genuine, editable field on Edit Service itself. */}
+            <Link href={`/dashboard/workstreams/${task.workstream.id}`} className="hover:underline">
               {workstreamDisplayHeading(task.workstream.name, task.workstream.serviceLineName)}
             </Link>
             {task.activity && (

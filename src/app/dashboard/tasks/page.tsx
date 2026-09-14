@@ -69,7 +69,7 @@ function TasksPageContent() {
   // List on every page load.
   const [view, setView] = useState<TaskView>("list");
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
-  const { filters, patch } = useTaskFilters();
+  const { filters, patch } = useTaskFilters("tasks-page");
 
   // Seeds this page's filter from a KPI-card "view full details" link (e.g. /dashboard/tasks?status=completed)
   // — one-time on mount, same `patch` the filter bar itself already calls, no change to useTaskFilters.

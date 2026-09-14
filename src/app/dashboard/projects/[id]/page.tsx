@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import {
   ArrowLeft,
+  ChevronDown,
   GanttChart,
   LayoutGrid,
   List as ListIcon,
@@ -50,8 +51,10 @@ import { CompanyFormDialog } from "@/components/companies/company-form-dialog";
 import { ContactFormDialog } from "@/components/companies/contact-form-dialog";
 import { WorkstreamStatusBadge } from "@/components/workstreams/workstream-status-badge";
 import { AddProjectServiceDialog } from "@/components/projects/add-project-service-dialog";
+import { WorkstreamFormDialog } from "@/components/workstreams/workstream-form-dialog";
+import { WorkstreamLifecycleMenu } from "@/components/workstreams/workstream-lifecycle-menu";
 import { ProjectFormDialog } from "@/components/projects/project-form-dialog";
-import { ProjectStatusControl } from "@/components/projects/project-status-control";
+import { ProjectStatusControl, ProjectLifecycleMenu } from "@/components/projects/project-status-control";
 import { ProjectCommentsSection } from "@/components/projects/project-comments-section";
 import { ProjectIssuesSection } from "@/components/projects/project-issues-section";
 import { ProjectDocumentsSection } from "@/components/projects/project-documents-section";
@@ -78,7 +81,10 @@ function formatDate(value: string | null) {
 // four sub-sections dissolved into their own top-level tabs (Context -> folded into Overview's own
 // Notes panel; Completed Work dropped as a dedicated panel — redundant with Tasks' own "Done"
 // status group; Client Reports -> Reports; Time & Team -> Time); Comments/Documents/Issues are new.
-type TabKey = "overview" | "services" | "tasks" | "members" | "comments" | "documents" | "time" | "issues" | "reports";
+// MVP Simplification Pass (boss feedback) — Documents+Reports merged into one "Reports" tab
+// (generation workspace + already-generated report/document library, together); Issues+Comments
+// merged into one "Comments" tab (canonical discussion + issue-style reporting/history, together).
+type TabKey = "overview" | "services" | "tasks" | "members" | "comments" | "time" | "reports";
 type TaskView = "list" | "board" | "timeline";
 const TABS: { key: TabKey; label: string }[] = [
   { key: "overview", label: "Overview" },
@@ -86,9 +92,7 @@ const TABS: { key: TabKey; label: string }[] = [
   { key: "tasks", label: "Tasks" },
   { key: "members", label: "Members" },
   { key: "comments", label: "Comments" },
-  { key: "documents", label: "Documents" },
   { key: "time", label: "Time" },
-  { key: "issues", label: "Issues" },
   { key: "reports", label: "Reports" },
 ];
 
@@ -198,6 +202,98 @@ function ServicesSummaryPanel({
   );
 }
 
+/**
+ * CD-162 post-manual-QA pass — one Project Services list row, extracted so the active list and the
+ * "Archived Services" disclosure below it render identically (only the data differs). The 3-dot
+ * `WorkstreamLifecycleMenu` (Edit/Archive/Remove, Admin-only, self-hides for anyone else) replaces
+ * the previous "Configure Activities" text link's spot — Configure Activities stays as its own
+ * inline action since it's a materially different, more frequent capability (Team Lead can reach it
+ * too, unlike Edit/Archive/Remove).
+ */
+function ServiceRow({
+  workstream,
+  project,
+  user,
+  openTaskCount,
+  staffing,
+  nameFor,
+  onConfigureActivities,
+  onEdit,
+  onChanged,
+}: {
+  workstream: WorkstreamWithRelations;
+  project: NonNullable<ReturnType<typeof useProject>["project"]>;
+  user: import("@/lib/data/types").User;
+  openTaskCount: number;
+  staffing: { teamLeadUserIds: string[]; employeeUserIds: string[] } | undefined;
+  nameFor: (userId: string) => string;
+  onConfigureActivities: () => void;
+  onEdit: () => void;
+  onChanged: () => void;
+}) {
+  return (
+    <div>
+      <Link
+        href={`/dashboard/workstreams/${workstream.id}`}
+        className="flex flex-wrap items-center justify-between gap-3 rounded-md py-1 hover:underline"
+      >
+        <div className="flex flex-col gap-1">
+          <span className="text-sm font-medium">
+            {workstreamDisplayHeading(workstream.name, workstream.serviceLine?.name ?? null)}
+          </span>
+          <span className="text-xs text-muted-foreground">
+            Project Service Lead: {workstream.lead.fullName} · {workstream.activities.length} activit
+            {workstream.activities.length === 1 ? "y" : "ies"}
+          </span>
+        </div>
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-muted-foreground">{openTaskCount} open</span>
+          <WorkstreamStatusBadge status={workstream.status} />
+          {isProjectActiveForNewWork(project.status) &&
+            canConfigureWorkstreamActivities(
+              user,
+              { leadUserId: workstream.leadUserId },
+              project.members,
+              { companyId: project.companyId, ownerId: project.ownerId, memberUserIds: project.members.map((m) => m.id) }
+            ) && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onConfigureActivities();
+              }}
+              className="text-xs text-muted-foreground hover:underline"
+            >
+              Configure Activities
+            </button>
+          )}
+          <span
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+            }}
+          >
+            <WorkstreamLifecycleMenu workstream={workstream} onChanged={onChanged} onEdit={onEdit} />
+          </span>
+        </div>
+      </Link>
+      {workstream.serviceLine && staffing && (staffing.teamLeadUserIds.length > 0 || staffing.employeeUserIds.length > 0) && (
+        <div className="mt-2 flex flex-col gap-0.5 rounded-md border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+          <span className="font-mono text-[10px] tracking-wide uppercase">Global Service Staffing</span>
+          <span>
+            Global Team Leads: {staffing.teamLeadUserIds.length > 0 ? staffing.teamLeadUserIds.map(nameFor).join(", ") : "None"}
+          </span>
+          <span>
+            Service Members: {staffing.employeeUserIds.length > 0 ? staffing.employeeUserIds.map(nameFor).join(", ") : "None"}
+          </span>
+          <span className="italic">These assignments apply to this Service across all Projects.</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /** Section 9E/10E — compact Project participants, never a giant people grid. */
 function TeamPanel({
   members,
@@ -301,6 +397,18 @@ function LoadedProjectDetailPage({
     [workstreams]
   );
   const { staffing: globalServiceStaffing } = useServiceLineStaffing(serviceLineIds);
+  // CD-162 post-manual-QA pass — Archived (status "cancelled") Project Services stay fully
+  // accessible (their own Tasks/Time/Comments history is never hidden — see `useTasks` above, which
+  // deliberately keeps reading from the unfiltered `workstreams`), but no longer clutter the normal
+  // active Services list, KPI counts, or the "Add Service" duplicate-prevention check. A Service
+  // whose earlier instance was archived is not "still active," so its Service Line becomes free to
+  // add again — this is a duplicate-*active*-service rule, not a duplicate-ever rule.
+  const activeWorkstreams = useMemo(() => workstreams.filter((w) => w.status !== "cancelled"), [workstreams]);
+  const archivedWorkstreams = useMemo(() => workstreams.filter((w) => w.status === "cancelled"), [workstreams]);
+  const activeServiceLineIds = useMemo(
+    () => Array.from(new Set(activeWorkstreams.map((w) => w.serviceLine?.id).filter((id): id is string => !!id))),
+    [activeWorkstreams]
+  );
   const toastManager = useToastManager();
   // Phase 13C — Client Reports are org-wide-authorized (canViewClientReport), never re-derived here;
   // this only narrows an already-authorized set down to this Project's own reports.
@@ -357,6 +465,8 @@ function LoadedProjectDetailPage({
   // now-removed inline flow) — offers only this Service's remaining, not-yet-enabled catalog
   // Activities, never requires re-adding the Service itself.
   const [configureActivitiesFor, setConfigureActivitiesFor] = useState<WorkstreamWithRelations | null>(null);
+  const [editingWorkstream, setEditingWorkstream] = useState<WorkstreamWithRelations | null>(null);
+  const [showArchivedServices, setShowArchivedServices] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [taskSearch, setTaskSearch] = useState("");
   const [taskView, setTaskView] = useState<TaskView>(() => {
@@ -501,11 +611,7 @@ function LoadedProjectDetailPage({
     });
   }
 
-  const canAddService = canCreateWorkstreamInProject(
-    user,
-    { companyId: project.companyId, ownerId: project.ownerId, memberUserIds: project.members.map((m) => m.id) },
-    project.members
-  );
+  const canAddService = canCreateWorkstreamInProject(user);
 
   return (
     <div className="flex flex-col gap-5">
@@ -516,9 +622,17 @@ function LoadedProjectDetailPage({
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2">
+          {/* MVP Gap Closure (boss feedback) — the Company/Project heading read as visually weaker
+              than Task Detail's own; the two H1s were already the identical text-2xl/font-semibold,
+              the actual cause was this avatar rendering at the "default" (32px) size while Task
+              Detail and Service Detail both use "sm" (24px) next to their own H1 — a bigger icon
+              directly beside an equal-sized heading makes the heading read as the smaller element
+              by comparison. Matching the same "sm" size used everywhere else restores the heading
+              as the clearly dominant element, with no font-size change needed anywhere. */}
           <CompanyProjectAvatar
             companyId={project.companyId}
             companyName={project.companyName}
+            size="sm"
             isInternal={project.isInternal}
           />
           {/* Phase 13B final boss-feedback pass — the Company name is the daily operational
@@ -537,7 +651,7 @@ function LoadedProjectDetailPage({
           {!isProjectActiveForNewWork(project.status) ? (
             <span className="text-xs text-muted-foreground">{projectNotActiveMessage(project.status)}</span>
           ) : (
-            workstreams.length > 0 && (
+            activeWorkstreams.length > 0 && (
               <Button size="sm" onClick={() => openCreateTask()} data-shortcut="new-task">
                 <Plus /> New Task
               </Button>
@@ -548,6 +662,7 @@ function LoadedProjectDetailPage({
               <Pencil /> Edit
             </Button>
           )}
+          <ProjectLifecycleMenu project={project} onChanged={refreshProject} />
         </div>
       </div>
 
@@ -579,7 +694,7 @@ function LoadedProjectDetailPage({
               from this page's own already-viewer-scoped `tasks`. */}
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
             {[
-              { label: "Services", value: workstreams.length },
+              { label: "Services", value: activeWorkstreams.length },
               { label: "Open Work", value: isEmployee(user) ? myTasks.length : openCount },
               { label: "Attention", value: isEmployee(user) ? myOverdueCount : overdueCount },
               {
@@ -618,7 +733,7 @@ function LoadedProjectDetailPage({
                 onViewTasks={() => setTab("tasks")}
               />
             )}
-            <ServicesSummaryPanel workstreams={workstreams} serviceLines={serviceLines} onViewServices={() => setTab("services")} />
+            <ServicesSummaryPanel workstreams={activeWorkstreams} serviceLines={serviceLines} onViewServices={() => setTab("services")} />
           </div>
 
           {/* E + F. Team, and (Admin-only) Administrative Details — Admin gets both side by side;
@@ -883,72 +998,68 @@ function LoadedProjectDetailPage({
           </div>
           <Card>
             <CardContent className="flex flex-col gap-1 pt-6">
-              {!workstreamsLoading && workstreams.length === 0 && (
+              {!workstreamsLoading && activeWorkstreams.length === 0 && (
                 <p className="text-sm text-muted-foreground">No services yet for this project.</p>
               )}
-              {workstreams.map((workstream, i) => {
-                const openTaskCount = tasks.filter((t) => t.workstreamId === workstream.id && !isTaskClosed(t.status)).length;
-                const staffing = globalServiceStaffing.find((s) => s.serviceLineId === workstream.serviceLine?.id);
-                const nameFor = (userId: string) => assignableStaff.find((s) => s.id === userId)?.fullName ?? "Unknown";
-                return (
-                  <div key={workstream.id}>
-                    {i > 0 && <Separator className="my-3" />}
-                    <Link
-                      href={`/dashboard/workstreams/${workstream.id}`}
-                      className="flex flex-wrap items-center justify-between gap-3 rounded-md py-1 hover:underline"
-                    >
-                      <div className="flex flex-col gap-1">
-                        <span className="text-sm font-medium">
-                          {workstreamDisplayHeading(workstream.name, workstream.serviceLine?.name ?? null)}
-                        </span>
-                        <span className="text-xs text-muted-foreground">
-                          Project Service Lead: {workstream.lead.fullName} · {workstream.activities.length} activit
-                          {workstream.activities.length === 1 ? "y" : "ies"}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <span className="text-xs text-muted-foreground">{openTaskCount} open</span>
-                        <WorkstreamStatusBadge status={workstream.status} />
-                        {isProjectActiveForNewWork(project.status) &&
-                          canConfigureWorkstreamActivities(
-                            user,
-                            { leadUserId: workstream.leadUserId },
-                            project.members,
-                            { companyId: project.companyId, ownerId: project.ownerId, memberUserIds: project.members.map((m) => m.id) }
-                          ) && (
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              setConfigureActivitiesFor(workstream);
-                            }}
-                            className="text-xs text-muted-foreground hover:underline"
-                          >
-                            Configure Activities
-                          </button>
-                        )}
-                      </div>
-                    </Link>
-                    {workstream.serviceLine && staffing && (staffing.teamLeadUserIds.length > 0 || staffing.employeeUserIds.length > 0) && (
-                      <div className="mt-2 flex flex-col gap-0.5 rounded-md border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-                        <span className="font-mono text-[10px] tracking-wide uppercase">Global Service Staffing</span>
-                        <span>
-                          Global Team Leads:{" "}
-                          {staffing.teamLeadUserIds.length > 0 ? staffing.teamLeadUserIds.map(nameFor).join(", ") : "None"}
-                        </span>
-                        <span>
-                          Service Members:{" "}
-                          {staffing.employeeUserIds.length > 0 ? staffing.employeeUserIds.map(nameFor).join(", ") : "None"}
-                        </span>
-                        <span className="italic">These assignments apply to this Service across all Projects.</span>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+              {activeWorkstreams.map((workstream, i) => (
+                <div key={workstream.id}>
+                  {i > 0 && <Separator className="my-3" />}
+                  <ServiceRow
+                    workstream={workstream}
+                    project={project}
+                    user={user}
+                    openTaskCount={tasks.filter((t) => t.workstreamId === workstream.id && !isTaskClosed(t.status)).length}
+                    staffing={globalServiceStaffing.find((s) => s.serviceLineId === workstream.serviceLine?.id)}
+                    nameFor={(userId) => assignableStaff.find((s) => s.id === userId)?.fullName ?? "Unknown"}
+                    onConfigureActivities={() => setConfigureActivitiesFor(workstream)}
+                    onEdit={() => setEditingWorkstream(workstream)}
+                    onChanged={refreshWorkstreams}
+                  />
+                </div>
+              ))}
             </CardContent>
           </Card>
+
+          {/* CD-162 post-manual-QA pass — Archived (status "cancelled") Services stay fully
+              reachable (Reactivate lives in the same lifecycle menu) but default-collapsed, so a
+              Project with archived history doesn't clutter the normal active Services view. */}
+          {archivedWorkstreams.length > 0 && (
+            <div className="flex flex-col gap-2">
+              <button
+                type="button"
+                onClick={() => setShowArchivedServices((v) => !v)}
+                className="flex w-fit items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
+              >
+                <ChevronDown
+                  className={"size-4 transition-transform duration-200" + (showArchivedServices ? "" : " -rotate-90")}
+                  aria-hidden="true"
+                />
+                Archived Services ({archivedWorkstreams.length})
+              </button>
+              {showArchivedServices && (
+                <Card>
+                  <CardContent className="flex flex-col gap-1 pt-6">
+                    {archivedWorkstreams.map((workstream, i) => (
+                      <div key={workstream.id}>
+                        {i > 0 && <Separator className="my-3" />}
+                        <ServiceRow
+                          workstream={workstream}
+                          project={project}
+                          user={user}
+                          openTaskCount={tasks.filter((t) => t.workstreamId === workstream.id && !isTaskClosed(t.status)).length}
+                          staffing={globalServiceStaffing.find((s) => s.serviceLineId === workstream.serviceLine?.id)}
+                          nameFor={(userId) => assignableStaff.find((s) => s.id === userId)?.fullName ?? "Unknown"}
+                          onConfigureActivities={() => setConfigureActivitiesFor(workstream)}
+                          onEdit={() => setEditingWorkstream(workstream)}
+                          onChanged={refreshWorkstreams}
+                        />
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+          )}
         </div>
       )}
 
@@ -1036,8 +1147,13 @@ function LoadedProjectDetailPage({
       )}
 
       {tab === "comments" && (
+        // MVP Gap Closure (boss feedback) — Comments is the ONE active Project communication
+        // concept now; Issues is no longer a second active product alongside it. Canonical
+        // Comments first, then Historical Issues (read-only, renders nothing if a Project has no
+        // Issue records) and legacy read-only Notes, both purely for historical reference.
         <div className="flex flex-col gap-4">
           <ProjectCommentsSection target={commentsTarget} />
+          <ProjectIssuesSection issues={issues} workstreams={workstreams.map((w) => ({ id: w.id, name: w.name }))} />
           {/* Step 4 — Comments is now the one normal place for new Project discussion/context;
               legacy Notes stay visible for reference (never destructively deleted) but strictly
               read-only, so no new legacy Note can be authored from the normal V1 Project UI. */}
@@ -1045,15 +1161,30 @@ function LoadedProjectDetailPage({
         </div>
       )}
 
-      {tab === "documents" && (
+      {tab === "time" && <ProjectTimeTeam user={user} tasks={tasks} />}
+
+      {tab === "reports" && (
+        // MVP Simplification Pass (boss feedback) — Reports is now the single place for both
+        // generating a new report and reaching everything already produced for this Project.
+        // Generation stays pre-scoped to this Project/Client via `defaultProjectId` so the user
+        // never re-picks what they're already looking at; generation authorization is exactly the
+        // same, unwidened, unnarrowed `clientReportProvider.generateReport` path the global Reports
+        // page already uses. Uploaded files stay fully intact, just secondary to the report library.
         <div className="flex flex-col gap-4">
-          {/* Boss Feedback Alignment, Section 8 — Documents' primary meaning is now "what's already
-              been produced": the generated/completed Client Report library, reusing the exact same
-              `ClientReportsTable`/`projectReports` the Reports tab itself used to show (moved here so
-              the two tabs never duplicate the same list — Reports is now the generation workspace,
-              below). Uploaded files (Section 8's "Task/document attachment infrastructure may still
-              be technically useful") stay fully intact — nothing was deleted — just demoted to a
-              secondary section beneath the report library, with no generic upload CTA promoted here. */}
+          <Card className="border-primary/30 bg-primary/5">
+            <CardHeader>
+              <CardTitle className="text-base">Generate a Client Report</CardTitle>
+            </CardHeader>
+            <CardContent className="flex flex-wrap items-center justify-between gap-4">
+              <p className="max-w-md text-sm text-muted-foreground">
+                Covers {project.companyName}&apos;s tracked work and confirmed Daily Updates for this Project over
+                whichever period you choose.
+              </p>
+              <Button size="lg" onClick={() => setGenerateReportOpen(true)}>
+                <Plus /> Generate Report
+              </Button>
+            </CardContent>
+          </Card>
           <div className="flex flex-col gap-2">
             <span className="font-mono text-xs tracking-wider text-muted-foreground uppercase">
               Reports generated for this Project
@@ -1061,49 +1192,11 @@ function LoadedProjectDetailPage({
             <ClientReportsTable
               reports={projectReports}
               isLoading={false}
-              emptyMessage="No Client Reports generated for this Project yet — use the Reports tab to generate one."
+              emptyMessage="No Client Reports generated for this Project yet — use the button above."
             />
           </div>
           <ProjectDocumentsSection projectId={project.id} />
         </div>
-      )}
-
-      {tab === "time" && <ProjectTimeTeam user={user} tasks={tasks} />}
-
-      {tab === "issues" && (
-        <ProjectIssuesSection
-          projectId={project.id}
-          issues={issues}
-          workstreams={workstreams.map((w) => ({
-            id: w.id,
-            name: w.name,
-            activities: w.activities.map((a) => ({ id: a.id, name: a.name })),
-          }))}
-          onChanged={refreshIssues}
-        />
-      )}
-
-      {tab === "reports" && (
-        // Boss Feedback Alignment, Section 9 — Reports is the generation workspace ("Report is
-        // where you go to generate reports of a client"), pre-scoped to this Project/Client via
-        // `defaultProjectId` so the user never re-picks what they're already looking at; the
-        // already-generated list now lives on Documents (above), never duplicated here. Generation
-        // authorization is exactly the same, unwidened, unnarrowed `clientReportProvider.generateReport`
-        // path the global Reports page already uses — this button is shown unconditionally there too.
-        <Card className="border-primary/30 bg-primary/5">
-          <CardHeader>
-            <CardTitle className="text-base">Generate a Client Report</CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-wrap items-center justify-between gap-4">
-            <p className="max-w-md text-sm text-muted-foreground">
-              Covers {project.companyName}&apos;s tracked work and confirmed Daily Updates for this Project over
-              whichever period you choose. Already-generated reports live on the Documents tab.
-            </p>
-            <Button size="lg" onClick={() => setGenerateReportOpen(true)}>
-              <Plus /> Generate Report
-            </Button>
-          </CardContent>
-        </Card>
       )}
 
       {company && (
@@ -1112,11 +1205,23 @@ function LoadedProjectDetailPage({
           onOpenChange={setAddServiceOpen}
           company={company}
           projectId={project.id}
-          existingServiceLineIds={serviceLineIds}
+          existingServiceLineIds={activeServiceLineIds}
           onSaved={() => {
             refreshWorkstreams();
             refreshProject();
           }}
+        />
+      )}
+
+      {company && editingWorkstream && (
+        <WorkstreamFormDialog
+          open={Boolean(editingWorkstream)}
+          onOpenChange={(open) => !open && setEditingWorkstream(null)}
+          mode="edit"
+          company={company}
+          projectId={project.id}
+          workstream={editingWorkstream}
+          onSaved={refreshWorkstreams}
         />
       )}
 
@@ -1158,15 +1263,17 @@ function LoadedProjectDetailPage({
         />
       )}
 
-      {workstreams.length > 0 && (
+      {activeWorkstreams.length > 0 && (
         <TaskFormDialog
           open={createTaskOpen}
           onOpenChange={setCreateTaskOpen}
           mode="create"
           // Section 22 — only ever preselect when there's exactly one Service to pick from; with
           // more than one, the field starts empty so the user must actively choose (never a silent
-          // workstreams[0] default that could put a Task under the wrong Service).
-          defaultWorkstreamId={workstreams.length === 1 ? workstreams[0].id : undefined}
+          // workstreams[0] default that could put a Task under the wrong Service). CD-162 —
+          // an archived Service is never a valid target for a new Task, so only `activeWorkstreams`
+          // count here.
+          defaultWorkstreamId={activeWorkstreams.length === 1 ? activeWorkstreams[0].id : undefined}
           defaultStatus={createTaskDefaultStatus}
           onSaved={refreshTasks}
         />

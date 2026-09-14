@@ -656,34 +656,23 @@ export function canManageWorkstreams(user: User): boolean {
 }
 
 /**
- * Creating a NEW workstream: supervisor/superadmin unconditionally, or an Employee for a Company
- * they can already access (`canAccessCompany`) — the boss-clarified rule that an Employee may set
- * up their own operational work (Service + Activities + Tasks) without needing a
- * supervisor/superadmin to do it for them. This does not grant broader staff-assignment powers —
- * see the caller-side rule that an Employee-created workstream must name the Employee themselves
- * as its own lead.
+ * Creating a NEW workstream: Supervisor/Superadmin only. MVP Simplification Pass (boss feedback) —
+ * an Employee may no longer set up their own Service; this narrows the previous "Employee may
+ * self-serve a Company they can access" rule, which the Product Owner has now explicitly retired
+ * in favor of a simpler, more predictable permission model for MVP.
  */
-export function canCreateWorkstream(viewer: User, companyId: string, allUsers: User[]): boolean {
-  if (isSupervisor(viewer) || isSuperadmin(viewer)) return true;
-  return isEmployee(viewer) && canAccessCompany(viewer, companyId, allUsers);
+export function canCreateWorkstream(viewer: User): boolean {
+  return isSupervisor(viewer) || isSuperadmin(viewer);
 }
 
 /**
- * Phase 8B — the Project-aware version of `canCreateWorkstream`, used by the "+ Add Service" flow
- * inside a Project workspace: supervisor/superadmin unconditionally, or an Employee who can
- * access the Project itself (`canAccessProject`) rather than merely the underlying Company —
- * closes the "pass a Company id you happen to know" risk, since Project membership is now the
- * real operational relationship. `canCreateWorkstream` (Company-based) remains for the legacy
- * Company-page flow, which stays Supervisor/Superadmin-only in practice now that Employee no
- * longer has that page at all.
+ * The Project-aware version of `canCreateWorkstream`, used by the "+ Add Service" flow inside a
+ * Project workspace — MVP Simplification Pass (boss feedback): Supervisor/Superadmin only, same
+ * narrowing as `canCreateWorkstream` above. An Employee may still work within Services/Tasks
+ * already set up for them, just never create a new Service.
  */
-export function canCreateWorkstreamInProject(
-  viewer: User,
-  project: { companyId: string; ownerId: string; memberUserIds: string[] },
-  allUsers: User[]
-): boolean {
-  if (isSupervisor(viewer) || isSuperadmin(viewer)) return true;
-  return isEmployee(viewer) && canAccessProject(viewer, project, allUsers);
+export function canCreateWorkstreamInProject(viewer: User): boolean {
+  return isSupervisor(viewer) || isSuperadmin(viewer);
 }
 
 /**
@@ -725,13 +714,14 @@ export function canExtendServiceActivities(
 }
 
 /**
- * Activity Level, Sections 18-20 — the real narrow boundary for "may this viewer configure which
- * existing catalog Activities this Project Service uses," mirroring the hosted
- * `workstream_activities_write` RLS policy exactly (not `canManageWorkstreams`, which is broader —
- * full Service edit — and not what actually gates this specific junction table). Superadmin always;
- * Employee only if they are this Workstream's own Project Service Lead; Supervisor only if they
- * manage that Lead AND can access the Workstream's own Project. Global Team Lead/"Works In Services"
- * status is never checked here — it grants no Project-level authority (locked Service Level rule).
+ * The real narrow boundary for "may this viewer configure which existing catalog Activities this
+ * Project Service uses" (not `canManageWorkstreams`, which is broader — full Service edit). MVP
+ * Simplification Pass (boss feedback) — Supervisor/Superadmin only; an Employee no longer
+ * configures Activities even for a Service they lead, matching the same narrowing applied to
+ * `canCreateWorkstreamInProject`. NOTE: the hosted Supabase `workstream_activities_write` RLS
+ * policy still technically permits an Employee-as-lead write (this app-layer/mock-provider
+ * narrowing was not mirrored into a new migration — this pass was not authorized to touch the
+ * database — see the audit report's Section G for this known, explicitly-flagged parity gap).
  */
 export function canConfigureWorkstreamActivities(
   viewer: User,
@@ -740,7 +730,6 @@ export function canConfigureWorkstreamActivities(
   project: { companyId: string; ownerId: string; memberUserIds: string[] } | null
 ): boolean {
   if (isSuperadmin(viewer)) return true;
-  if (isEmployee(viewer)) return workstream.leadUserId === viewer.id;
   if (isSupervisor(viewer)) {
     const lead = allUsers.find((u) => u.id === workstream.leadUserId);
     if (!lead || !managesUser(viewer, lead)) return false;

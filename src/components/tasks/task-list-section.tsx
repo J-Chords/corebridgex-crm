@@ -92,7 +92,14 @@ export function TaskListSection({
         )}
       </button>
       {!isCollapsed && (
-        <div>
+        // Phase-2 CD-162 pass — indents the whole expanded block (column header + every row) under
+        // its own parent group header, so the relationship reads as a clean menu/submenu nesting
+        // instead of the header and its rows sharing the same left edge. Purely visual: navigation,
+        // filtering, grouping, and status semantics are all untouched — only "Group by: Status" (and
+        // any other grouped view) gets this treatment; `FlatTaskList`'s "Group by: None" is a
+        // different component entirely and is deliberately left flush, since it has no parent to
+        // nest under.
+        <div className="border-l-2 border-border pl-3 sm:ml-1 sm:pl-4">
           <TaskListHeader context={context} showAssignee={showAssignee} showActions={Boolean(onEdit && onDeleted)} />
           {group.tasks.map((task, i) => (
             <TaskListRow

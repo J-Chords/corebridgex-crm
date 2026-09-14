@@ -1,11 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { Plus } from "lucide-react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { CalendarDays, Grid3x3, LayoutList, Plus } from "lucide-react";
 import type { User, TaskStatus } from "@/lib/data/types";
 import { useMyTasks, useTasks } from "@/lib/data/hooks/use-tasks";
 import { useCompanies, useCompanyLookups } from "@/lib/data/hooks/use-companies";
 import { useProjects } from "@/lib/data/hooks/use-projects";
+import { useRunningTimer } from "@/lib/data/hooks/use-time-entries";
 import {
   useTaskFilters,
   filterTasks,
@@ -22,22 +24,32 @@ import { SavedViewsBar } from "@/components/tasks/saved-views-bar";
 import { TASK_STATUS_SELECT_ITEMS } from "@/components/tasks/task-status-badge";
 import { RecentNotificationsCard } from "@/components/dashboard/recent-notifications-card";
 import { UpcomingDeadlinesCard } from "@/components/dashboard/upcoming-deadlines-card";
-import { STATUS_ORDER, EMPTY_BUCKET_COPY, StatusBucketButton } from "@/components/my-day/status-bucket-button";
+import { STATUS_ORDER, EMPTY_BUCKET_COPY, StatusBucketButton, usePersistedStatusBucket } from "@/components/my-day/status-bucket-button";
 import { BucketTaskGrid } from "@/components/my-day/bucket-task-grid";
 import { NeedsAttentionStrip } from "@/components/my-day/needs-attention-strip";
 import { TodayTimeCard } from "@/components/my-day/today-time-card";
-import { DailyVisitHoursCard } from "@/components/my-day/daily-visit-hours-card";
 import { DailyUpdateCard } from "@/components/my-day/daily-update-card";
 import { GreetingText } from "@/components/dashboard/greeting-heading";
 import { SearchTriggerBar } from "@/components/dashboard/search-trigger-bar";
 import { myDaySubtitle } from "@/lib/my-day-greeting";
 import { findFocusTask } from "@/lib/my-day-focus";
 import { isTaskClosed, isTaskInActiveProject } from "@/lib/data/task-display";
+import { todayDateOnly, formatDateOnly, startOfWeekMonday } from "@/lib/planner-dates";
+import { PlannerWeekView } from "@/components/planner/planner-week-view";
+import { PlannerMonthView } from "@/components/planner/planner-month-view";
+import { PlannerUnscheduledPanel } from "@/components/planner/planner-unscheduled-panel";
 import { STAGGER_ITEM_CLASS, staggerDelay } from "@/lib/stagger";
 
 function todayDateString() {
   return new Date().toISOString().slice(0, 10);
 }
+
+type MyDayView = "today" | "week" | "month";
+const VIEW_TABS: { key: MyDayView; label: string; icon: typeof CalendarDays }[] = [
+  { key: "today", label: "Today", icon: CalendarDays },
+  { key: "week", label: "Week", icon: LayoutList },
+  { key: "month", label: "Month", icon: Grid3x3 },
+];
 
 interface SuperadminMyDayProps {
   user: User;
@@ -49,24 +61,61 @@ interface SuperadminMyDayProps {
  * introduced, fed org-wide data instead of team-scoped data: every active staff member (not just
  * direct reports), org-wide tasks, and — Superadmin-only — at-risk clients from the existing Client
  * Health Score. No new visibility rules: every source here is exactly what the Superadmin dashboard
- * already fetches, since a superadmin's existing gates already resolve to "everything."
+ * already fetches, since a superadmin's existing gates already resolve to "everything." MVP
+ * Simplification Pass (boss feedback) — Week/Month (Planner's own views, reused as-is) join Today as
+ * additional tabs, org-wide by default with an Assignee filter to narrow down, matching exactly what
+ * Planner already did for this role (no separate scope toggle needed — the filter bar already covers it).
  */
 export function SuperadminMyDay({ user }: SuperadminMyDayProps) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const { tasks, isLoading: tasksLoading, refresh: refreshTasks } = useMyTasks();
+  const { runningTimer } = useRunningTimer();
   const [taskDialogOpen, setTaskDialogOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<TaskWithRelations | null>(null);
-  const [selectedStatus, setSelectedStatus] = useState<TaskStatus>("in-progress");
-  const { filters, patch } = useTaskFilters();
+  const [selectedStatus, setSelectedStatus] = usePersistedStatusBucket();
+  const [view, setView] = useState<MyDayView>(() => {
+    const viewParam = searchParams.get("view");
+    return viewParam === "week" || viewParam === "month" ? viewParam : "today";
+  });
+  const [weekAnchor, setWeekAnchor] = useState(() => formatDateOnly(startOfWeekMonday(new Date())));
+  const [monthAnchor, setMonthAnchor] = useState(() => todayDateOnly());
+  const { filters, patch } = useTaskFilters("my-day");
   const companyOptions = useCompanyOptionsFromTasks(tasks);
   const workstreamOptions = useWorkstreamOptionsFromTasks(tasks);
+  const runningTaskId = runningTimer?.taskId ?? null;
 
-  // Org-wide data for the "Needs my attention" strip only — same sources the Superadmin dashboard
-  // already uses (useTasks()/useCompanies() already return everything for a superadmin).
+  // Org-wide data for the "Needs my attention" strip and the Week/Month schedule — same sources
+  // the Superadmin dashboard already uses (useTasks()/useCompanies() already return everything for
+  // a superadmin).
   const { tasks: orgTasks } = useTasks();
   const { companies } = useCompanies();
   const { projects } = useProjects();
   const { assignableStaff } = useCompanyLookups();
   const staff = assignableStaff.filter((u) => u.id !== user.id);
+
+  function openTask(taskId: string) {
+    router.push(`/dashboard/tasks/${taskId}`);
+  }
+
+  // MVP Gap Closure (boss feedback) — `view` was only ever read from `?view=` once, on mount; a tab
+  // click updated local state but never the URL, so a Task opened from Week/Month and then returned
+  // from via the Task page's own `router.back()` remounted My Day and re-read the (stale) URL, always
+  // landing back on Today. Pushing a real history entry on every tab change (same pattern as the
+  // Project detail page's own `?tab=`) fixes this and keeps Back/Forward working intuitively.
+  function handleViewChange(next: MyDayView) {
+    setView(next);
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("view", next);
+    router.push(`/dashboard/my-day?${params.toString()}`, { scroll: false });
+  }
+
+  // Week/Month no longer have a dedicated arbitrary-date "Day" view to drill into (My Day's own
+  // "Today" tab always means literally today) — clicking a day only switches tabs when that day
+  // genuinely IS today; any other day's tasks are already visible inline in the Week/Month grid.
+  function openDay(date: string) {
+    if (date === todayDateOnly()) handleViewChange("today");
+  }
 
   const today = todayDateString();
 
@@ -106,67 +155,132 @@ export function SuperadminMyDay({ user }: SuperadminMyDayProps) {
         </Button>
       </div>
 
-      <SearchTriggerBar variant="pill" placeholder="Search clients, tasks, actions…" />
+      <div className="flex items-center gap-0.5 self-start rounded-lg border p-0.5">
+        {VIEW_TABS.map(({ key, label, icon: Icon }) => (
+          <Button
+            key={key}
+            size="sm"
+            variant={view === key ? "secondary" : "ghost"}
+            aria-pressed={view === key}
+            onClick={() => handleViewChange(key)}
+          >
+            <Icon /> {label}
+          </Button>
+        ))}
+      </div>
 
-      <NeedsAttentionStrip
-        teamMembers={staff}
-        teamTasks={orgTasks}
-        atRiskCompanies={companies}
-        projects={projects}
-        className={STAGGER_ITEM_CLASS}
-        style={staggerDelay(0)}
-      />
+      {view === "today" && <SearchTriggerBar variant="pill" placeholder="Search clients, tasks, actions…" />}
 
-      {!tasksLoading && !hasAnyTasks ? (
-        <Card>
-          <CardContent className="py-6 text-center text-sm text-muted-foreground">
-            Nothing on your plate right now — add a task to get your day started.
-          </CardContent>
-        </Card>
-      ) : (
-        <>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
-            {STATUS_ORDER.map((status, i) => (
-              <StatusBucketButton
-                key={status}
-                status={status}
-                count={countByStatus[status]}
-                selected={selectedStatus === status}
-                onSelect={setSelectedStatus}
-                className={STAGGER_ITEM_CLASS}
-                style={staggerDelay(i)}
-              />
-            ))}
-          </div>
-
-          <div className="flex flex-col gap-3">
-            <TaskFilterBar
-              filters={filters}
-              onChange={patch}
-              fields={["search", "company", "workstream", "priority"]}
-              companies={companyOptions}
-              workstreams={workstreamOptions}
-              className="flex flex-wrap items-center gap-3"
-            />
-            <SavedViewsBar filters={filters} onApply={patch} />
-          </div>
-
-          <BucketTaskGrid
-            user={user}
-            tasks={bucketTasks}
-            selectedStatus={selectedStatus}
-            focusTaskId={focusTask?.id ?? null}
-            onChanged={refreshTasks}
-            emptyMessage={
-              filteredTasks.length === tasks.length
-                ? EMPTY_BUCKET_COPY[selectedStatus]
-                : `No ${TASK_STATUS_SELECT_ITEMS[selectedStatus].toLowerCase()} tasks match your filters.`
-            }
-            onEdit={setEditingTask}
-            onDeleted={refreshTasks}
-          />
-        </>
+      {view === "today" && (
+        <NeedsAttentionStrip
+          teamMembers={staff}
+          teamTasks={orgTasks}
+          atRiskCompanies={companies}
+          projects={projects}
+          className={STAGGER_ITEM_CLASS}
+          style={staggerDelay(0)}
+        />
       )}
+
+      {view === "today" &&
+        (!tasksLoading && !hasAnyTasks ? (
+          <Card>
+            <CardContent className="py-6 text-center text-sm text-muted-foreground">
+              Nothing on your plate right now — add a task to get your day started.
+            </CardContent>
+          </Card>
+        ) : (
+          <>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+              {STATUS_ORDER.map((status, i) => (
+                <StatusBucketButton
+                  key={status}
+                  status={status}
+                  count={countByStatus[status]}
+                  selected={selectedStatus === status}
+                  onSelect={setSelectedStatus}
+                  className={STAGGER_ITEM_CLASS}
+                  style={staggerDelay(i)}
+                />
+              ))}
+            </div>
+
+            <div className="flex flex-col gap-3">
+              <TaskFilterBar
+                filters={filters}
+                onChange={patch}
+                fields={["search", "company", "workstream", "priority"]}
+                companies={companyOptions}
+                workstreams={workstreamOptions}
+                className="flex flex-wrap items-center gap-3"
+              />
+              <SavedViewsBar filters={filters} onApply={patch} />
+            </div>
+
+            <BucketTaskGrid
+              user={user}
+              tasks={bucketTasks}
+              selectedStatus={selectedStatus}
+              focusTaskId={focusTask?.id ?? null}
+              onChanged={refreshTasks}
+              emptyMessage={
+                filteredTasks.length === tasks.length
+                  ? EMPTY_BUCKET_COPY[selectedStatus]
+                  : `No ${TASK_STATUS_SELECT_ITEMS[selectedStatus].toLowerCase()} tasks match your filters.`
+              }
+              onEdit={setEditingTask}
+              onDeleted={refreshTasks}
+            />
+          </>
+        ))}
+
+      {(view === "week" || view === "month") &&
+        (() => {
+          const scheduleTasks = filterTasks(orgTasks, { ...filters, status: "all" });
+          return (
+            <div className="flex flex-col gap-4">
+              <TaskFilterBar
+                filters={filters}
+                onChange={patch}
+                fields={["search", "company", "workstream", "priority", "assignee"]}
+                companies={companyOptions}
+                workstreams={workstreamOptions}
+                assignableStaff={assignableStaff}
+                className="flex flex-wrap items-center gap-3"
+              />
+              {view === "week" ? (
+                <PlannerWeekView
+                  anchorDate={weekAnchor}
+                  onAnchorDateChange={setWeekAnchor}
+                  onOpenDay={openDay}
+                  tasks={scheduleTasks}
+                  onOpen={openTask}
+                  runningTaskId={runningTaskId}
+                  onEdit={setEditingTask}
+                  onDeleted={refreshTasks}
+                />
+              ) : (
+                <PlannerMonthView
+                  anchorDate={monthAnchor}
+                  onAnchorDateChange={setMonthAnchor}
+                  onOpenDay={openDay}
+                  tasks={scheduleTasks}
+                  onOpen={openTask}
+                  runningTaskId={runningTaskId}
+                  onEdit={setEditingTask}
+                  onDeleted={refreshTasks}
+                />
+              )}
+              <PlannerUnscheduledPanel
+                tasks={scheduleTasks}
+                onOpen={openTask}
+                runningTaskId={runningTaskId}
+                onEdit={setEditingTask}
+                onDeleted={refreshTasks}
+              />
+            </div>
+          );
+        })()}
 
       <SectionBreak num="01" label="Time & Deadlines" />
 
@@ -175,11 +289,14 @@ export function SuperadminMyDay({ user }: SuperadminMyDayProps) {
         <UpcomingDeadlinesCard tasks={tasks} className={STAGGER_ITEM_CLASS} style={staggerDelay(1)} />
       </div>
 
-      {/* Phase 11D — Client Visits are temporarily Superadmin-only (Employee/Supervisor product
-       * policy, not a server-side restriction — see permissions.ts). Superadmin keeps this exact
-       * self-service Plan/Complete workflow so the feature stays testable and reusable for a future
-       * Account Manager capability, rather than being orphaned. */}
-      <DailyVisitHoursCard className={STAGGER_ITEM_CLASS} style={staggerDelay(2)} />
+      {/* CD-162 post-manual-QA pass — Client Visits removed from the visible MVP surface entirely
+       * (there is no Account Manager role yet, so this had no real owner in the current product).
+       * The underlying `visit-entries-provider`/types/hosted schema and `daily-visit-hours-card.tsx`
+       * (plus its Plan/Record dialogs) are all left completely untouched — this was the only
+       * remaining place any of it was reachable in the UI (Phase 11D had already narrowed it from
+       * Employee/Supervisor down to Superadmin-only), so unlinking it here is enough to satisfy "not
+       * in the current Admin, Team Lead, or Employee active experience." Re-link it here (or wire it
+       * to a future Account Manager surface) when that role exists. */}
 
       <SectionBreak num="02" label="Daily Update" />
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Archive, ChevronDown, Trash2, Undo2 } from "lucide-react";
+import { Archive, ChevronDown, MoreHorizontal, Trash2, Undo2 } from "lucide-react";
 import { useAuth } from "@/lib/auth/auth-context";
 import { projectsProvider } from "@/lib/data/providers";
 import type { ProjectWithRelations } from "@/lib/data/providers/projects-provider";
@@ -28,20 +28,23 @@ import {
 import { useToastManager } from "@/components/ui/toast";
 
 type AnyLifecycleStatus = Exclude<ProjectStatus, "trash">;
-/** The normal, ordinary status-dropdown targets — Archive is its own dedicated action below, never
- * one flat pick among these (mirrors Trash's own dedicated Move-to-Trash/Restore pair). */
-const LIFECYCLE_STATUSES: Exclude<AnyLifecycleStatus, "archived">[] = ["active", "on-hold", "completed", "cancelled"];
+type NormalStatus = Exclude<AnyLifecycleStatus, "archived">;
+/** The normal, ordinary status-dropdown targets — Archive is its own dedicated action in
+ * `ProjectLifecycleMenu`, never one flat pick among these (mirrors Trash's own dedicated
+ * Move-to-Trash/Restore pair). */
+const LIFECYCLE_STATUSES: NormalStatus[] = ["active", "on-hold", "completed", "cancelled"];
 
 /**
- * Project Level Stage C, restored by the Product Owner's Boss-Aligned Project Status Restoration —
- * the ONE control for every lifecycle transition. Admin-only (viewers see just the plain badge).
- * Normal business states are Active/On Hold/Completed/Canceled, picked from one dropdown ("On
- * Hold"/"Canceled" require a non-empty reason before the change can be saved); Archive/Reactivate
- * and Trash/Restore are each their own dedicated, separately-confirmed action pair — never reachable
- * via the generic dropdown, so each always reads as its own distinct, intentional move rather than
- * one flat pick among many. Archiving stamps `archivedAt` (always the latest date) atomically inside
- * `setProjectStatus` itself; moving to Completed stamps `completionDate` the same way, but only the
- * first time (never overwritten by a later transition) — the two dates are never conflated.
+ * MVP Simplification Pass (boss feedback) — the project header used to give Archive/Move to Trash
+ * equal visual weight to the status itself, which read as too dominant/risky for everyday use. The
+ * one control from Project Level Stage C onward is now split into two: this component is just the
+ * status badge/dropdown (Active/On Hold/Completed/Canceled, with a reason prompt for On Hold/
+ * Canceled) — rendered next to the Project name, where status has always lived. The separate
+ * `ProjectLifecycleMenu` below holds Archive/Trash/Restore/Reactivate in a 3-dot overflow menu next
+ * to Edit, so those less-frequent, more consequential actions no longer compete for attention with
+ * the everyday status control. Admin-only (viewers see just the plain badge); while the Project is
+ * itself Archived or in Trash there's no normal dropdown here at all — those two states are handled
+ * entirely by the overflow menu's own dedicated Reactivate/Restore action.
  */
 export function ProjectStatusControl({
   project,
@@ -52,14 +55,16 @@ export function ProjectStatusControl({
 }) {
   const { user } = useAuth();
   const toastManager = useToastManager();
-  const [reasonTarget, setReasonTarget] = useState<Exclude<AnyLifecycleStatus, "archived"> | null>(null);
+  const [reasonTarget, setReasonTarget] = useState<NormalStatus | null>(null);
   const [reason, setReason] = useState("");
-  const [confirmTrash, setConfirmTrash] = useState(false);
-  const [confirmArchive, setConfirmArchive] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  if (!user) return <ProjectStatusBadge status={project.status} />;
-  if (!canManageProjects(user)) {
+  if (
+    !user ||
+    !canManageProjects(user) ||
+    project.status === "archived" ||
+    project.status === "trash"
+  ) {
     return (
       <div className="flex flex-col gap-0.5">
         <ProjectStatusBadge status={project.status} />
@@ -70,18 +75,13 @@ export function ProjectStatusControl({
     );
   }
 
-  async function applyStatus(status: AnyLifecycleStatus, reasonText?: string) {
+  async function applyStatus(status: NormalStatus, reasonText?: string) {
     if (!user) return;
     setIsSubmitting(true);
     try {
-      // ONE authoritative lifecycle transition call — the Archive/Completed dates are each stamped
-      // atomically inside `setProjectStatus` itself (both the hosted RPC and the mock provider), so
-      // there's no separate `updateProject` orchestration that could succeed/fail independently.
       await projectsProvider.setProjectStatus(user, project.id, status, reasonText);
       onChanged();
-      toastManager.add({
-        description: status === "archived" ? "Client archived" : status === "active" ? "Client reactivated" : `Status changed to ${PROJECT_STATUS_META[status].label}`,
-      });
+      toastManager.add({ description: `Status changed to ${PROJECT_STATUS_META[status].label}` });
       setReasonTarget(null);
       setReason("");
     } catch (err) {
@@ -91,7 +91,7 @@ export function ProjectStatusControl({
     }
   }
 
-  function handlePick(status: Exclude<AnyLifecycleStatus, "archived">) {
+  function handlePick(status: NormalStatus) {
     if (status === project.status) return;
     if (status === "on-hold" || status === "cancelled") {
       setReasonTarget(status);
@@ -101,82 +101,22 @@ export function ProjectStatusControl({
     void applyStatus(status);
   }
 
-  async function handleTrash() {
-    if (!user) return;
-    setIsSubmitting(true);
-    try {
-      await projectsProvider.trashProject(user, project.id);
-      onChanged();
-      toastManager.add({ description: "Project moved to Trash" });
-    } catch (err) {
-      toastManager.add({ description: err instanceof Error ? err.message : "Couldn't move to Trash." });
-    } finally {
-      setIsSubmitting(false);
-    }
-  }
-
-  async function handleRestore() {
-    if (!user) return;
-    setIsSubmitting(true);
-    try {
-      await projectsProvider.restoreProject(user, project.id);
-      onChanged();
-      toastManager.add({ description: "Project restored" });
-    } catch (err) {
-      toastManager.add({ description: err instanceof Error ? err.message : "Couldn't restore." });
-    } finally {
-      setIsSubmitting(false);
-    }
-  }
-
-  if (project.status === "trash") {
-    return (
-      <div className="flex items-center gap-2">
-        <ProjectStatusBadge status={project.status} />
-        <Button size="sm" variant="outline" disabled={isSubmitting} onClick={handleRestore}>
-          <Undo2 /> Restore
-        </Button>
-      </div>
-    );
-  }
-
-  // Archived is its own dedicated branch too — the SAME workspace, just returned to Active via one
-  // explicit Reactivate action (never a new/cloned Project, never a status-dropdown pick).
-  if (project.status === "archived") {
-    return (
-      <div className="flex items-center gap-2">
-        <ProjectStatusBadge status={project.status} />
-        <Button size="sm" variant="outline" disabled={isSubmitting} onClick={() => void applyStatus("active")}>
-          <Undo2 /> Reactivate
-        </Button>
-      </div>
-    );
-  }
-
   return (
     <>
       <div className="flex flex-col gap-0.5">
-        <div className="flex items-center gap-1">
-          <DropdownMenu>
-            <DropdownMenuTrigger render={<Button size="sm" variant="outline" disabled={isSubmitting} />}>
-              <ProjectStatusBadge status={project.status} />
-              <ChevronDown className="size-3.5" aria-hidden="true" />
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start">
-              {LIFECYCLE_STATUSES.map((status) => (
-                <DropdownMenuItem key={status} disabled={status === project.status} onClick={() => handlePick(status)}>
-                  {PROJECT_STATUS_META[status].label}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-          <Button size="sm" variant="outline" disabled={isSubmitting} onClick={() => setConfirmArchive(true)}>
-            <Archive /> Archive
-          </Button>
-          <Button size="sm" variant="ghost" disabled={isSubmitting} onClick={() => setConfirmTrash(true)}>
-            <Trash2 /> Move to Trash
-          </Button>
-        </div>
+        <DropdownMenu>
+          <DropdownMenuTrigger render={<Button size="sm" variant="outline" disabled={isSubmitting} />}>
+            <ProjectStatusBadge status={project.status} />
+            <ChevronDown className="size-3.5" aria-hidden="true" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start">
+            {LIFECYCLE_STATUSES.map((status) => (
+              <DropdownMenuItem key={status} disabled={status === project.status} onClick={() => handlePick(status)}>
+                {PROJECT_STATUS_META[status].label}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
         {project.statusReason && (project.status === "on-hold" || project.status === "cancelled") && (
           <span className="text-xs text-muted-foreground">{project.statusReason}</span>
         )}
@@ -209,6 +149,106 @@ export function ProjectStatusControl({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </>
+  );
+}
+
+/**
+ * The 3-dot overflow menu for Archive/Move to Trash (rendered near Edit in the header) — Reactivate
+ * (while Archived) and Restore (while in Trash) render as a single plain button instead, since a
+ * one-item menu adds a click for no benefit. Admin-only; returns nothing at all for any other
+ * viewer, matching `ProjectStatusControl`'s own gate.
+ */
+export function ProjectLifecycleMenu({
+  project,
+  onChanged,
+}: {
+  project: ProjectWithRelations;
+  onChanged: () => void;
+}) {
+  const { user } = useAuth();
+  const toastManager = useToastManager();
+  const [confirmTrash, setConfirmTrash] = useState(false);
+  const [confirmArchive, setConfirmArchive] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  if (!user || !canManageProjects(user)) return null;
+
+  async function applyStatus(status: "active" | "archived") {
+    if (!user) return;
+    setIsSubmitting(true);
+    try {
+      // ONE authoritative lifecycle transition call — the Archive date is stamped atomically inside
+      // `setProjectStatus` itself (both the hosted RPC and the mock provider).
+      await projectsProvider.setProjectStatus(user, project.id, status);
+      onChanged();
+      toastManager.add({ description: status === "archived" ? "Client archived" : "Client reactivated" });
+    } catch (err) {
+      toastManager.add({ description: err instanceof Error ? err.message : "Couldn't change status." });
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  async function handleTrash() {
+    if (!user) return;
+    setIsSubmitting(true);
+    try {
+      await projectsProvider.trashProject(user, project.id);
+      onChanged();
+      toastManager.add({ description: "Project moved to Trash" });
+    } catch (err) {
+      toastManager.add({ description: err instanceof Error ? err.message : "Couldn't move to Trash." });
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  async function handleRestore() {
+    if (!user) return;
+    setIsSubmitting(true);
+    try {
+      await projectsProvider.restoreProject(user, project.id);
+      onChanged();
+      toastManager.add({ description: "Project restored" });
+    } catch (err) {
+      toastManager.add({ description: err instanceof Error ? err.message : "Couldn't restore." });
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  if (project.status === "trash") {
+    return (
+      <Button size="sm" variant="outline" disabled={isSubmitting} onClick={handleRestore}>
+        <Undo2 /> Restore
+      </Button>
+    );
+  }
+
+  if (project.status === "archived") {
+    return (
+      <Button size="sm" variant="outline" disabled={isSubmitting} onClick={() => void applyStatus("active")}>
+        <Undo2 /> Reactivate
+      </Button>
+    );
+  }
+
+  return (
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger render={<Button size="sm" variant="outline" disabled={isSubmitting} aria-label="More project actions" />}>
+          <MoreHorizontal className="size-4" aria-hidden="true" />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem onClick={() => setConfirmArchive(true)}>
+            <Archive /> Archive
+          </DropdownMenuItem>
+          <DropdownMenuItem variant="destructive" onClick={() => setConfirmTrash(true)}>
+            <Trash2 /> Move to Trash
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
 
       <ConfirmDialog
         open={confirmTrash}

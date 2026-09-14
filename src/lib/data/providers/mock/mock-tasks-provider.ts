@@ -57,6 +57,21 @@ function requireActiveProjectForWorkstream(workstream: Workstream) {
 }
 
 /**
+ * CD-162 final gap closure — an archived (cancelled) Project Service can never gain a NEW Task
+ * association, at the provider layer, not just the UI: on create, `previousWorkstreamId` is always
+ * null, so any cancelled target is rejected outright; on edit/reassignment, a Task already living on
+ * a since-archived Service may keep being edited on that same Service (so editing its title/status/
+ * checklist still works), but it can never be MOVED onto a different archived Service, and an active
+ * Task can never be moved onto an archived one either. This is the real boundary — the Task form's
+ * own picker exclusion is a convenience on top of this, never the only guard.
+ */
+function requireActiveWorkstreamForTaskAssignment(workstream: Workstream, previousWorkstreamId: string | null) {
+  if (workstream.status === "cancelled" && workstream.id !== previousWorkstreamId) {
+    throw new Error("This Service is archived — reactivate it before adding new Tasks.");
+  }
+}
+
+/**
  * A tagged activity must be one the workstream actually enabled — never silently attached outside
  * that set. A workstream with NO persisted associations yet (legacy data, or a service/brand with no
  * catalog) has nothing to check against, so anything goes there — same permissive behavior every
@@ -374,6 +389,7 @@ export const mockTasksProvider: TasksProvider = {
     if (!workstream) throw new Error("Service not found.");
     requireWorkstreamAccess(viewer, workstream);
     requireActiveProjectForWorkstream(workstream);
+    requireActiveWorkstreamForTaskAssignment(workstream, null);
     resolveActivityForTaskCreation(viewer, workstream, input.activityId);
     requireActiveActivityIfNewlySelected(input.activityId, null);
     const statusReason = resolveStatusReason(input.status, input.statusReason);
@@ -437,6 +453,7 @@ export const mockTasksProvider: TasksProvider = {
     const workstream = db.workstreams.find((e) => e.id === input.workstreamId);
     if (!workstream) throw new Error("Service not found.");
     requireWorkstreamAccess(viewer, workstream);
+    requireActiveWorkstreamForTaskAssignment(workstream, existing.workstreamId);
     requireActivityEnabledOnWorkstream(workstream.id, input.activityId);
     requireActiveActivityIfNewlySelected(nextActivityId, existing.activityId);
     const statusReason = resolveStatusReason(input.status, input.statusReason);
