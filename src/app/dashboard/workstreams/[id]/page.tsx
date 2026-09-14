@@ -33,7 +33,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { WorkstreamStatusBadge } from "@/components/workstreams/workstream-status-badge";
 import { ServiceAvatar } from "@/components/workstreams/service-avatar";
-import { CompanyProjectAvatar } from "@/components/companies/company-project-avatar";
 import { WorkstreamFormDialog } from "@/components/workstreams/workstream-form-dialog";
 import { WorkstreamLifecycleMenu } from "@/components/workstreams/workstream-lifecycle-menu";
 import { BudgetBar } from "@/components/ui/budget-bar";
@@ -159,32 +158,28 @@ function LoadedWorkstreamDetailPage({
           Back to {workstream.company.name}
         </Link>
 
-        {/* MVP Simplification Pass (boss feedback) — one light breadcrumb line (Client) then the
-            Service's own global-catalog name ("Accounting") as the primary heading, matching Task
-            Detail's own established Company → Service pattern instead of a heavier two-block
-            "Project" / "Service" label stack. MVP Gap Closure — the Project-Service instance's own
-            reference/qualifier ("Accounting 2026") is no longer surfaced here at all (not even as a
-            hover tooltip): it had no demonstrable current-MVP workflow attached to it on a read-only
-            page like this one, and only invited "can I switch years?" confusion. The underlying
-            field is untouched and still editable from Edit Service's own "Reference / qualifier"
-            input — that's the one place it's a genuine, self-explanatory, user-driven value. */}
+        {/* Product Owner refinement pass — the Service is the single dominant page identity now:
+            the Project used to get its own large avatar + name row here, competing with the
+            Service's own heading directly below it. That row is now a small/muted breadcrumb
+            (Project / Services) instead — still a real link back to this Project's Services tab,
+            just visually secondary to the Service heading. MVP Simplification Pass (boss feedback)
+            — the Service's own global-catalog name ("Accounting") stays the primary heading,
+            matching Task Detail's own established Company → Service pattern. MVP Gap Closure — the
+            Project-Service instance's own reference/qualifier ("Accounting 2026") is still not
+            surfaced here at all (not even as a hover tooltip): it had no demonstrable current-MVP
+            workflow attached to it on a read-only page like this one, and only invited "can I
+            switch years?" confusion. The underlying field is untouched and still editable from
+            Edit Service's own "Reference / qualifier" input — that's the one place it's a genuine,
+            self-explanatory, user-driven value. */}
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-col gap-1">
             {workstream.projectId && (
-              <div className="flex flex-wrap items-center gap-1.5 text-sm text-muted-foreground">
-                <CompanyProjectAvatar
-                  companyId={workstream.company.id}
-                  companyName={workstream.company.name}
-                  size="sm"
-                  isInternal={project?.isInternal}
-                />
-                <Link
-                  href={`/dashboard/projects/${workstream.projectId}`}
-                  className="font-medium text-foreground hover:underline"
-                >
-                  {workstream.company.name}
-                </Link>
-              </div>
+              <Link
+                href={backHref}
+                className="w-fit text-xs text-muted-foreground hover:text-foreground hover:underline"
+              >
+                {workstream.company.name} / Services
+              </Link>
             )}
             <div className="flex flex-wrap items-center gap-2.5">
               <ServiceAvatar
