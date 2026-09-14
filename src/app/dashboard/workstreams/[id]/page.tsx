@@ -32,6 +32,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { WorkstreamStatusBadge } from "@/components/workstreams/workstream-status-badge";
+import { ServiceAvatar } from "@/components/workstreams/service-avatar";
 import { CompanyProjectAvatar } from "@/components/companies/company-project-avatar";
 import { WorkstreamFormDialog } from "@/components/workstreams/workstream-form-dialog";
 import { WorkstreamLifecycleMenu } from "@/components/workstreams/workstream-lifecycle-menu";
@@ -185,7 +186,11 @@ function LoadedWorkstreamDetailPage({
                 </Link>
               </div>
             )}
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2.5">
+              <ServiceAvatar
+                serviceKey={workstream.serviceLineId ?? workstream.id}
+                serviceName={workstreamDisplayHeading(workstream.name, workstream.serviceLine?.name ?? null)}
+              />
               <h1 className="font-heading text-2xl font-semibold">
                 {workstreamDisplayHeading(workstream.name, workstream.serviceLine?.name ?? null)}
               </h1>

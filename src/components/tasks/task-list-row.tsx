@@ -68,7 +68,7 @@ export function TaskListHeader({
 }) {
   return (
     <div className="hidden items-center gap-2 border-b bg-muted/20 px-3 sm:flex">
-      {showTreeConnector && <span className="w-4 shrink-0" aria-hidden="true" />}
+      {showTreeConnector && <span className="w-5 shrink-0" aria-hidden="true" />}
       <div
         className={cn(
           "grid h-8 flex-1 items-center gap-3 font-mono text-[10px] tracking-wide text-muted-foreground uppercase",
@@ -240,8 +240,8 @@ export function TaskListRow({
       style={staggerDelay(index)}
     >
       {showTreeConnector && (
-        <span className="flex w-4 shrink-0 items-center justify-center text-xs text-muted-foreground/50" aria-hidden="true">
-          └
+        <span className="flex w-5 shrink-0 items-center justify-center font-mono text-xs text-muted-foreground/50" aria-hidden="true">
+          ├─
         </span>
       )}
       <div className="min-w-0 flex-1">

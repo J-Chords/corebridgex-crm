@@ -12,6 +12,7 @@ import {
   Pencil,
   Plus,
   Search,
+  SlidersHorizontal,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth/auth-context";
 import { useProject, useProjectGroups } from "@/lib/data/hooks/use-projects";
@@ -50,6 +51,7 @@ import { CompanyStatusBadge } from "@/components/companies/company-status-badge"
 import { CompanyFormDialog } from "@/components/companies/company-form-dialog";
 import { ContactFormDialog } from "@/components/companies/contact-form-dialog";
 import { WorkstreamStatusBadge } from "@/components/workstreams/workstream-status-badge";
+import { ServiceAvatar } from "@/components/workstreams/service-avatar";
 import { AddProjectServiceDialog } from "@/components/projects/add-project-service-dialog";
 import { WorkstreamFormDialog } from "@/components/workstreams/workstream-form-dialog";
 import { WorkstreamLifecycleMenu } from "@/components/workstreams/workstream-lifecycle-menu";
@@ -208,7 +210,9 @@ function ServicesSummaryPanel({
  * `WorkstreamLifecycleMenu` (Edit/Archive/Remove, Admin-only, self-hides for anyone else) replaces
  * the previous "Configure Activities" text link's spot — Configure Activities stays as its own
  * inline action since it's a materially different, more frequent capability (Team Lead can reach it
- * too, unlike Edit/Archive/Remove).
+ * too, unlike Edit/Archive/Remove). Product Owner refinement pass — compact card-list hybrid: each
+ * row is its own bordered/tinted container (not one big enclosing Card) so Services read as
+ * clearly separated, scannable units without becoming a bulky card grid.
  */
 function ServiceRow({
   workstream,
@@ -241,43 +245,47 @@ function ServiceRow({
       { companyId: project.companyId, ownerId: project.ownerId, memberUserIds: project.members.map((m) => m.id) }
     );
 
+  const serviceName = workstreamDisplayHeading(workstream.name, workstream.serviceLine?.name ?? null);
+
   return (
-    <div className="group rounded-lg transition-colors hover:bg-muted/40 focus-within:bg-muted/40">
+    <div className="group rounded-lg bg-card ring-1 ring-foreground/10 transition-colors hover:bg-muted/40 focus-within:bg-muted/40">
       <Link
         href={`/dashboard/workstreams/${workstream.id}`}
-        className="flex flex-wrap items-center justify-between gap-3 rounded-lg px-2 py-2.5 outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+        className="flex flex-wrap items-center justify-between gap-3 rounded-lg px-3 py-2.5 outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
       >
         <div className="flex min-w-0 items-center gap-3">
-          <Avatar size="sm" className="shrink-0">
-            <AvatarFallback className="text-[0.65rem]">{initials(workstream.lead.fullName)}</AvatarFallback>
-          </Avatar>
+          <ServiceAvatar
+            serviceKey={workstream.serviceLineId ?? workstream.id}
+            serviceName={serviceName}
+            size="sm"
+            className="shrink-0"
+          />
           <div className="flex min-w-0 flex-col gap-0.5">
-            <span className="truncate text-sm font-semibold text-foreground group-hover:underline">
-              {workstreamDisplayHeading(workstream.name, workstream.serviceLine?.name ?? null)}
-            </span>
+            <span className="truncate text-sm font-semibold text-foreground group-hover:underline">{serviceName}</span>
             <span className="truncate text-xs text-muted-foreground">
               {workstream.lead.fullName} · {activityCount} activit{activityCount === 1 ? "y" : "ies"}
             </span>
           </div>
         </div>
         <div className="flex shrink-0 flex-wrap items-center gap-4">
-          <div className="flex flex-col items-end gap-1">
-            <span className="text-xs font-medium text-foreground">{openTaskCount} open</span>
+          <div className="flex items-center gap-2">
+            <Badge variant="neutral">{openTaskCount} Open</Badge>
             <WorkstreamStatusBadge status={workstream.status} />
           </div>
           <div className="flex items-center gap-1.5 sm:border-l sm:pl-4">
             {canConfigure && (
-              <button
+              <Button
                 type="button"
+                size="sm"
+                variant="outline"
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
                   onConfigureActivities();
                 }}
-                className="rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-background hover:text-foreground"
               >
-                Configure Activities
-              </button>
+                <SlidersHorizontal /> Configure Activities
+              </Button>
             )}
             <span
               onClick={(e) => {
@@ -291,7 +299,7 @@ function ServiceRow({
         </div>
       </Link>
       {workstream.serviceLine && staffing && (staffing.teamLeadUserIds.length > 0 || staffing.employeeUserIds.length > 0) && (
-        <div className="mx-2 mb-2 flex flex-col gap-0.5 rounded-md border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+        <div className="mx-3 mb-2.5 flex flex-col gap-0.5 rounded-md border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
           <span className="font-mono text-[10px] tracking-wide uppercase">Global Service Staffing</span>
           <span>
             Global Team Leads: {staffing.teamLeadUserIds.length > 0 ? staffing.teamLeadUserIds.map(nameFor).join(", ") : "None"}
@@ -1008,29 +1016,27 @@ function LoadedProjectDetailPage({
               )
             )}
           </div>
-          <Card>
-            <CardContent className="flex flex-col gap-0.5 py-2">
-              {!workstreamsLoading && activeWorkstreams.length === 0 && (
-                <p className="px-2 py-4 text-sm text-muted-foreground">No services yet for this project.</p>
-              )}
-              {activeWorkstreams.map((workstream, i) => (
-                <div key={workstream.id}>
-                  {i > 0 && <Separator className="my-0.5" />}
-                  <ServiceRow
-                    workstream={workstream}
-                    project={project}
-                    user={user}
-                    openTaskCount={tasks.filter((t) => t.workstreamId === workstream.id && !isTaskClosed(t.status)).length}
-                    staffing={globalServiceStaffing.find((s) => s.serviceLineId === workstream.serviceLine?.id)}
-                    nameFor={(userId) => assignableStaff.find((s) => s.id === userId)?.fullName ?? "Unknown"}
-                    onConfigureActivities={() => setConfigureActivitiesFor(workstream)}
-                    onEdit={() => setEditingWorkstream(workstream)}
-                    onChanged={refreshWorkstreams}
-                  />
-                </div>
-              ))}
-            </CardContent>
-          </Card>
+          {!workstreamsLoading && activeWorkstreams.length === 0 && (
+            <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
+              No services yet for this project.
+            </div>
+          )}
+          <div className="flex flex-col gap-2">
+            {activeWorkstreams.map((workstream) => (
+              <ServiceRow
+                key={workstream.id}
+                workstream={workstream}
+                project={project}
+                user={user}
+                openTaskCount={tasks.filter((t) => t.workstreamId === workstream.id && !isTaskClosed(t.status)).length}
+                staffing={globalServiceStaffing.find((s) => s.serviceLineId === workstream.serviceLine?.id)}
+                nameFor={(userId) => assignableStaff.find((s) => s.id === userId)?.fullName ?? "Unknown"}
+                onConfigureActivities={() => setConfigureActivitiesFor(workstream)}
+                onEdit={() => setEditingWorkstream(workstream)}
+                onChanged={refreshWorkstreams}
+              />
+            ))}
+          </div>
 
           {/* CD-162 post-manual-QA pass — Archived (status "cancelled") Services stay fully
               reachable (Reactivate lives in the same lifecycle menu) but default-collapsed, so a
@@ -1049,26 +1055,22 @@ function LoadedProjectDetailPage({
                 Archived Services ({archivedWorkstreams.length})
               </button>
               {showArchivedServices && (
-                <Card className="opacity-75">
-                  <CardContent className="flex flex-col gap-0.5 py-2">
-                    {archivedWorkstreams.map((workstream, i) => (
-                      <div key={workstream.id}>
-                        {i > 0 && <Separator className="my-0.5" />}
-                        <ServiceRow
-                          workstream={workstream}
-                          project={project}
-                          user={user}
-                          openTaskCount={tasks.filter((t) => t.workstreamId === workstream.id && !isTaskClosed(t.status)).length}
-                          staffing={globalServiceStaffing.find((s) => s.serviceLineId === workstream.serviceLine?.id)}
-                          nameFor={(userId) => assignableStaff.find((s) => s.id === userId)?.fullName ?? "Unknown"}
-                          onConfigureActivities={() => setConfigureActivitiesFor(workstream)}
-                          onEdit={() => setEditingWorkstream(workstream)}
-                          onChanged={refreshWorkstreams}
-                        />
-                      </div>
-                    ))}
-                  </CardContent>
-                </Card>
+                <div className="flex flex-col gap-2 opacity-75">
+                  {archivedWorkstreams.map((workstream) => (
+                    <ServiceRow
+                      key={workstream.id}
+                      workstream={workstream}
+                      project={project}
+                      user={user}
+                      openTaskCount={tasks.filter((t) => t.workstreamId === workstream.id && !isTaskClosed(t.status)).length}
+                      staffing={globalServiceStaffing.find((s) => s.serviceLineId === workstream.serviceLine?.id)}
+                      nameFor={(userId) => assignableStaff.find((s) => s.id === userId)?.fullName ?? "Unknown"}
+                      onConfigureActivities={() => setConfigureActivitiesFor(workstream)}
+                      onEdit={() => setEditingWorkstream(workstream)}
+                      onChanged={refreshWorkstreams}
+                    />
+                  ))}
+                </div>
               )}
             </div>
           )}

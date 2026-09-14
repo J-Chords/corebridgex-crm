@@ -96,9 +96,11 @@ export function TaskListSection({
         // its own parent group header, so the relationship reads as a clean menu/submenu nesting
         // instead of the header and its rows sharing the same left edge. UI polish pass — the
         // spine is tinted to match the parent status (reinforcing which rows belong to which
-        // group) and each row gets its own small "└" connector glyph (via `showTreeConnector`),
-        // matching this component's own doc-comment example of a true tree hierarchy. Purely
-        // visual: navigation, filtering, grouping, and status semantics are all untouched — only
+        // group) and each row gets its own small "├─" connector glyph (via `showTreeConnector`;
+        // Product Owner refinement pass — a continuing-branch glyph on every child row, not just
+        // the last one, since each Task is visibly one of several children of the Status), matching
+        // this component's own doc-comment example of a true tree hierarchy. Purely visual:
+        // navigation, filtering, grouping, and status semantics are all untouched — only
         // "Group by: Status" (and any other grouped view) gets this treatment; `FlatTaskList`'s
         // "Group by: None" is a different component entirely and is deliberately left flush, since
         // it has no parent to nest under.
