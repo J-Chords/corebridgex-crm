@@ -1,36 +1,34 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Corebridge X
 
-## Getting Started
+Internal Project Management / PSA (Professional Services Automation) web app for Croki Digital. Tracks client work through **Project → Service → Activity → Task → Checklist**, with role-based visibility for Admin / Team Lead / Employee.
 
-First, run the development server:
+## Stack
+
+Next.js 16 (App Router) · React 19 · TypeScript · Tailwind CSS · Supabase (Postgres + Auth)
+
+## Documentation
+
+**Start at [`docs/README.md`](docs/README.md)** — the full documentation index, including domain model, authorization rules, architecture, database/migrations, development setup, testing strategy, deployment state, a decision log, and a full developer handover.
+
+## Quick start
 
 ```bash
+npm install
+cp .env.example .env.local   # fill in real values; never commit this file
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+With `NEXT_PUBLIC_DATA_PROVIDER` unset (or `mock`), the app runs entirely against in-memory seeded data with no-password quick-login buttons per role — the fastest way to explore it. See [`docs/development.md`](docs/development.md) for every provider mode and [`docs/data-and-supabase.md`](docs/data-and-supabase.md) for what each environment variable does.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Scripts
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Command | Purpose |
+|---|---|
+| `npm run dev` | Start the dev server |
+| `npm run build` | Production build |
+| `npm run start` | Run a production build |
+| `npm run lint` | ESLint |
 
-## Learn More
+## Current deployment status
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+**Frontend production hosting is not configured** — no CI/CD, no connected hosting provider. Hosted Supabase (the database/auth backend) is real and live. See [`docs/deployment.md`](docs/deployment.md) for the full audit before assuming anything is publicly reachable.
