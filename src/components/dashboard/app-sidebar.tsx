@@ -5,7 +5,6 @@ import { useRouter, usePathname } from "next/navigation";
 import {
   ChevronsLeft,
   ChevronsRight,
-  Clock,
   ClipboardList,
   FolderKanban,
   Home,
@@ -44,7 +43,7 @@ import { useAuth } from "@/lib/auth/auth-context";
 import { useHelpDialog } from "@/lib/help-dialog-context";
 import { useCommandPalette } from "@/lib/command-palette-context";
 import { ROLE_LABELS } from "@/lib/data/role-labels";
-import { canViewTeamUpdatesPage, canViewTeamTimePage, isSuperadmin } from "@/lib/data/permissions";
+import { canViewTeamActivityPage, isSuperadmin } from "@/lib/data/permissions";
 import { SearchTriggerBar } from "@/components/dashboard/search-trigger-bar";
 import { cn } from "@/lib/utils";
 
@@ -82,8 +81,8 @@ export function AppSidebar() {
 
   // Employee-first: every role gets the same core operational destinations — Supervisor and
   // Superadmin only ever ADD to this, never replace it, per the locked "Supervisor = Employee +
-  // team" / "Superadmin = + org admin" principle. Team Time/Team Updates keep their existing
-  // page-level visibility gates.
+  // team" / "Superadmin = + org admin" principle. Team Activity keeps the same page-level
+  // visibility gate its two predecessor pages (Team Time, Team Updates) each had.
   const workspaceItems: NavItem[] = [
     { href: "/dashboard", label: "Dashboard", icon: Home },
     { href: "/dashboard/my-day", label: "My Day", icon: Sun },
@@ -95,9 +94,10 @@ export function AppSidebar() {
   // top-level nav item (the route/data model/RLS are all untouched — Superadmin still reaches it
   // via a "View full client record" link from a Project's own Overview tab, or its direct URL).
   const clientWorkItems: NavItem[] = [{ href: "/dashboard/projects", label: "Projects", icon: FolderKanban }];
+  // CD-190 — Team Time and Team Updates merged into one Team Activity page (Updates/Time tabs);
+  // one nav item, same existing Supervisor/Superadmin visibility gate as both had individually.
   const teamItems: NavItem[] = [
-    ...(user && canViewTeamTimePage(user) ? [{ href: "/dashboard/team-time", label: "Team Time", icon: Clock }] : []),
-    ...(user && canViewTeamUpdatesPage(user) ? [{ href: "/dashboard/team-updates", label: "Team Updates", icon: Users }] : []),
+    ...(user && canViewTeamActivityPage(user) ? [{ href: "/dashboard/team-activity", label: "Team Activity", icon: Users }] : []),
   ];
   const adminItems: NavItem[] = [
     ...(user && isSuperadmin(user) ? [{ href: "/dashboard/admin/users", label: "Users", icon: UsersRound }] : []),

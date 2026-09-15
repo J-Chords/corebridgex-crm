@@ -1,52 +1,52 @@
 "use client";
 
-import type { CSSProperties } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { Users } from "lucide-react";
 import type { User } from "@/lib/data/types";
-import type { TimeEntryWithUserAndTask } from "@/lib/data/providers/time-entries-provider";
 import { ROLE_LABELS } from "@/lib/data/role-labels";
-import { formatMinutes } from "@/lib/format-minutes";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarBadge, AvatarFallback } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
 import { STAGGER_ITEM_CLASS, staggerDelay } from "@/lib/stagger";
 import { cn } from "@/lib/utils";
 
 import { getInitials as initials } from "@/lib/initials";
 
-function totalMinutesFor(entries: TimeEntryWithUserAndTask[]): number {
-  return entries.filter((e) => e.durationMinutes !== null).reduce((sum, e) => sum + (e.durationMinutes ?? 0), 0);
-}
-
-/** Small dot on the avatar corner — green while something's actively running for that person that day, otherwise just "has logged time" vs. not; never a presence/attendance signal, purely derived from their own logged entries. */
-function avatarDotClass(entries: TimeEntryWithUserAndTask[]): string {
-  if (entries.some((e) => e.durationMinutes === null)) return "bg-info";
-  if (totalMinutesFor(entries) > 0) return "bg-success";
-  return "bg-muted-foreground/40";
-}
-
-interface TeamTimeRosterProps {
+interface TeamActivityRosterProps {
   people: User[];
-  entriesByUserId: Map<string, TimeEntryWithUserAndTask[]>;
   selectedUserId: string;
   viewerId: string;
   onSelect: (userId: string) => void;
   isLoading: boolean;
+  /** Avatar-corner dot color class (e.g. "bg-success") — tab-specific meaning (Updates:
+   * submitted/draft/not-started; Time: running/has-time/no-time), computed by the caller. */
+  dotClassFor: (person: User) => string;
+  /** Trailing status content (a status badge, a duration chip, a loading skeleton) — tab-specific,
+   * rendered by the caller. */
+  renderStatus: (person: User) => ReactNode;
   className?: string;
   style?: CSSProperties;
 }
 
-/** Who's on this list is already fully permission-scoped upstream (assignableStaffFor — the same set canViewTimeForUser resolves to: self + reports, never above), so this component just renders it. */
-export function TeamTimeRoster({
+/**
+ * CD-190 — the one shared Team Activity roster shell, merging what were previously two
+ * near-identical components (`TeamUpdatesRoster`, `TeamTimeRoster`). Who's on this list is already
+ * fully permission-scoped upstream (`assignableStaffFor` — the same set `canViewDailyUpdate`/
+ * `canViewTimeForUser` resolve to: self + reports, never above), so this component just renders
+ * it. Only the avatar-dot color and the trailing status content are genuinely tab-specific —
+ * everything else (card shell, avatar, name, "(You)", role, selection state) was already pixel-
+ * identical between the two old rosters, so it lives here once.
+ */
+export function TeamActivityRoster({
   people,
-  entriesByUserId,
   selectedUserId,
   viewerId,
   onSelect,
   isLoading,
+  dotClassFor,
+  renderStatus,
   className,
   style,
-}: TeamTimeRosterProps) {
+}: TeamActivityRosterProps) {
   return (
     <Card className={className} style={style}>
       <CardHeader>
@@ -61,7 +61,6 @@ export function TeamTimeRoster({
           <p className="text-sm text-muted-foreground">No team members yet.</p>
         ) : (
           people.map((person, i) => {
-            const personEntries = entriesByUserId.get(person.id) ?? [];
             const isSelected = person.id === selectedUserId;
             return (
               <button
@@ -78,7 +77,7 @@ export function TeamTimeRoster({
               >
                 <Avatar className="size-8 shrink-0">
                   <AvatarFallback className="text-xs">{initials(person.fullName)}</AvatarFallback>
-                  {!isLoading && <AvatarBadge className={avatarDotClass(personEntries)} />}
+                  {!isLoading && <AvatarBadge className={dotClassFor(person)} />}
                 </Avatar>
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-sm font-medium">
@@ -87,32 +86,12 @@ export function TeamTimeRoster({
                   </div>
                   <div className="truncate text-xs text-muted-foreground">{ROLE_LABELS[person.role]}</div>
                 </div>
-                <TotalChip entries={personEntries} isLoading={isLoading} />
+                {renderStatus(person)}
               </button>
             );
           })
         )}
       </CardContent>
     </Card>
-  );
-}
-
-function TotalChip({ entries, isLoading }: { entries: TimeEntryWithUserAndTask[]; isLoading: boolean }) {
-  if (isLoading) {
-    return <span className="h-5 w-16 shrink-0 animate-pulse rounded-full bg-muted" aria-hidden="true" />;
-  }
-  const total = totalMinutesFor(entries);
-  if (total === 0 && entries.length === 0) {
-    return (
-      <Badge variant="neutral" className="shrink-0">
-        No time
-      </Badge>
-    );
-  }
-  return (
-    <span className="shrink-0 font-mono text-xs text-muted-foreground">
-      {formatMinutes(total)}
-      {entries.some((e) => e.durationMinutes === null) && " +"}
-    </span>
   );
 }
