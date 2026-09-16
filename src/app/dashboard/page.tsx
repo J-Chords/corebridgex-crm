@@ -15,6 +15,6 @@ export default function DashboardPage() {
     case "supervisor":
       return <SupervisorDashboard user={user} />;
     case "employee":
-      return <EmployeeDashboard user={user} />;
+      return <EmployeeDashboard />;
   }
 }

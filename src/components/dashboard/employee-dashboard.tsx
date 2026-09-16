@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import type { User } from "@/lib/data/types";
 import type { TaskWithRelations } from "@/lib/data/providers/tasks-provider";
 import { useMyTasks } from "@/lib/data/hooks/use-tasks";
 import { useWorkstreams } from "@/lib/data/hooks/use-workstreams";
@@ -35,10 +34,11 @@ function todayDateString() {
  * The interactive "My Tasks" list (its own search/filter/save-view, editable inline) and the "Time
  * this week" timer-control card were both genuine, fuller duplicates of My Day's own equivalents —
  * removed here rather than kept as a second, less-capable copy. The KPI tiles below still let you
- * open/edit a Task from their own drill-down (`TaskKpiDetail`), so nothing about "what needs my
- * attention" is lost — only the always-on, execution-style list/timer duplication is.
+ * preview and open a Task from their own drill-down (`TaskKpiDetail`, read-only — no inline edit/
+ * delete kebab there; a row click opens the real Task Drawer, same as anywhere else in the app), so
+ * nothing about "what needs my attention" is lost, without Dashboard becoming a second Tasks editor.
  */
-export function EmployeeDashboard({ user }: { user: User }) {
+export function EmployeeDashboard() {
   const { tasks, refresh } = useMyTasks();
   const { workstreams } = useWorkstreams();
   const { entries, refresh: refreshEntries } = useMyTimeEntries();
@@ -104,11 +104,6 @@ export function EmployeeDashboard({ user }: { user: User }) {
                   close();
                   setDrawerTaskId(id);
                 }}
-                onEdit={(task) => {
-                  close();
-                  setEditingTask(task);
-                }}
-                onDeleted={refresh}
               />
             ),
           }}
@@ -132,11 +127,6 @@ export function EmployeeDashboard({ user }: { user: User }) {
                   close();
                   setDrawerTaskId(id);
                 }}
-                onEdit={(task) => {
-                  close();
-                  setEditingTask(task);
-                }}
-                onDeleted={refresh}
               />
             ),
           }}
@@ -159,11 +149,6 @@ export function EmployeeDashboard({ user }: { user: User }) {
                   close();
                   setDrawerTaskId(id);
                 }}
-                onEdit={(task) => {
-                  close();
-                  setEditingTask(task);
-                }}
-                onDeleted={refresh}
               />
             ),
           }}

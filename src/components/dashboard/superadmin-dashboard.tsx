@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import type { User } from "@/lib/data/types";
-import type { TaskWithRelations } from "@/lib/data/providers/tasks-provider";
 import { useTasks } from "@/lib/data/hooks/use-tasks";
 import { useCompanies, useCompanyLookups } from "@/lib/data/hooks/use-companies";
 import { useProjects } from "@/lib/data/hooks/use-projects";
@@ -13,7 +12,6 @@ import { isTaskActiveWork } from "@/lib/data/task-display";
 import { SearchTriggerBar } from "@/components/dashboard/search-trigger-bar";
 import { KpiPreviewList } from "@/components/dashboard/kpi-preview-list";
 import { TaskDrawer } from "@/components/tasks/task-drawer";
-import { TaskFormDialog } from "@/components/tasks/task-form-dialog";
 import { TaskKpiDetail } from "@/components/dashboard/task-kpi-detail";
 import { StatCard } from "@/components/ui/stat-card";
 import { SectionBreak } from "@/components/ui/section-break";
@@ -37,7 +35,6 @@ export function SuperadminDashboard({ user }: { user: User }) {
   const { brands, assignableStaff } = useCompanyLookups();
   const { handoffs } = useRecentHandoffs();
   const [drawerTaskId, setDrawerTaskId] = useState<string | null>(null);
-  const [editingTask, setEditingTask] = useState<TaskWithRelations | null>(null);
 
   const staff = assignableStaff.filter((u) => u.id !== user.id);
 
@@ -120,11 +117,6 @@ export function SuperadminDashboard({ user }: { user: User }) {
                   close();
                   setDrawerTaskId(id);
                 }}
-                onEdit={(task) => {
-                  close();
-                  setEditingTask(task);
-                }}
-                onDeleted={refresh}
               />
             ),
           }}
@@ -197,15 +189,6 @@ export function SuperadminDashboard({ user }: { user: User }) {
         onOpenChange={(open) => !open && setDrawerTaskId(null)}
         onChanged={refresh}
       />
-      {editingTask && (
-        <TaskFormDialog
-          open={Boolean(editingTask)}
-          onOpenChange={(open) => !open && setEditingTask(null)}
-          mode="edit"
-          task={editingTask}
-          onSaved={refresh}
-        />
-      )}
     </div>
   );
 }

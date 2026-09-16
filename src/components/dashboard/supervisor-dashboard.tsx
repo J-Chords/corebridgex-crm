@@ -106,11 +106,6 @@ export function SupervisorDashboard({ user }: { user: User }) {
                   close();
                   setDrawerTaskId(id);
                 }}
-                onEdit={(task) => {
-                  close();
-                  setEditingTask(task);
-                }}
-                onDeleted={refreshTasks}
               />
             ),
           }}
@@ -133,11 +128,6 @@ export function SupervisorDashboard({ user }: { user: User }) {
                   close();
                   setDrawerTaskId(id);
                 }}
-                onEdit={(task) => {
-                  close();
-                  setEditingTask(task);
-                }}
-                onDeleted={refreshTasks}
               />
             ),
           }}
@@ -159,11 +149,6 @@ export function SupervisorDashboard({ user }: { user: User }) {
                   close();
                   setDrawerTaskId(id);
                 }}
-                onEdit={(task) => {
-                  close();
-                  setEditingTask(task);
-                }}
-                onDeleted={refreshTasks}
               />
             ),
           }}
