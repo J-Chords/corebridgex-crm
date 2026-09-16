@@ -76,6 +76,26 @@ Durable architectural and product decisions a future contributor needs to know, 
 
 ---
 
+### Dashboard vs. My Day: role-scoped overview vs. personal execution
+
+**Decision**: `/dashboard` and `/dashboard/my-day` answer two different questions and are no longer allowed to drift toward each other. **Dashboard** = "What is happening across my scope, and what needs attention?" — summary, health, oversight, attention, navigation into operational surfaces; it must never become a second Tasks editor. **My Day** = "What am I personally doing now and next?" — personal execution, personal Tasks, personal Time/Timer, personal Upcoming, personal Daily Update, Today/Week/Month planning; it is **personal by default for every role**, with exactly one deliberate planning exception (below).
+
+Concrete placement decisions:
+- **Notifications** → Dashboard only, for every role (Employee/Team Lead/Admin all show `RecentNotificationsCard` on their Dashboard now; it is removed from all three My Day variants). Notifications is an awareness/context signal ("what happened that I should know about"), not personal execution.
+- **Employee's personal Upcoming** → My Day Today only (removed from Employee Dashboard, which has no Upcoming card at all now).
+- **Team/Organization Upcoming** → stays on the Team Lead/Admin Dashboard, explicitly labeled "Team Upcoming" / "Organization Upcoming" (never bare "Upcoming") so it's never confused with a viewer's own personal Upcoming on My Day. This is a genuinely different scope from Client Health or Recurring Work Due, not a duplicate of either — kept, not removed.
+- **Needs Attention** (`NeedsAttentionStrip`) → moved from Team Lead's/Admin's My Day to their Dashboard (Employee never had this — Dashboard oversight strips are a management-only concept, not added to Employee's Dashboard).
+- **Today vs. Week/Month** → My Day's Today-only cards (Today Time, personal Upcoming, Daily Update) now render only under the Today tab; Week/Month show just the tab bar, filter bar, and calendar grid. Previously all three rendered unconditionally regardless of which tab was selected.
+- **Team Lead's Week/Month "My work | Team" toggle** → kept (not retired), defaulting to "My work". Team Activity is a Daily Update/Time review surface, not a Week/Month scheduling surface, so it cannot replace this toggle.
+- **Admin's Week/Month schedule default** → fixed to default to the Admin's own assigned tasks (via `useTaskFilters`'s new optional `initialFilters` parameter — a per-page override, not a change to the global `DEFAULT_TASK_FILTERS`), matching every other role's My Day. The existing Assignee filter still lets an Admin explicitly widen to another person or "All assignees."
+- **Activity feed naming** → "Recent Team Activity" / "Recent Firm Activity" both renamed to "Recent Task Activity" on Team Lead's and Admin's Dashboard (visible label only — `TeamActivityCard`'s underlying data/model is unchanged, and the real `/dashboard/team-activity` page/nav item keeps its own name).
+- **Dashboard vs. My Day header** → Dashboard's `<h1>` is now the literal word "Dashboard" plus a role-and-scope-aware subtitle; My Day keeps the personal greeting (`GreetingText`) it always had. Previously both surfaces rendered byte-identical greeting markup, which was the single biggest reason the two pages read as duplicates.
+
+**Why**: A visual/source design review (screenshots across all 3 roles × Dashboard/My Day/Week/Month, desktop + mobile, cross-checked against direct source reads) found Employee's Dashboard and My Day Today were near-duplicates (same header, same Notifications card, similar shape), while Team Lead's and Admin's Dashboards were missing Notifications and an attention signal entirely. Two real, source-confirmed defects came out of the same review: Admin's My Day Week/Month calendar defaulted to org-wide (`assigneeId: "all"`) instead of personal, inconsistent with every other role and with "My Day = personal by default"; and Team Lead's Dashboard had a genuine mobile horizontal-overflow bug at ~400px (`scrollWidth` 573 vs `clientWidth` 400), traced to two `lg:col-span-2` grid cards not getting `min-w-0` at the mobile breakpoint.
+**Consequences**: `UpcomingDeadlinesCard` and `TeamActivityCard` both gained an optional `title` prop (defaults unchanged in spirit — `TeamActivityCard`'s default text changed from "Recent Team Activity" to "Recent Task Activity", `UpcomingDeadlinesCard`'s stays "Upcoming" unless a caller passes an explicit scope label). `useTaskFilters` gained an optional second `initialFilters` parameter — it only seeds the very first mount and is overridden by anything already persisted under a page's `storageKey`, so it never fights a viewer's own saved filter choice. Do not reintroduce a Notifications card on My Day, a personal Upcoming card on Employee's Dashboard, or a management Needs Attention strip on Employee's Dashboard — all three were deliberately, explicitly excluded from this change. Implemented under **CD-196**.
+
+---
+
 ### No AI/assistant attribution in Git history
 
 **Decision**: Commits never include `Co-Authored-By: Claude`, `Co-Authored-By: ChatGPT`, or any other AI/model/assistant attribution trailer. Normal human authorship (the actual developer) is the sole Git author/committer.

@@ -15,16 +15,13 @@ import { TaskFormDialog } from "@/components/tasks/task-form-dialog";
 import { TaskStatusDonut } from "@/components/tasks/task-status-donut";
 import { TaskDrawer } from "@/components/tasks/task-drawer";
 import { RecentNotificationsCard } from "@/components/dashboard/recent-notifications-card";
-import { UpcomingDeadlinesCard } from "@/components/dashboard/upcoming-deadlines-card";
 import { WorkstreamOverviewCard } from "@/components/workstreams/workstream-overview-card";
-import { GreetingText } from "@/components/dashboard/greeting-heading";
 import { SearchTriggerBar } from "@/components/dashboard/search-trigger-bar";
 import { TaskKpiDetail } from "@/components/dashboard/task-kpi-detail";
 import { TaskStatusFocusContent } from "@/components/dashboard/task-status-focus-content";
 import { CardExpandButton } from "@/components/dashboard/card-expand-button";
 import { DashboardWidgetFocusDialog } from "@/components/dashboard/dashboard-widget-focus-dialog";
 import { STAGGER_ITEM_CLASS, staggerDelay } from "@/lib/stagger";
-import { cn } from "@/lib/utils";
 
 const MAX_WORKSTREAMS_PREVIEW = 6;
 
@@ -58,10 +55,12 @@ export function EmployeeDashboard({ user }: { user: User }) {
   const activeWorkstreams = workstreams.filter((w) => w.status === "active");
 
   const openTasks = tasks.filter((t) => isTaskActiveWork(t));
-  const dueTodayTasks = openTasks.filter((t) => t.dueDate === today);
   const overdueTasks = openTasks.filter((t) => t.dueDate && t.dueDate < today);
-  const dueTodayCount = dueTodayTasks.length;
   const overdueCount = overdueTasks.length;
+  const completedThisWeek = tasks.filter(
+    (t) => t.status === "completed" && t.statusChangedAt && t.statusChangedAt >= sevenDaysAgoIso
+  );
+  const completedThisWeekCount = completedThisWeek.length;
 
   const weekEntries = entries.filter((e) => e.durationMinutes !== null && e.startTime >= sevenDaysAgoIso);
   const weekMinutes = weekEntries.reduce((sum, e) => sum + (e.durationMinutes ?? 0), 0);
@@ -78,10 +77,8 @@ export function EmployeeDashboard({ user }: { user: User }) {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1 className="font-heading text-3xl font-semibold tracking-tight sm:text-4xl">
-          <GreetingText fullName={user.fullName} />
-        </h1>
-        <p className="mt-1 text-sm text-muted-foreground">Here&apos;s what&apos;s on your plate today.</p>
+        <h1 className="font-heading text-3xl font-semibold tracking-tight sm:text-4xl">Dashboard</h1>
+        <p className="mt-1 text-sm text-muted-foreground">An overview of your workload, progress, and recent activity.</p>
         <SearchTriggerBar
           variant="hero"
           placeholder="Search clients, tasks, actions…"
@@ -118,38 +115,11 @@ export function EmployeeDashboard({ user }: { user: User }) {
           viewAllHref="/dashboard/tasks?active=1"
         />
         <StatCard
-          label="Due today"
-          value={String(dueTodayCount)}
-          className={STAGGER_ITEM_CLASS}
-          style={staggerDelay(1)}
-          detail={{
-            title: "Due Today",
-            description: `${dueTodayCount} task${dueTodayCount === 1 ? "" : "s"}`,
-            content: (close) => (
-              <TaskKpiDetail
-                tasks={dueTodayTasks}
-                emptyMessage="Nothing due today."
-                runningTaskId={runningEntry?.task.id}
-                onOpenTask={(id) => {
-                  close();
-                  setDrawerTaskId(id);
-                }}
-                onEdit={(task) => {
-                  close();
-                  setEditingTask(task);
-                }}
-                onDeleted={refresh}
-              />
-            ),
-          }}
-          viewAllHref="/dashboard/tasks?due=today"
-        />
-        <StatCard
           label="Overdue"
           value={String(overdueCount)}
           tone={overdueCount > 0 ? "warning" : "default"}
           className={STAGGER_ITEM_CLASS}
-          style={staggerDelay(2)}
+          style={staggerDelay(1)}
           detail={{
             title: "Overdue Tasks",
             description: `${overdueCount} task${overdueCount === 1 ? "" : "s"}`,
@@ -171,6 +141,33 @@ export function EmployeeDashboard({ user }: { user: User }) {
             ),
           }}
           viewAllHref="/dashboard/tasks?overdue=1"
+        />
+        <StatCard
+          label="Completed this week"
+          value={String(completedThisWeekCount)}
+          className={STAGGER_ITEM_CLASS}
+          style={staggerDelay(2)}
+          detail={{
+            title: "Completed This Week",
+            description: `${completedThisWeekCount} task${completedThisWeekCount === 1 ? "" : "s"}`,
+            content: (close) => (
+              <TaskKpiDetail
+                tasks={completedThisWeek}
+                emptyMessage="Nothing completed yet this week."
+                runningTaskId={runningEntry?.task.id}
+                onOpenTask={(id) => {
+                  close();
+                  setDrawerTaskId(id);
+                }}
+                onEdit={(task) => {
+                  close();
+                  setEditingTask(task);
+                }}
+                onDeleted={refresh}
+              />
+            ),
+          }}
+          viewAllHref="/dashboard/tasks?status=completed"
         />
         <StatCard
           label="Hours logged this week"
@@ -265,20 +262,17 @@ export function EmployeeDashboard({ user }: { user: User }) {
 
       <SectionBreak num="02" label="Summary" />
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <UpcomingDeadlinesCard tasks={tasks} className={STAGGER_ITEM_CLASS} style={staggerDelay(0)} />
-        <Card className={cn(STAGGER_ITEM_CLASS)} style={staggerDelay(1)}>
-          <CardHeader>
-            <CardTitle className="text-base">My Tasks by Status</CardTitle>
-            <CardAction>
-              <CardExpandButton onClick={() => setTaskStatusFocusOpen(true)} label="Expand My Tasks by Status" />
-            </CardAction>
-          </CardHeader>
-          <CardContent>
-            <TaskStatusDonut tasks={tasks} />
-          </CardContent>
-        </Card>
-      </div>
+      <Card className={STAGGER_ITEM_CLASS} style={staggerDelay(0)}>
+        <CardHeader>
+          <CardTitle className="text-base">My Tasks by Status</CardTitle>
+          <CardAction>
+            <CardExpandButton onClick={() => setTaskStatusFocusOpen(true)} label="Expand My Tasks by Status" />
+          </CardAction>
+        </CardHeader>
+        <CardContent>
+          <TaskStatusDonut tasks={tasks} />
+        </CardContent>
+      </Card>
 
       <DashboardWidgetFocusDialog
         open={taskStatusFocusOpen}

@@ -10,7 +10,6 @@ import { useWorkstreams } from "@/lib/data/hooks/use-workstreams";
 import { projectHrefForCompany } from "@/lib/data/project-display";
 import { useRecentHandoffs } from "@/lib/data/hooks/use-task-handoffs";
 import { isTaskActiveWork } from "@/lib/data/task-display";
-import { GreetingText } from "@/components/dashboard/greeting-heading";
 import { SearchTriggerBar } from "@/components/dashboard/search-trigger-bar";
 import { KpiPreviewList } from "@/components/dashboard/kpi-preview-list";
 import { TaskDrawer } from "@/components/tasks/task-drawer";
@@ -24,6 +23,8 @@ import { TeamActivityCard } from "@/components/dashboard/team-activity-card";
 import { BrandSnapshotCard } from "@/components/dashboard/brand-snapshot-card";
 import { RecurringWorkDueCard } from "@/components/dashboard/recurring-work-due-card";
 import { UpcomingDeadlinesCard } from "@/components/dashboard/upcoming-deadlines-card";
+import { RecentNotificationsCard } from "@/components/dashboard/recent-notifications-card";
+import { NeedsAttentionStrip } from "@/components/my-day/needs-attention-strip";
 import { ROLE_LABELS } from "@/lib/data/role-labels";
 import { STAGGER_ITEM_CLASS, staggerDelay } from "@/lib/stagger";
 import { cn } from "@/lib/utils";
@@ -48,10 +49,10 @@ export function SuperadminDashboard({ user }: { user: User }) {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1 className="font-heading text-3xl font-semibold tracking-tight sm:text-4xl">
-          <GreetingText fullName={user.fullName} />
-        </h1>
-        <p className="mt-1 text-sm text-muted-foreground">Org-wide visibility across every client, team, and brand.</p>
+        <h1 className="font-heading text-3xl font-semibold tracking-tight sm:text-4xl">Dashboard</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Organization workload, upcoming deadlines, client health, and operational attention.
+        </p>
         <SearchTriggerBar
           variant="hero"
           placeholder="Search clients, tasks, actions…"
@@ -101,6 +102,7 @@ export function SuperadminDashboard({ user }: { user: User }) {
               />
             ),
           }}
+          viewAllHref="/dashboard/admin/users"
         />
         <StatCard
           label="Active tasks"
@@ -155,27 +157,40 @@ export function SuperadminDashboard({ user }: { user: User }) {
         />
       </div>
 
+      <NeedsAttentionStrip
+        teamMembers={staff}
+        teamTasks={tasks}
+        atRiskCompanies={companies}
+        projects={projects}
+        className={STAGGER_ITEM_CLASS}
+        style={staggerDelay(4)}
+      />
+
       <SectionBreak num="01" label="Overview" />
 
       <div className="grid gap-4 lg:grid-cols-3">
-        <div className={cn("lg:col-span-2", STAGGER_ITEM_CLASS)} style={staggerDelay(0)}>
+        <div className={cn("min-w-0 lg:col-span-2", STAGGER_ITEM_CLASS)} style={staggerDelay(0)}>
           <TeamWorkloadCard members={staff} tasks={tasks} />
         </div>
-        <ClientHealthOverviewCard companies={companies} projects={projects} className={STAGGER_ITEM_CLASS} style={staggerDelay(1)} />
+        <ClientHealthOverviewCard companies={companies} projects={projects} className={cn("min-w-0", STAGGER_ITEM_CLASS)} style={staggerDelay(1)} />
       </div>
 
       <SectionBreak num="02" label="Across Brands & Activity" />
 
       <div className="grid gap-4 lg:grid-cols-3">
-        <div className={cn("lg:col-span-2", STAGGER_ITEM_CLASS)} style={staggerDelay(0)}>
-          <TeamActivityCard tasks={tasks} handoffs={handoffs} title="Recent Firm Activity" />
+        <div className={cn("min-w-0 lg:col-span-2", STAGGER_ITEM_CLASS)} style={staggerDelay(0)}>
+          <TeamActivityCard tasks={tasks} handoffs={handoffs} />
         </div>
-        <div className={cn("flex flex-col gap-4", STAGGER_ITEM_CLASS)} style={staggerDelay(1)}>
+        <div className={cn("min-w-0 flex flex-col gap-4", STAGGER_ITEM_CLASS)} style={staggerDelay(1)}>
           <BrandSnapshotCard brands={brands} companies={companies} tasks={tasks} />
           <RecurringWorkDueCard workstreams={workstreams} />
-          <UpcomingDeadlinesCard tasks={tasks} />
+          <UpcomingDeadlinesCard tasks={tasks} title="Organization Upcoming" />
         </div>
       </div>
+
+      <SectionBreak num="03" label="Notifications" />
+
+      <RecentNotificationsCard />
 
       <TaskDrawer
         taskId={drawerTaskId}

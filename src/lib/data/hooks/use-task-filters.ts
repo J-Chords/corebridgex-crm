@@ -74,12 +74,16 @@ function readPersistedFilters(storageKey: string): TaskFilters | null {
  * navigation causes, for the lifetime of the browser tab; omitting it keeps the original
  * in-memory-only behavior (still the right choice for a screen that shouldn't remember state, e.g.
  * an ephemeral dialog). Each page needs its own key so unrelated screens never leak filters into
- * each other.
+ * each other. `initialFilters` overrides individual `DEFAULT_TASK_FILTERS` fields for the very
+ * first mount only (e.g. a My Day scoped to the viewer's own assignee by default) — it never
+ * overrides a value already persisted under `storageKey`, so a viewer's own explicit filter choice
+ * always wins over the page's default.
  */
-export function useTaskFilters(storageKey?: string) {
-  const [filters, setFilters] = useState<TaskFilters>(() =>
-    storageKey ? (readPersistedFilters(storageKey) ?? DEFAULT_TASK_FILTERS) : DEFAULT_TASK_FILTERS
-  );
+export function useTaskFilters(storageKey?: string, initialFilters?: Partial<TaskFilters>) {
+  const [filters, setFilters] = useState<TaskFilters>(() => {
+    const base = initialFilters ? { ...DEFAULT_TASK_FILTERS, ...initialFilters } : DEFAULT_TASK_FILTERS;
+    return storageKey ? (readPersistedFilters(storageKey) ?? base) : base;
+  });
   const patch = (next: Partial<TaskFilters>) =>
     setFilters((f) => {
       const merged = { ...f, ...next };

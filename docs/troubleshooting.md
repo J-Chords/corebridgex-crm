@@ -26,6 +26,16 @@ Mock data lives in a single in-memory module-level object (`mock-db.ts`) — no 
 
 Two migrations dated 2026-09-11 still say "NOT YET APPLIED TO THE HOSTED PROJECT" in their own file header, but were in fact applied and verified against hosted Supabase shortly after being written — nobody went back to update the comment post-deployment. Treat a migration header as a snapshot of intent *at authoring time*, not a live status check. Confirm actual hosted state via `current-state.md` or the Supabase Dashboard, not by reading migration comments.
 
+## A grid item won't shrink below its content's min-content width (the CD-196 mobile overflow)
+
+**Symptom**: Team Lead's Dashboard overflowed horizontally at a ~400px mobile viewport (`document.documentElement.scrollWidth` 573 vs. `clientWidth` 400) — the page wasn't actually using any fixed-pixel width anywhere.
+
+**Root cause**: a grid item's default `min-width` is `auto`, not `0` — meaning a flex/grid child won't shrink narrower than its own content's min-content size unless something overrides that default. `<div className="grid gap-4 lg:grid-cols-3">` renders as a single implicit column below `lg`, so its two child wrapper `<div className="lg:col-span-2">`/`<div className="flex flex-col gap-4">` were each still full grid items — and without `min-w-0`, one of their descendant cards' content (a status pill, a date string, an icon+text row) set a min-content width wide enough to force the whole grid track past the viewport, even though every individual element inside used `truncate`/`min-w-0` correctly at its own level.
+
+**Fix applied**: added `min-w-0` to the grid-item wrapper `<div>`s themselves (`src/components/dashboard/supervisor-dashboard.tsx`, `src/components/dashboard/superadmin-dashboard.tsx`), not to anything inside them.
+
+**Where else this can recur**: any `grid`/`flex` container whose direct child is itself a wrapper `<div>` (not the card component directly) — the wrapper is the thing that needs `min-w-0`, and adding more `truncate`s deeper inside won't fix it. Check new dashboard/My Day grid sections for this pattern before assuming a mobile overflow is caused by the card's own content.
+
 ## Old routes that intentionally redirect
 
 `/dashboard/team-updates` and `/dashboard/team-time` no longer have their own pages — they 307-redirect (via `next.config.ts`) to `/dashboard/team-activity?view=updates`/`?view=time`. This is intentional bookmark-compatibility, not a bug. Similarly, `/dashboard/planner` redirects to `/dashboard/my-day?view=week` — Planner was absorbed into My Day and is not a separate nav destination; don't reintroduce it as one.
