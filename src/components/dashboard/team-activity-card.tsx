@@ -53,12 +53,12 @@ function buildActivityItems(tasks: TaskWithRelations[], handoffs: TeamHandoffAct
 interface TeamActivityCardProps {
   tasks: TaskWithRelations[];
   handoffs: TeamHandoffActivity[];
-  /** Defaults to "Recent Team Activity" — pass e.g. "Recent Firm Activity" for an org-wide (Superadmin) feed. */
+  /** Defaults to "Recent Task Activity" — override only if a surface needs a different label; the underlying feed shape doesn't change. */
   title?: string;
 }
 
 /** Merges two already-tracked signals — task status changes (incl. completions) and handoffs — into one recent-first feed. No separate activity-log subsystem; both come straight from data the app already records. */
-export function TeamActivityCard({ tasks, handoffs, title = "Recent Team Activity" }: TeamActivityCardProps) {
+export function TeamActivityCard({ tasks, handoffs, title = "Recent Task Activity" }: TeamActivityCardProps) {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const allItems = buildActivityItems(tasks, handoffs);
   const items = allItems.slice(0, MAX_ITEMS);

@@ -5,7 +5,6 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { CalendarDays, Grid3x3, LayoutList, Plus } from "lucide-react";
 import type { User, TaskStatus } from "@/lib/data/types";
 import { useMyTasks, useTasks } from "@/lib/data/hooks/use-tasks";
-import { useCompanyLookups } from "@/lib/data/hooks/use-companies";
 import { useRunningTimer } from "@/lib/data/hooks/use-time-entries";
 import {
   useTaskFilters,
@@ -21,11 +20,9 @@ import type { TaskWithRelations } from "@/lib/data/providers/tasks-provider";
 import { TaskFilterBar } from "@/components/tasks/task-filter-bar";
 import { SavedViewsBar } from "@/components/tasks/saved-views-bar";
 import { TASK_STATUS_SELECT_ITEMS } from "@/components/tasks/task-status-badge";
-import { RecentNotificationsCard } from "@/components/dashboard/recent-notifications-card";
 import { UpcomingDeadlinesCard } from "@/components/dashboard/upcoming-deadlines-card";
 import { STATUS_ORDER, EMPTY_BUCKET_COPY, StatusBucketButton, usePersistedStatusBucket } from "@/components/my-day/status-bucket-button";
 import { BucketTaskGrid } from "@/components/my-day/bucket-task-grid";
-import { NeedsAttentionStrip } from "@/components/my-day/needs-attention-strip";
 import { TodayTimeCard } from "@/components/my-day/today-time-card";
 import { DailyUpdateCard } from "@/components/my-day/daily-update-card";
 import { GreetingText } from "@/components/dashboard/greeting-heading";
@@ -55,13 +52,11 @@ interface SupervisorMyDayProps {
 }
 
 /**
- * Supervisor's redesigned My Day — the exact same personal "today" hub as `EmployeeMyDay` (hero,
- * status buckets, task-card grid, timer panel, Upcoming strip; supervisors do their own work too),
- * plus a small "Needs my attention" strip near the top surfacing team-level heads-up items. The
- * personal section is scoped to the supervisor's own tasks (`useMyTasks`); the attention strip is
- * scoped to their team (`useTasks` — already team-scoped by the existing task-visibility gate). MVP
- * Simplification Pass (boss feedback) — Week/Month (Planner's own views, reused as-is) join Today as
- * additional tabs, with the same "My work"/"Team" scope toggle Planner already had.
+ * Supervisor's My Day — the exact same personal "today" hub as `EmployeeMyDay` (hero, status
+ * buckets, task-card grid, timer panel, Upcoming card; supervisors do their own work too). My
+ * Day stays personal-by-default even for a Supervisor: the one deliberate exception is Week/Month's
+ * "My work"/"Team" scope toggle below, defaulting to "My work". Team-level oversight (workload,
+ * client health, who needs attention) lives on the Dashboard, not here — see `decisions.md`.
  */
 export function SupervisorMyDay({ user }: SupervisorMyDayProps) {
   const router = useRouter();
@@ -83,12 +78,9 @@ export function SupervisorMyDay({ user }: SupervisorMyDayProps) {
   const workstreamOptions = useWorkstreamOptionsFromTasks(tasks);
   const runningTaskId = runningTimer?.taskId ?? null;
 
-  // Team-level data for both the "Needs my attention" strip and the Week/Month "Team" scope — same
-  // sources/gates the Supervisor dashboard already uses (useTasks() is team-scoped for a supervisor
-  // via the existing task-visibility gate; assignableStaff is the same team partition used there).
+  // Team-scoped tasks, for the Week/Month "Team" scope toggle only — same gate the Supervisor
+  // Dashboard uses (useTasks() is already team-scoped for a Supervisor via the task-visibility gate).
   const { tasks: teamTasks } = useTasks();
-  const { assignableStaff } = useCompanyLookups();
-  const teamMembers = assignableStaff.filter((u) => u.id !== user.id);
 
   function openTask(taskId: string) {
     router.push(`/dashboard/tasks/${taskId}`);
@@ -178,15 +170,6 @@ export function SupervisorMyDay({ user }: SupervisorMyDayProps) {
       </div>
 
       {view === "today" && <SearchTriggerBar variant="pill" placeholder="Search clients, tasks, actions…" />}
-
-      {view === "today" && (
-        <NeedsAttentionStrip
-          teamMembers={teamMembers}
-          teamTasks={teamTasks}
-          className={STAGGER_ITEM_CLASS}
-          style={staggerDelay(0)}
-        />
-      )}
 
       {view === "today" &&
         (!tasksLoading && !hasAnyTasks ? (
@@ -287,20 +270,20 @@ export function SupervisorMyDay({ user }: SupervisorMyDayProps) {
           );
         })()}
 
-      <SectionBreak num="01" label="Time & Deadlines" />
+      {view === "today" && (
+        <>
+          <SectionBreak num="01" label="Time & Deadlines" />
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <TodayTimeCard className={STAGGER_ITEM_CLASS} style={staggerDelay(0)} />
-        <UpcomingDeadlinesCard tasks={tasks} className={STAGGER_ITEM_CLASS} style={staggerDelay(1)} />
-      </div>
+          <div className="grid gap-4 lg:grid-cols-2">
+            <TodayTimeCard className={STAGGER_ITEM_CLASS} style={staggerDelay(0)} />
+            <UpcomingDeadlinesCard tasks={tasks} className={STAGGER_ITEM_CLASS} style={staggerDelay(1)} />
+          </div>
 
-      <SectionBreak num="02" label="Daily Update" />
+          <SectionBreak num="02" label="Daily Update" />
 
-      <DailyUpdateCard />
-
-      <SectionBreak num="03" label="Activity" />
-
-      <RecentNotificationsCard />
+          <DailyUpdateCard />
+        </>
+      )}
 
       <TaskFormDialog open={taskDialogOpen} onOpenChange={setTaskDialogOpen} mode="create" onSaved={refreshTasks} />
       {editingTask && (

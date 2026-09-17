@@ -1,11 +1,11 @@
 # Current State
 
-**Last verified: 2026-09-15.** This document changes often — re-verify against Jira and `git log`/`gh pr list` before relying on it for anything consequential.
+**Last verified: 2026-09-16.** This document changes often — re-verify against Jira and `git log`/`gh pr list` before relying on it for anything consequential.
 
 ## Current `main`
 
 ```
-084393e45a5316db78a9fc986a66807ce13b7d4f
+0c077827e453c8e7da44aeffd5cc2e4731952d51
 ```
 
 Verify freshly with `git rev-parse origin/main`.
@@ -24,6 +24,7 @@ Both are merged into `main` and validated (TypeScript/ESLint/all four provider b
 | Ticket | Summary | Status |
 |---|---|---|
 | **CD-193** | Normalize local-date handling across task and dashboard date surfaces — the remaining UTC-slice anti-pattern instances not covered by CD-190's narrower fix (due-date/overdue classification, various default-date fields, dashboard/My Day date displays) | `New` — not started, not assigned a branch |
+| **CD-196** | Clarify Dashboard and My Day information architecture — role-scoped overview (Dashboard) vs. personal execution (My Day), Notifications/Needs Attention/Upcoming placement cleanup, Admin personal-default schedule fix, Team Lead mobile Dashboard overflow fix, Dashboard KPI drill-down made read-only/navigation-oriented | `Code review` — branch `feature/CD-196-dashboard-myday-information-architecture`, implemented and validated (TypeScript/ESLint/all 4 provider builds/isolated-mock role QA all passed across all 9 role×surface combinations at 400px), PR opened against `main`, not yet merged — see the repo's PR list for the exact number |
 
 ## Deployment
 

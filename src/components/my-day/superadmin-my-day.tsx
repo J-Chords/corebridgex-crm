@@ -5,8 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { CalendarDays, Grid3x3, LayoutList, Plus } from "lucide-react";
 import type { User, TaskStatus } from "@/lib/data/types";
 import { useMyTasks, useTasks } from "@/lib/data/hooks/use-tasks";
-import { useCompanies, useCompanyLookups } from "@/lib/data/hooks/use-companies";
-import { useProjects } from "@/lib/data/hooks/use-projects";
+import { useCompanyLookups } from "@/lib/data/hooks/use-companies";
 import { useRunningTimer } from "@/lib/data/hooks/use-time-entries";
 import {
   useTaskFilters,
@@ -22,11 +21,9 @@ import type { TaskWithRelations } from "@/lib/data/providers/tasks-provider";
 import { TaskFilterBar } from "@/components/tasks/task-filter-bar";
 import { SavedViewsBar } from "@/components/tasks/saved-views-bar";
 import { TASK_STATUS_SELECT_ITEMS } from "@/components/tasks/task-status-badge";
-import { RecentNotificationsCard } from "@/components/dashboard/recent-notifications-card";
 import { UpcomingDeadlinesCard } from "@/components/dashboard/upcoming-deadlines-card";
 import { STATUS_ORDER, EMPTY_BUCKET_COPY, StatusBucketButton, usePersistedStatusBucket } from "@/components/my-day/status-bucket-button";
 import { BucketTaskGrid } from "@/components/my-day/bucket-task-grid";
-import { NeedsAttentionStrip } from "@/components/my-day/needs-attention-strip";
 import { TodayTimeCard } from "@/components/my-day/today-time-card";
 import { DailyUpdateCard } from "@/components/my-day/daily-update-card";
 import { GreetingText } from "@/components/dashboard/greeting-heading";
@@ -56,15 +53,12 @@ interface SuperadminMyDayProps {
 }
 
 /**
- * Superadmin's redesigned My Day — the same personal "today" hub as `EmployeeMyDay`/`SupervisorMyDay`
- * (superadmins do their own work too), plus the same "Needs my attention" strip pattern Supervisor
- * introduced, fed org-wide data instead of team-scoped data: every active staff member (not just
- * direct reports), org-wide tasks, and — Superadmin-only — at-risk clients from the existing Client
- * Health Score. No new visibility rules: every source here is exactly what the Superadmin dashboard
- * already fetches, since a superadmin's existing gates already resolve to "everything." MVP
- * Simplification Pass (boss feedback) — Week/Month (Planner's own views, reused as-is) join Today as
- * additional tabs, org-wide by default with an Assignee filter to narrow down, matching exactly what
- * Planner already did for this role (no separate scope toggle needed — the filter bar already covers it).
+ * Superadmin's My Day — the same personal "today" hub as `EmployeeMyDay`/`SupervisorMyDay`
+ * (superadmins do their own work too). My Day stays personal-by-default even for an Admin: Week/Month
+ * defaults its schedule to the Admin's own assigned tasks (`useTaskFilters`'s `initialFilters`), with
+ * the existing Assignee filter available to explicitly widen to another person or "All assignees" —
+ * never org-wide by default. Org-wide oversight (workload, client health, who needs attention) lives
+ * on the Dashboard, not here — see `decisions.md`.
  */
 export function SuperadminMyDay({ user }: SuperadminMyDayProps) {
   const router = useRouter();
@@ -80,19 +74,19 @@ export function SuperadminMyDay({ user }: SuperadminMyDayProps) {
   });
   const [weekAnchor, setWeekAnchor] = useState(() => formatDateOnly(startOfWeekMonday(new Date())));
   const [monthAnchor, setMonthAnchor] = useState(() => todayDateOnly());
-  const { filters, patch } = useTaskFilters("my-day");
+  // Personal-by-default (Phase 15 correction): an Admin's Week/Month schedule now starts scoped to
+  // their own tasks, matching every other role's My Day, instead of inheriting DEFAULT_TASK_FILTERS'
+  // org-wide "all" — the Assignee filter below still lets them explicitly widen it.
+  const { filters, patch } = useTaskFilters("my-day", { assigneeId: user.id });
   const companyOptions = useCompanyOptionsFromTasks(tasks);
   const workstreamOptions = useWorkstreamOptionsFromTasks(tasks);
   const runningTaskId = runningTimer?.taskId ?? null;
 
-  // Org-wide data for the "Needs my attention" strip and the Week/Month schedule — same sources
-  // the Superadmin dashboard already uses (useTasks()/useCompanies() already return everything for
-  // a superadmin).
+  // Org-wide tasks for the Week/Month schedule — same source the Superadmin Dashboard already uses
+  // (useTasks() already returns everything for a superadmin); narrowed to "just me" by the assignee
+  // filter's own default above, widened explicitly via the Assignee control in the filter bar.
   const { tasks: orgTasks } = useTasks();
-  const { companies } = useCompanies();
-  const { projects } = useProjects();
   const { assignableStaff } = useCompanyLookups();
-  const staff = assignableStaff.filter((u) => u.id !== user.id);
 
   function openTask(taskId: string) {
     router.push(`/dashboard/tasks/${taskId}`);
@@ -170,17 +164,6 @@ export function SuperadminMyDay({ user }: SuperadminMyDayProps) {
       </div>
 
       {view === "today" && <SearchTriggerBar variant="pill" placeholder="Search clients, tasks, actions…" />}
-
-      {view === "today" && (
-        <NeedsAttentionStrip
-          teamMembers={staff}
-          teamTasks={orgTasks}
-          atRiskCompanies={companies}
-          projects={projects}
-          className={STAGGER_ITEM_CLASS}
-          style={staggerDelay(0)}
-        />
-      )}
 
       {view === "today" &&
         (!tasksLoading && !hasAnyTasks ? (
@@ -282,29 +265,29 @@ export function SuperadminMyDay({ user }: SuperadminMyDayProps) {
           );
         })()}
 
-      <SectionBreak num="01" label="Time & Deadlines" />
+      {view === "today" && (
+        <>
+          <SectionBreak num="01" label="Time & Deadlines" />
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <TodayTimeCard className={STAGGER_ITEM_CLASS} style={staggerDelay(0)} />
-        <UpcomingDeadlinesCard tasks={tasks} className={STAGGER_ITEM_CLASS} style={staggerDelay(1)} />
-      </div>
+          <div className="grid gap-4 lg:grid-cols-2">
+            <TodayTimeCard className={STAGGER_ITEM_CLASS} style={staggerDelay(0)} />
+            <UpcomingDeadlinesCard tasks={tasks} className={STAGGER_ITEM_CLASS} style={staggerDelay(1)} />
+          </div>
 
-      {/* CD-162 post-manual-QA pass — Client Visits removed from the visible MVP surface entirely
-       * (there is no Account Manager role yet, so this had no real owner in the current product).
-       * The underlying `visit-entries-provider`/types/hosted schema and `daily-visit-hours-card.tsx`
-       * (plus its Plan/Record dialogs) are all left completely untouched — this was the only
-       * remaining place any of it was reachable in the UI (Phase 11D had already narrowed it from
-       * Employee/Supervisor down to Superadmin-only), so unlinking it here is enough to satisfy "not
-       * in the current Admin, Team Lead, or Employee active experience." Re-link it here (or wire it
-       * to a future Account Manager surface) when that role exists. */}
+          {/* CD-162 post-manual-QA pass — Client Visits removed from the visible MVP surface entirely
+           * (there is no Account Manager role yet, so this had no real owner in the current product).
+           * The underlying `visit-entries-provider`/types/hosted schema and `daily-visit-hours-card.tsx`
+           * (plus its Plan/Record dialogs) are all left completely untouched — this was the only
+           * remaining place any of it was reachable in the UI (Phase 11D had already narrowed it from
+           * Employee/Supervisor down to Superadmin-only), so unlinking it here is enough to satisfy "not
+           * in the current Admin, Team Lead, or Employee active experience." Re-link it here (or wire it
+           * to a future Account Manager surface) when that role exists. */}
 
-      <SectionBreak num="02" label="Daily Update" />
+          <SectionBreak num="02" label="Daily Update" />
 
-      <DailyUpdateCard />
-
-      <SectionBreak num="03" label="Activity" />
-
-      <RecentNotificationsCard />
+          <DailyUpdateCard />
+        </>
+      )}
 
       <TaskFormDialog open={taskDialogOpen} onOpenChange={setTaskDialogOpen} mode="create" onSaved={refreshTasks} />
       {editingTask && (

@@ -10,7 +10,6 @@ import { useWorkstreams } from "@/lib/data/hooks/use-workstreams";
 import { projectHrefForCompany } from "@/lib/data/project-display";
 import { useRecentHandoffs } from "@/lib/data/hooks/use-task-handoffs";
 import { isTaskActiveWork } from "@/lib/data/task-display";
-import { GreetingText } from "@/components/dashboard/greeting-heading";
 import { SearchTriggerBar } from "@/components/dashboard/search-trigger-bar";
 import { KpiPreviewList } from "@/components/dashboard/kpi-preview-list";
 import { TaskDrawer } from "@/components/tasks/task-drawer";
@@ -26,6 +25,8 @@ import { ClientHealthOverviewCard } from "@/components/dashboard/client-health-o
 import { RecurringWorkDueCard } from "@/components/dashboard/recurring-work-due-card";
 import { TeamActivityCard } from "@/components/dashboard/team-activity-card";
 import { UpcomingDeadlinesCard } from "@/components/dashboard/upcoming-deadlines-card";
+import { RecentNotificationsCard } from "@/components/dashboard/recent-notifications-card";
+import { NeedsAttentionStrip } from "@/components/my-day/needs-attention-strip";
 import { CardExpandButton } from "@/components/dashboard/card-expand-button";
 import { DashboardWidgetFocusDialog } from "@/components/dashboard/dashboard-widget-focus-dialog";
 import { STAGGER_ITEM_CLASS, staggerDelay } from "@/lib/stagger";
@@ -77,10 +78,10 @@ export function SupervisorDashboard({ user }: { user: User }) {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1 className="font-heading text-3xl font-semibold tracking-tight sm:text-4xl">
-          <GreetingText fullName={user.fullName} />
-        </h1>
-        <p className="mt-1 text-sm text-muted-foreground">Your own work, plus how your team is doing.</p>
+        <h1 className="font-heading text-3xl font-semibold tracking-tight sm:text-4xl">Dashboard</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Team workload, upcoming deadlines, client health, and items needing attention.
+        </p>
         <SearchTriggerBar
           variant="hero"
           placeholder="Search clients, tasks, actions…"
@@ -105,11 +106,6 @@ export function SupervisorDashboard({ user }: { user: User }) {
                   close();
                   setDrawerTaskId(id);
                 }}
-                onEdit={(task) => {
-                  close();
-                  setEditingTask(task);
-                }}
-                onDeleted={refreshTasks}
               />
             ),
           }}
@@ -132,11 +128,6 @@ export function SupervisorDashboard({ user }: { user: User }) {
                   close();
                   setDrawerTaskId(id);
                 }}
-                onEdit={(task) => {
-                  close();
-                  setEditingTask(task);
-                }}
-                onDeleted={refreshTasks}
               />
             ),
           }}
@@ -158,11 +149,6 @@ export function SupervisorDashboard({ user }: { user: User }) {
                   close();
                   setDrawerTaskId(id);
                 }}
-                onEdit={(task) => {
-                  close();
-                  setEditingTask(task);
-                }}
-                onDeleted={refreshTasks}
               />
             ),
           }}
@@ -194,15 +180,20 @@ export function SupervisorDashboard({ user }: { user: User }) {
         />
       </div>
 
+      <NeedsAttentionStrip teamMembers={teamMembers} teamTasks={tasks} className={STAGGER_ITEM_CLASS} style={staggerDelay(4)} />
+
       <SectionBreak num="01" label="Team Attention" />
 
-      <div className="grid gap-4 lg:grid-cols-3">
-        <div className={cn("lg:col-span-2", STAGGER_ITEM_CLASS)} style={staggerDelay(0)}>
-          <TeamWorkloadCard members={teamMembers} tasks={tasks} />
-        </div>
-        <div className={cn("flex flex-col gap-4", STAGGER_ITEM_CLASS)} style={staggerDelay(1)}>
-          <ClientHealthOverviewCard companies={companies} projects={projects} />
-          <Card>
+      <div className="flex flex-col gap-4">
+        <TeamWorkloadCard members={teamMembers} tasks={tasks} className={STAGGER_ITEM_CLASS} style={staggerDelay(0)} />
+        <div className="grid items-start gap-4 lg:grid-cols-2">
+          <ClientHealthOverviewCard
+            companies={companies}
+            projects={projects}
+            className={cn("min-w-0", STAGGER_ITEM_CLASS)}
+            style={staggerDelay(1)}
+          />
+          <Card className={cn("min-w-0", STAGGER_ITEM_CLASS)} style={staggerDelay(2)}>
             <CardHeader>
               <CardTitle className="text-base">Team Tasks by Status</CardTitle>
               <CardAction>
@@ -238,15 +229,19 @@ export function SupervisorDashboard({ user }: { user: User }) {
 
       <SectionBreak num="02" label="Review & Activity" />
 
-      <div className="grid gap-4 lg:grid-cols-3">
-        <div className={cn("lg:col-span-2", STAGGER_ITEM_CLASS)} style={staggerDelay(0)}>
+      <div className="grid items-start gap-4 lg:grid-cols-3">
+        <div className={cn("min-w-0 lg:col-span-2", STAGGER_ITEM_CLASS)} style={staggerDelay(0)}>
           <TeamActivityCard tasks={tasks} handoffs={handoffs} />
         </div>
-        <div className={cn("flex flex-col gap-4", STAGGER_ITEM_CLASS)} style={staggerDelay(1)}>
+        <div className={cn("min-w-0 flex flex-col gap-4", STAGGER_ITEM_CLASS)} style={staggerDelay(1)}>
           <RecurringWorkDueCard workstreams={workstreams} />
-          <UpcomingDeadlinesCard tasks={tasks} />
+          <UpcomingDeadlinesCard tasks={tasks} title="Team Upcoming" />
         </div>
       </div>
+
+      <SectionBreak num="03" label="Notifications" />
+
+      <RecentNotificationsCard />
 
       {editingTask && (
         <TaskFormDialog

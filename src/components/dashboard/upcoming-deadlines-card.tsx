@@ -43,12 +43,14 @@ const BUCKET_ORDER: { key: UpcomingBucket; label: string }[] = [
 
 interface UpcomingDeadlinesCardProps {
   tasks: TaskWithRelations[];
+  /** Defaults to "Upcoming" — a management Dashboard should pass an explicit scope label (e.g. "Team Upcoming", "Organization Upcoming") so it's never confused with a viewer's own personal Upcoming on My Day. */
+  title?: string;
   className?: string;
   style?: CSSProperties;
 }
 
 /** Lightweight "what's coming up" list, grouped Today/This week/Later — not a calendar, just upcoming due dates ordered by time. */
-export function UpcomingDeadlinesCard({ tasks, className, style }: UpcomingDeadlinesCardProps) {
+export function UpcomingDeadlinesCard({ tasks, title = "Upcoming", className, style }: UpcomingDeadlinesCardProps) {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const today = todayDateString();
   const weekEnd = addDays(today, 6);
@@ -102,9 +104,9 @@ export function UpcomingDeadlinesCard({ tasks, className, style }: UpcomingDeadl
   return (
     <Card className={className} style={style}>
       <CardHeader>
-        <CardTitle className="text-base">Upcoming</CardTitle>
+        <CardTitle className="text-base">{title}</CardTitle>
         <CardAction>
-          <CardExpandButton onClick={() => setDrawerOpen(true)} label="Expand Upcoming" />
+          <CardExpandButton onClick={() => setDrawerOpen(true)} label={`Expand ${title}`} />
         </CardAction>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
@@ -126,7 +128,7 @@ export function UpcomingDeadlinesCard({ tasks, className, style }: UpcomingDeadl
         )}
       </CardContent>
 
-      <DashboardWidgetFocusDialog open={drawerOpen} onOpenChange={setDrawerOpen} title="Upcoming Deadlines" description={`${upcoming.length} task${upcoming.length === 1 ? "" : "s"}`}>
+      <DashboardWidgetFocusDialog open={drawerOpen} onOpenChange={setDrawerOpen} title={title} description={`${upcoming.length} task${upcoming.length === 1 ? "" : "s"}`}>
         {upcoming.length === 0 ? (
           <p className="text-sm text-muted-foreground">Nothing on the horizon — you&apos;re all clear ✨</p>
         ) : (

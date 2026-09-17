@@ -20,7 +20,6 @@ import type { TaskWithRelations } from "@/lib/data/providers/tasks-provider";
 import { TaskFilterBar } from "@/components/tasks/task-filter-bar";
 import { SavedViewsBar } from "@/components/tasks/saved-views-bar";
 import { TASK_STATUS_SELECT_ITEMS } from "@/components/tasks/task-status-badge";
-import { RecentNotificationsCard } from "@/components/dashboard/recent-notifications-card";
 import { UpcomingDeadlinesCard } from "@/components/dashboard/upcoming-deadlines-card";
 import { STATUS_ORDER, EMPTY_BUCKET_COPY, StatusBucketButton, usePersistedStatusBucket } from "@/components/my-day/status-bucket-button";
 import { BucketTaskGrid } from "@/components/my-day/bucket-task-grid";
@@ -253,20 +252,20 @@ export function EmployeeMyDay({ user }: EmployeeMyDayProps) {
         </div>
       )}
 
-      <SectionBreak num="01" label="Time & Deadlines" />
+      {view === "today" && (
+        <>
+          <SectionBreak num="01" label="Time & Deadlines" />
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <TodayTimeCard className={STAGGER_ITEM_CLASS} style={staggerDelay(0)} />
-        <UpcomingDeadlinesCard tasks={tasks} className={STAGGER_ITEM_CLASS} style={staggerDelay(1)} />
-      </div>
+          <div className="grid gap-4 lg:grid-cols-2">
+            <TodayTimeCard className={STAGGER_ITEM_CLASS} style={staggerDelay(0)} />
+            <UpcomingDeadlinesCard tasks={tasks} className={STAGGER_ITEM_CLASS} style={staggerDelay(1)} />
+          </div>
 
-      <SectionBreak num="02" label="Daily Update" />
+          <SectionBreak num="02" label="Daily Update" />
 
-      <DailyUpdateCard />
-
-      <SectionBreak num="03" label="Activity" />
-
-      <RecentNotificationsCard />
+          <DailyUpdateCard />
+        </>
+      )}
 
       <TaskFormDialog open={taskDialogOpen} onOpenChange={setTaskDialogOpen} mode="create" onSaved={refreshTasks} />
       {editingTask && (
