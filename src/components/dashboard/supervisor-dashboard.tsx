@@ -184,13 +184,16 @@ export function SupervisorDashboard({ user }: { user: User }) {
 
       <SectionBreak num="01" label="Team Attention" />
 
-      <div className="grid gap-4 lg:grid-cols-3">
-        <div className={cn("min-w-0 lg:col-span-2", STAGGER_ITEM_CLASS)} style={staggerDelay(0)}>
-          <TeamWorkloadCard members={teamMembers} tasks={tasks} />
-        </div>
-        <div className={cn("min-w-0 flex flex-col gap-4", STAGGER_ITEM_CLASS)} style={staggerDelay(1)}>
-          <ClientHealthOverviewCard companies={companies} projects={projects} />
-          <Card>
+      <div className="flex flex-col gap-4">
+        <TeamWorkloadCard members={teamMembers} tasks={tasks} className={STAGGER_ITEM_CLASS} style={staggerDelay(0)} />
+        <div className="grid items-start gap-4 lg:grid-cols-2">
+          <ClientHealthOverviewCard
+            companies={companies}
+            projects={projects}
+            className={cn("min-w-0", STAGGER_ITEM_CLASS)}
+            style={staggerDelay(1)}
+          />
+          <Card className={cn("min-w-0", STAGGER_ITEM_CLASS)} style={staggerDelay(2)}>
             <CardHeader>
               <CardTitle className="text-base">Team Tasks by Status</CardTitle>
               <CardAction>
@@ -226,7 +229,7 @@ export function SupervisorDashboard({ user }: { user: User }) {
 
       <SectionBreak num="02" label="Review & Activity" />
 
-      <div className="grid gap-4 lg:grid-cols-3">
+      <div className="grid items-start gap-4 lg:grid-cols-3">
         <div className={cn("min-w-0 lg:col-span-2", STAGGER_ITEM_CLASS)} style={staggerDelay(0)}>
           <TeamActivityCard tasks={tasks} handoffs={handoffs} />
         </div>

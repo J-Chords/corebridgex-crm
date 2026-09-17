@@ -160,16 +160,14 @@ export function SuperadminDashboard({ user }: { user: User }) {
 
       <SectionBreak num="01" label="Overview" />
 
-      <div className="grid gap-4 lg:grid-cols-3">
-        <div className={cn("min-w-0 lg:col-span-2", STAGGER_ITEM_CLASS)} style={staggerDelay(0)}>
-          <TeamWorkloadCard members={staff} tasks={tasks} />
-        </div>
-        <ClientHealthOverviewCard companies={companies} projects={projects} className={cn("min-w-0", STAGGER_ITEM_CLASS)} style={staggerDelay(1)} />
+      <div className="flex flex-col gap-4">
+        <TeamWorkloadCard members={staff} tasks={tasks} className={STAGGER_ITEM_CLASS} style={staggerDelay(0)} />
+        <ClientHealthOverviewCard companies={companies} projects={projects} className={STAGGER_ITEM_CLASS} style={staggerDelay(1)} />
       </div>
 
       <SectionBreak num="02" label="Across Brands & Activity" />
 
-      <div className="grid gap-4 lg:grid-cols-3">
+      <div className="grid items-start gap-4 lg:grid-cols-3">
         <div className={cn("min-w-0 lg:col-span-2", STAGGER_ITEM_CLASS)} style={staggerDelay(0)}>
           <TeamActivityCard tasks={tasks} handoffs={handoffs} />
         </div>

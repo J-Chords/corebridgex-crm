@@ -2,9 +2,12 @@
 
 import Link from "next/link";
 import { Bell, CheckCheck } from "lucide-react";
+import { useAuth } from "@/lib/auth/auth-context";
 import { useNotifications } from "@/lib/data/hooks/use-notifications";
 import { notificationHref } from "@/lib/data/notification-links";
 import { Button } from "@/components/ui/button";
+import { NotificationContent } from "@/components/dashboard/notification-display";
+import { cn } from "@/lib/utils";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -15,17 +18,12 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-function timeAgo(iso: string) {
-  const diffMs = Date.now() - new Date(iso).getTime();
-  const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-  if (days <= 0) return "Today";
-  if (days === 1) return "Yesterday";
-  return `${days}d ago`;
-}
-
 export function NotificationsBell() {
+  const { user } = useAuth();
   const { notifications, markRead, markAllRead } = useNotifications();
   const unreadCount = notifications.filter((n) => !n.read).length;
+
+  if (!user) return null;
 
   return (
     <DropdownMenu>
@@ -65,27 +63,23 @@ export function NotificationsBell() {
           {notifications.length === 0 ? (
             <p className="px-2 py-3 text-sm text-muted-foreground">No notifications yet.</p>
           ) : (
-            notifications.slice(0, 8).map((notification) => (
-              <DropdownMenuItem
-                key={notification.id}
-                render={<Link href={notificationHref(notification)} />}
-                onClick={() => {
-                  if (!notification.read) markRead(notification.id);
-                }}
-              >
-                <div className="flex w-full items-start gap-2">
-                  {!notification.read && (
-                    <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-primary" aria-hidden="true" />
-                  )}
-                  <div className="flex flex-col gap-0.5">
-                    <span className={notification.read ? "text-sm text-muted-foreground" : "text-sm font-medium"}>
-                      {notification.message}
-                    </span>
-                    <span className="text-xs text-muted-foreground">{timeAgo(notification.createdAt)}</span>
+            notifications.slice(0, 8).map((notification) => {
+              const href = notificationHref(notification, user);
+              return (
+                <DropdownMenuItem
+                  key={notification.id}
+                  disabled={!href}
+                  render={href ? <Link href={href} /> : undefined}
+                  onClick={() => {
+                    if (href && !notification.read) markRead(notification.id);
+                  }}
+                >
+                  <div className={cn("flex w-full items-start gap-2", !href && "cursor-default")}>
+                    <NotificationContent notification={notification} clickable={Boolean(href)} />
                   </div>
-                </div>
-              </DropdownMenuItem>
-            ))
+                </DropdownMenuItem>
+              );
+            })
           )}
         </DropdownMenuGroup>
       </DropdownMenuContent>

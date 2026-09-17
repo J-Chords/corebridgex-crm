@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type CSSProperties } from "react";
 import Link from "next/link";
 import type { User } from "@/lib/data/types";
 import type { TaskWithRelations } from "@/lib/data/providers/tasks-provider";
@@ -27,10 +27,12 @@ const MAX_ROWS = 6;
 interface TeamWorkloadCardProps {
   members: User[];
   tasks: TaskWithRelations[];
+  className?: string;
+  style?: CSSProperties;
 }
 
 /** Per-person active-task load across a team — doubles as a lightweight capacity view. Real data only: no invented capacity target, just active task counts. */
-export function TeamWorkloadCard({ members, tasks }: TeamWorkloadCardProps) {
+export function TeamWorkloadCard({ members, tasks, className, style }: TeamWorkloadCardProps) {
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   const rows = members.map((member) => {
@@ -78,7 +80,7 @@ export function TeamWorkloadCard({ members, tasks }: TeamWorkloadCardProps) {
   }
 
   return (
-    <Card>
+    <Card className={className} style={style}>
       <CardHeader>
         <CardTitle className="text-base">Team Workload</CardTitle>
         <CardAction>
