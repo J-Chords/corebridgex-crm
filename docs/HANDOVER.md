@@ -16,7 +16,7 @@ An internal Project Management / PSA (Professional Services Automation) web app 
 ## 3. Current `main` head
 
 ```
-0c077827e453c8e7da44aeffd5cc2e4731952d51
+fa65e339f73123c34089679df07be583a5f44ad7
 ```
 
 Re-verify with `git rev-parse origin/main` — this file goes stale the moment another PR merges. See `current-state.md` for the live picture.
@@ -26,15 +26,15 @@ Re-verify with `git rev-parse origin/main` — this file goes stale the moment a
 - **CD-162** — Boss Feedback MVP Simplification (Dashboard naming, My Day/Planner merge, Project tab consolidation 9→7, Service/Task hierarchy UI polish, employee-service-activity authorization parity). PR #1, merged.
 - **CD-190** — Merge Team Updates + Team Time into Team Activity, plus a local-calendar-date time-entry stabilization fix. PR #2, merged.
 - **CD-194** — Technical documentation and developer handover (this document set). PR #3, merged.
+- **CD-196** — Clarify Dashboard and My Day information architecture, plus a Product Owner-approved follow-up polish pass (Team Workload layout fix, Services-inspired Notifications redesign, notification safe-routing fix). PR #4, merged. Locks Dashboard = role-scoped overview/attention, My Day = personal execution/planning (personal by default for every role); see `decisions.md` for the full placement decisions.
 
 ## 5. Open ticket(s)
 
-- **CD-196** — Clarify Dashboard and My Day information architecture. Status `Code review`, branch `feature/CD-196-dashboard-myday-information-architecture`, PR open against `main`, not yet merged. Locks Dashboard = role-scoped overview/attention, My Day = personal execution/planning (personal by default for every role); see `decisions.md` for the full placement decisions (Notifications, Needs Attention, Upcoming, header differentiation) and the two real defects it fixes (Admin's My Day schedule defaulting org-wide instead of personal; a Team Lead mobile Dashboard horizontal-overflow bug).
 - **CD-193** — Normalize local-date handling across task and dashboard date surfaces. Status `New`, not started, no branch created. See `decisions.md` and `troubleshooting.md` for exactly what this covers and what it deliberately excludes (CD-190 already fixed the time-entry-specific instance of this bug class).
 
 ## 6. Current Jira states
 
-CD-162, CD-190, and CD-194: `pending deployment`/`Sign-off` (merged + validated, awaiting a hosting decision — see `current-state.md` for each ticket's exact status). CD-196: `Code review`. CD-193: `New`. Full workflow state list and the reasoning behind each transition: `current-state.md`.
+CD-162, CD-190, and CD-196: `pending deployment` (merged + validated, awaiting a hosting decision — see `current-state.md` for each ticket's exact status). CD-194: `Sign-off`. CD-193: `New`. Full workflow state list and the reasoning behind each transition: `current-state.md`.
 
 ## 7. Current deployment state
 
@@ -140,20 +140,20 @@ STACK: Next.js 16.2.11 (App Router — has real breaking changes vs. older Next.
   node_modules/next/dist/docs/ before assuming an API), React 19, TypeScript (strict),
   Tailwind CSS, Supabase (Postgres + Auth).
 
-CURRENT MAIN HEAD: 0c077827e453c8e7da44aeffd5cc2e4731952d51 (re-verify — this drifts)
+CURRENT MAIN HEAD: fa65e339f73123c34089679df07be583a5f44ad7 (re-verify — this drifts)
 
 RECENTLY COMPLETED (merged to main):
 - CD-162: Boss Feedback MVP Simplification (PR #1)
 - CD-190: Merge Team Updates + Team Time into Team Activity, + a local-calendar-date
   time-entry stabilization fix (PR #2)
 - CD-194: Technical documentation and developer handover (PR #3)
-CD-162 and CD-190 currently sit at "pending deployment" (merged + validated, no hosting
-target exists yet to deploy to); CD-194 at "Sign-off".
+- CD-196: Clarify Dashboard and My Day information architecture, plus a Product
+  Owner-approved polish pass (Team Workload layout fix, Services-inspired
+  Notifications redesign, notification safe-routing fix) (PR #4)
+CD-162, CD-190, and CD-196 currently sit at "pending deployment" (merged + validated,
+no hosting target exists yet to deploy to); CD-194 at "Sign-off".
 
 OPEN TICKETS:
-- CD-196 — Clarify Dashboard and My Day information architecture. Status "Code review,"
-  branch feature/CD-196-dashboard-myday-information-architecture, PR open against main,
-  not yet merged. See decisions.md for the full scope.
 - CD-193 — Normalize local-date handling across task and dashboard date surfaces.
   Status "New," not started. Do not implement unless explicitly asked to.
 
