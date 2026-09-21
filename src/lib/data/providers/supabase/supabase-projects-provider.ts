@@ -199,7 +199,6 @@ export const supabaseProjectsProvider: ProjectsProvider = {
       p_project_group_id: input.projectGroupId,
       p_tags: input.tags,
       p_member_user_ids: input.memberUserIds,
-      p_template_id: input.templateId ?? null,
     });
     if (error) throw new Error(error.message);
     const [hydrated] = await hydrate([toProject(data)]);
@@ -229,7 +228,6 @@ export const supabaseProjectsProvider: ProjectsProvider = {
       p_project_group_id: input.projectGroupId,
       p_tags: input.tags,
       p_member_user_ids: input.memberUserIds,
-      p_template_id: input.templateId ?? null,
     });
     if (error) throw new Error(error.message);
     const [hydrated] = await hydrate([toProject(data)]);

@@ -60,13 +60,12 @@ export const mockActivityCatalogProvider: ActivityCatalogProvider = {
     const existing = db.activities.find((a) => a.id === id);
     if (!existing) throw new Error("Activity not found.");
     // Explicit usage proof, not FK-failure inference — mirrors admin_delete_activity's hosted RPC
-    // exactly, since workstream_activities/project_template_activities cascade-delete in the real
-    // schema and would otherwise silently destroy history instead of blocking the delete.
+    // exactly, since workstream_activities cascade-deletes in the real schema and would otherwise
+    // silently destroy history instead of blocking the delete.
     const inUse =
       db.workstreamActivities.some((wa) => wa.activityId === id) ||
       db.tasks.some((t) => t.activityId === id) ||
-      db.projectIssues.some((pi) => pi.activityId === id) ||
-      db.projectTemplateActivities.some((pta) => pta.activityId === id);
+      db.projectIssues.some((pi) => pi.activityId === id);
     if (inUse) {
       throw new Error("This Activity has historical usage and cannot be deleted — deactivate it instead.");
     }
