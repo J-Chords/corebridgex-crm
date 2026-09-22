@@ -81,6 +81,9 @@ Grouped loosely by theme; exact filenames below. Reference this table when tryin
 
 CD-190 (Team Activity merge + local-date fix) introduced **no migration at all** — it's a pure application-layer change, fully compatible with the schema as it stood after CD-162.
 
+### Project Template bundle retirement (CD-205)
+- `20260921090000_retire_project_template_bundle.sql` — drops the dormant `project_templates`/`project_template_services`/`project_template_activities` tables, their RPCs (`create_project_template`/`update_project_template`/`set_project_template_services`/`set_project_template_activities`/`apply_project_template`), and their two trigger functions; repairs `admin_delete_activity` to drop its now-obsolete `project_template_activities` reference; redefines `create_project` to raise a clear exception on a non-null legacy `p_template_id` instead of querying the now-dropped table (the parameter itself stays, for signature compatibility — always `null` from every current caller). Does **not** touch `service_lines`, `workstreams`, `tasks`, `checklist_items`, `projects`, `companies`, or the separate, still-live Service-recipe system (`templates`/`template_tasks`/`template_checklist_items`, `apply_template`, `materialize_template_tasks`, `apply_service_template_to_project`). **NOT yet applied to hosted** — see `current-state.md`; hosted application is gated on a manual read-only row-count/DDL-backup step this session couldn't perform (no authenticated Supabase access).
+
 ## Required environment variables (names only — never values)
 
 | Variable | Required when |

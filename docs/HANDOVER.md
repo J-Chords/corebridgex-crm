@@ -31,10 +31,11 @@ Re-verify with `git rev-parse origin/main` — this file goes stale the moment a
 ## 5. Open ticket(s)
 
 - **CD-193** — Normalize local-date handling across task and dashboard date surfaces. Status `New`, not started, no branch created. See `decisions.md` and `troubleshooting.md` for exactly what this covers and what it deliberately excludes (CD-190 already fixed the time-entry-specific instance of this bug class).
+- **CD-205** — Retire the dormant legacy "Project Template" bundle architecture at the schema/source level. `In Progress`, branch `feature/CD-205-retire-project-template-bundle`, not yet merged. TypeScript/ESLint clean; forward-only migration written but **not yet applied to hosted Supabase** (no authenticated hosted-Supabase access was available to first take the required read-only row-count/DDL backup). The separate, still-live Service-recipe system (`templates`/`template_tasks`/`template_checklist_items`) is explicitly untouched. See `decisions.md` and `data-and-supabase.md`.
 
 ## 6. Current Jira states
 
-CD-162, CD-190, and CD-196: `pending deployment` (merged + validated, awaiting a hosting decision — see `current-state.md` for each ticket's exact status). CD-194: `Sign-off`. CD-193: `New`. Full workflow state list and the reasoning behind each transition: `current-state.md`.
+CD-162, CD-190, and CD-196: `pending deployment` (merged + validated, awaiting a hosting decision — see `current-state.md` for each ticket's exact status). CD-194: `Sign-off`. CD-193: `New`. CD-205: `In Progress`. Full workflow state list and the reasoning behind each transition: `current-state.md`.
 
 ## 7. Current deployment state
 
@@ -156,6 +157,15 @@ no hosting target exists yet to deploy to); CD-194 at "Sign-off".
 OPEN TICKETS:
 - CD-193 — Normalize local-date handling across task and dashboard date surfaces.
   Status "New," not started. Do not implement unless explicitly asked to.
+- CD-205 — Retire the dormant legacy "Project Template" bundle architecture
+  (project_templates/project_template_services/project_template_activities + their
+  RPCs/triggers/RLS/grants + dead provider/hook/type source). Status "In Progress,"
+  branch feature/CD-205-retire-project-template-bundle, not yet merged. Forward-only
+  migration 20260921090000_retire_project_template_bundle.sql written but NOT yet
+  applied to hosted Supabase (no authenticated hosted access was available to first
+  take the required read-only row-count/DDL backup). The separate, still-live
+  Service-recipe system (templates/template_tasks/template_checklist_items,
+  apply_template, Company-detail "Apply template") is explicitly untouched.
 
 DOMAIN HIERARCHY (locked): Project → Service → Activity → Task → Checklist.
 No Subtask level exists — it was built, then deliberately fully removed. "Service" is

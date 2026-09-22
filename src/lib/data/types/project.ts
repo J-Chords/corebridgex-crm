@@ -73,40 +73,6 @@ export interface ProjectMember {
   projectRole: string | null;
 }
 
-/** Optional preset that references (never copies) existing Service Line/Activity catalog rows —
- * see docs/project-level-product-architecture.md's Template architecture section. */
-export interface ProjectTemplate {
-  id: string;
-  name: string;
-  description: string | null;
-  active: boolean;
-  createdById: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-/** Correction — a Project Template bundle entry references an existing Service Template/recipe
- * (the pre-existing `templates` entity, with its own recurrence/default Tasks/checklists), never a
- * bare Service Line. `serviceLineId` is always derived server-side from that recipe (never
- * independently supplied), kept here only for convenient display/filtering. */
-export interface ProjectTemplateServiceConfig {
-  serviceTemplateId: string;
-  serviceLineId: string;
-  activityIds: string[];
-}
-
-/** One step of applying a Project Template bundle onto a Project — "created" a new Workstream, or
- * "merged" selected Activities into one that already existed on that Service Line. Never a
- * duplicate Workstream/Tasks/checklists on repeated application. */
-export interface ProjectTemplateApplyStep {
-  serviceLineId: string;
-  serviceLineName: string;
-  serviceTemplateName: string;
-  status: "created" | "merged";
-  workstreamId: string;
-  activitiesMerged?: number;
-}
-
 /** Singleton row — see `set_project_trash_retention`. `retentionDays === null` means automatic
  * purge is disabled (the default); a positive number is the Admin's own explicit choice. No
  * automatic physical purge is ever scheduled by this codebase — see the architecture doc's

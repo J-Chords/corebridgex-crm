@@ -31,7 +31,6 @@ import type {
   Document,
   ProjectComment,
   ProjectIssue,
-  ProjectTemplate,
   ProjectTrashSettings,
   TimeEntryCorrection,
   VisitEntry,
@@ -96,12 +95,5 @@ export const db = {
   projectGroups: [...seedProjectGroups],
   projectComments: [] as ProjectComment[],
   projectIssues: [] as ProjectIssue[],
-  // Project Level completion pass — Templates, member responsibility (folded into projectMembers'
-  // own rows, see seed-project-members.ts), Trash retention.
-  projectTemplates: [] as ProjectTemplate[],
-  // Correction — each entry references an existing Service Template/recipe (`templates.id`), never
-  // a bare Service Line. serviceLineId is always derived from that recipe, never independent input.
-  projectTemplateServices: [] as { projectTemplateId: string; serviceTemplateId: string; serviceLineId: string }[],
-  projectTemplateActivities: [] as { projectTemplateId: string; serviceTemplateId: string; activityId: string }[],
   projectTrashSettings: { retentionDays: null, updatedAt: new Date().toISOString() } as ProjectTrashSettings,
 };

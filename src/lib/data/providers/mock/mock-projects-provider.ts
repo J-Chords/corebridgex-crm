@@ -4,7 +4,6 @@ import { canAccessProject, canManageProjects } from "../../permissions";
 import { INTERNAL_COMPANY_ID } from "../../constants";
 import { isTaskClosed } from "../../task-display";
 import { db } from "./mock-db";
-import { mockProjectTemplatesProvider } from "./mock-project-templates-provider";
 import { mockCompaniesProvider } from "./mock-companies-provider";
 
 function requireAdmin(viewer: User) {
@@ -136,10 +135,6 @@ export const mockProjectsProvider: ProjectsProvider = {
       throw new Error("Project Group not found.");
     }
 
-    if (input.templateId && !db.projectTemplates.some((t) => t.id === input.templateId && t.active)) {
-      throw new Error("Project Template not found or inactive.");
-    }
-
     const id = crypto.randomUUID();
     const now = new Date().toISOString();
     const project: Project = {
@@ -170,22 +165,14 @@ export const mockProjectsProvider: ProjectsProvider = {
     db.projects = [...db.projects, project];
     syncMembers(id, input.memberUserIds);
 
-    if (input.templateId) {
-      // ONE canonical bundle-apply path — the exact same function "Project -> Services -> Apply
-      // Template" uses on an existing Project (mockProjectTemplatesProvider.applyToProject),
-      // which itself reuses create_workstream's own role validation and the shared Service
-      // Template Task/checklist materialization. Nothing is duplicated here.
-      await mockProjectTemplatesProvider.applyToProject(viewer, input.templateId, id);
-    }
-
     return toProjectWithRelations(project)!;
   },
 
   // Project/client consolidation — the ONE normal "New Project" workflow for a brand-new client.
   // Creates the Company (+ optional primary contact) then delegates entirely to this same
-  // `createProject` for the Project row/Template materialization — never a duplicated insert.
-  // Mock has no real transaction, so failure after the Company is created triggers a best-effort
-  // compensating delete (mirroring the real hosted RPC's genuine transactional rollback).
+  // `createProject` for the Project row — never a duplicated insert. Mock has no real transaction,
+  // so failure after the Company is created triggers a best-effort compensating delete (mirroring
+  // the real hosted RPC's genuine transactional rollback).
   async createClientProject(viewer, input: ClientProjectInput): Promise<ProjectWithRelations> {
     requireManageProjects(viewer);
     if (!input.name.trim()) throw new Error("Title can't be empty.");
@@ -229,7 +216,6 @@ export const mockProjectsProvider: ProjectsProvider = {
         projectGroupId: input.projectGroupId,
         tags: input.tags,
         memberUserIds: input.memberUserIds,
-        templateId: input.templateId,
       });
     } catch (err) {
       db.companies = db.companies.filter((c) => c.id !== company.id);

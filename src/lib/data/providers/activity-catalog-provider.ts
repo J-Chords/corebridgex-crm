@@ -38,10 +38,10 @@ export interface ActivityCatalogProvider {
   setActivityActive(viewer: User, id: string, isActive: boolean): Promise<Activity>;
   /**
    * Hard-deletes only when the Activity has never been used anywhere (workstream_activities/tasks/
-   * project_issues/project_template_activities) — proven explicitly, not merely inferred from a
-   * cascade succeeding, since two of those relationships are ON DELETE CASCADE and would otherwise
-   * silently destroy history instead of blocking the delete. Throws a friendly error directing to
-   * `setActivityActive(id, false)` instead when any usage exists.
+   * project_issues) — proven explicitly, not merely inferred from a cascade succeeding, since
+   * workstream_activities is ON DELETE CASCADE and would otherwise silently destroy history instead
+   * of blocking the delete. Throws a friendly error directing to `setActivityActive(id, false)`
+   * instead when any usage exists.
    */
   deleteActivity(viewer: User, id: string): Promise<void>;
 }

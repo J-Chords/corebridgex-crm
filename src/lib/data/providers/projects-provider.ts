@@ -4,9 +4,6 @@ import type {
   ProjectGroup,
   ProjectIssue,
   ProjectStatus,
-  ProjectTemplate,
-  ProjectTemplateApplyStep,
-  ProjectTemplateServiceConfig,
   ProjectTrashSettings,
   User,
 } from "../types";
@@ -81,9 +78,6 @@ export interface ProjectInput {
   projectGroupId: string | null;
   tags: string[];
   memberUserIds: string[];
-  /** Create-only — ignored by `updateProject`. Optional; materializes the Template's referenced
-   * Services/Activities onto the new Project via the existing canonical `create_workstream` path. */
-  templateId?: string | null;
 }
 
 /**
@@ -116,7 +110,6 @@ export interface ClientProjectInput {
   projectGroupId: string | null;
   tags: string[];
   memberUserIds: string[];
-  templateId?: string | null;
 }
 
 /**
@@ -171,37 +164,6 @@ export interface ProjectsProvider {
    * this codebase (see `ProjectTrashSettings`'s own doc comment for the dependency-audit finding). */
   getTrashSettings(viewer: User): Promise<ProjectTrashSettings>;
   setTrashRetentionDays(viewer: User, days: number | null): Promise<ProjectTrashSettings>;
-}
-
-/**
- * Project Templates — Admin-managed presets that BUNDLE existing Service Templates/recipes (the
- * pre-existing `templates`/`template_tasks`/`template_checklist_items` architecture — see
- * `TemplatesProvider`) onto a Project. Never a second recurrence/default-Task/checklist system:
- * every bundled entry references an existing `templates.id`, and applying materializes that
- * recipe's own recurrence/Tasks/checklists via `TemplatesProvider.applyTemplate`'s Project-aware
- * path (see `docs/project-level-product-architecture.md`'s Template architecture section).
- */
-export interface ProjectTemplatesProvider {
-  listTemplates(viewer: User): Promise<ProjectTemplate[]>;
-  /** The Template's own current Service Template/Activity configuration — read alongside the
-   * template list when managing/selecting one. */
-  getTemplateServices(viewer: User, templateId: string): Promise<ProjectTemplateServiceConfig[]>;
-  createTemplate(viewer: User, name: string, description: string | null): Promise<ProjectTemplate>;
-  updateTemplate(viewer: User, templateId: string, name: string, description: string | null, active: boolean): Promise<ProjectTemplate>;
-  /** Replace-set — the Admin submits the Template's full desired Service Template selection each
-   * time. Each id must be an existing `templates.id` with its own Service Line configured. */
-  setTemplateServices(viewer: User, templateId: string, serviceTemplateIds: string[]): Promise<void>;
-  /** Replace-set for one bundled Service Template's Activities — validated to belong to that
-   * Service Template's own Service Line. */
-  setTemplateActivities(viewer: User, templateId: string, serviceTemplateId: string, activityIds: string[]): Promise<void>;
-  /**
-   * Applies this whole bundle to an already-existing Project ("Project -> Services -> Apply
-   * Template"). Idempotent per Service Line: a Service the Project already has is never
-   * duplicated — only its missing selected Activities are merged in. The resolved lead for every
-   * newly-materialized Service is the Project's own real owner (never fabricated, never
-   * caller-supplied) — same convention Create-Project-with-Template already uses.
-   */
-  applyToProject(viewer: User, projectTemplateId: string, projectId: string): Promise<ProjectTemplateApplyStep[]>;
 }
 
 /** Threaded Project discussion — see `ProjectComment`. A comment's target (Project-root/Task/

@@ -1,6 +1,6 @@
 # Current State
 
-**Last verified: 2026-09-17.** This document changes often — re-verify against Jira and `git log`/`gh pr list` before relying on it for anything consequential.
+**Last verified: 2026-09-21.** This document changes often — re-verify against Jira and `git log`/`gh pr list` before relying on it for anything consequential.
 
 ## Current `main`
 
@@ -19,6 +19,12 @@ Verify freshly with `git rev-parse origin/main`.
 | **CD-196** | Clarify Dashboard and My Day information architecture — role-scoped overview (Dashboard) vs. personal execution (My Day), Notifications/Needs Attention/Upcoming placement cleanup, Admin personal-default schedule fix, Team Lead mobile Dashboard overflow fix, Dashboard KPI drill-down made read-only/navigation-oriented, Services-inspired Notifications redesign, notification safe-routing fix | [#4](https://github.com/J-Chords/corebridgex-crm/pull/4) — MERGED (merge commit `fa65e33`) | `pending deployment` |
 
 All three are merged into `main` and validated (TypeScript/ESLint/all four provider builds/role-based QA all passed at merge time). None have been deployed anywhere — see `deployment.md`.
+
+## In progress
+
+| Ticket | Summary | Status |
+|---|---|---|
+| **CD-205** | Retire the dormant legacy "Project Template" bundle architecture (`project_templates`/`project_template_services`/`project_template_activities`, their RPCs/triggers/RLS/grants, and dead provider/hook/type source) at the schema and source level. The separate, still-live Service-recipe system (`templates`/`template_tasks`/`template_checklist_items`, Company-detail "Apply template") is explicitly preserved, unchanged. TypeScript/ESLint clean; forward-only migration `20260921090000_retire_project_template_bundle.sql` written but **NOT applied to hosted Supabase** — no authenticated hosted-Supabase access was available to first obtain the required read-only row counts/DDL backup for the tables being dropped; that manual step is a blocker before hosted application. | `In Progress` — branch `feature/CD-205-retire-project-template-bundle`, not yet merged |
 
 ## Open / future work
 
