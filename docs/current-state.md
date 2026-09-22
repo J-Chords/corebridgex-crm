@@ -1,11 +1,11 @@
 # Current State
 
-**Last verified: 2026-09-21.** This document changes often — re-verify against Jira and `git log`/`gh pr list` before relying on it for anything consequential.
+**Last verified: 2026-09-22.** This document changes often — re-verify against Jira and `git log`/`gh pr list` before relying on it for anything consequential.
 
 ## Current `main`
 
 ```
-fa65e339f73123c34089679df07be583a5f44ad7
+83bff9c454011aafee29992872d8fe2b1a0bc2c6
 ```
 
 Verify freshly with `git rev-parse origin/main`.
@@ -17,14 +17,9 @@ Verify freshly with `git rev-parse origin/main`.
 | **CD-162** | Boss Feedback MVP Simplification — Dashboard naming, My Day (Planner merge), Project tab consolidation (9→7 tabs), Service/Task hierarchy UI polish, employee-service-activity authorization parity | [#1](https://github.com/J-Chords/corebridgex-crm/pull/1) — MERGED | `pending deployment` |
 | **CD-190** | Merge Team Updates + Team Time into Team Activity, plus a local-calendar-date time-entry stabilization fix | [#2](https://github.com/J-Chords/corebridgex-crm/pull/2) — MERGED | `pending deployment` |
 | **CD-196** | Clarify Dashboard and My Day information architecture — role-scoped overview (Dashboard) vs. personal execution (My Day), Notifications/Needs Attention/Upcoming placement cleanup, Admin personal-default schedule fix, Team Lead mobile Dashboard overflow fix, Dashboard KPI drill-down made read-only/navigation-oriented, Services-inspired Notifications redesign, notification safe-routing fix | [#4](https://github.com/J-Chords/corebridgex-crm/pull/4) — MERGED (merge commit `fa65e33`) | `pending deployment` |
+| **CD-205** | Retire the legacy "Project Template" bundle architecture — `project_templates`/`project_template_services`/`project_template_activities`, their RPCs/triggers/RLS/grants, and dead provider/hook/type source removed at both the schema and source level; hosted Supabase migration `20260921090000_retire_project_template_bundle.sql` applied and independently re-verified live (tables/functions/triggers confirmed absent; `admin_delete_activity`/`create_project`/`create_client_project` confirmed repaired/compatible via direct live function-body inspection). The separate, still-live Service-recipe system (`templates`/`template_tasks`/`template_checklist_items`, `apply_template`, Company-detail "Apply template") is explicitly preserved, unchanged — confirmed present on hosted. No operational Project/Workstream/Activity/Task/Checklist data removed (live row counts verified). | [#5](https://github.com/J-Chords/corebridgex-crm/pull/5) — MERGED (merge commit `83bff9c`) | `pending deployment` |
 
-All three are merged into `main` and validated (TypeScript/ESLint/all four provider builds/role-based QA all passed at merge time). None have been deployed anywhere — see `deployment.md`.
-
-## In progress
-
-| Ticket | Summary | Status |
-|---|---|---|
-| **CD-205** | Retire the dormant legacy "Project Template" bundle architecture (`project_templates`/`project_template_services`/`project_template_activities`, their RPCs/triggers/RLS/grants, and dead provider/hook/type source) at the schema and source level. The separate, still-live Service-recipe system (`templates`/`template_tasks`/`template_checklist_items`, Company-detail "Apply template") is explicitly preserved, unchanged. TypeScript/ESLint clean; forward-only migration `20260921090000_retire_project_template_bundle.sql` written but **NOT applied to hosted Supabase** — no authenticated hosted-Supabase access was available to first obtain the required read-only row counts/DDL backup for the tables being dropped; that manual step is a blocker before hosted application. | `In Progress` — branch `feature/CD-205-retire-project-template-bundle`, not yet merged |
+All four are merged into `main` and validated (TypeScript/ESLint/all four provider builds/role-based or isolated QA all passed at merge time). None have been deployed anywhere — see `deployment.md`.
 
 ## Open / future work
 
@@ -40,7 +35,7 @@ All three are merged into `main` and validated (TypeScript/ESLint/all four provi
 
 ## Jira workflow states seen on this project
 
-`New → Groomed → Ready to start → In Progress → Code review → End to end testing → pending deployment → Ready for demo → Sign-off` (plus a parallel `Blocked` state). CD-162, CD-190, and CD-196 currently sit at `pending deployment` — they are merged and validated, awaiting an actual hosting decision before progressing further. See `HANDOVER.md` for the Git/Jira workflow this project follows end-to-end.
+`New → Groomed → Ready to start → In Progress → Code review → End to end testing → pending deployment → Ready for demo → Sign-off` (plus a parallel `Blocked` state). CD-162, CD-190, CD-196, and CD-205 currently sit at `pending deployment` — they are merged and validated, awaiting an actual hosting decision before progressing further. See `HANDOVER.md` for the Git/Jira workflow this project follows end-to-end.
 
 ## Immediate next milestone
 

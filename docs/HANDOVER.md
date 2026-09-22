@@ -16,7 +16,7 @@ An internal Project Management / PSA (Professional Services Automation) web app 
 ## 3. Current `main` head
 
 ```
-fa65e339f73123c34089679df07be583a5f44ad7
+83bff9c454011aafee29992872d8fe2b1a0bc2c6
 ```
 
 Re-verify with `git rev-parse origin/main` — this file goes stale the moment another PR merges. See `current-state.md` for the live picture.
@@ -27,15 +27,15 @@ Re-verify with `git rev-parse origin/main` — this file goes stale the moment a
 - **CD-190** — Merge Team Updates + Team Time into Team Activity, plus a local-calendar-date time-entry stabilization fix. PR #2, merged.
 - **CD-194** — Technical documentation and developer handover (this document set). PR #3, merged.
 - **CD-196** — Clarify Dashboard and My Day information architecture, plus a Product Owner-approved follow-up polish pass (Team Workload layout fix, Services-inspired Notifications redesign, notification safe-routing fix). PR #4, merged. Locks Dashboard = role-scoped overview/attention, My Day = personal execution/planning (personal by default for every role); see `decisions.md` for the full placement decisions.
+- **CD-205** — Retire the legacy "Project Template" bundle architecture at the schema/source level (`project_templates`/`project_template_services`/`project_template_activities`, their RPCs/triggers/RLS/grants, and dead provider/hook/type source). PR #5, merged. Hosted migration `20260921090000_retire_project_template_bundle.sql` applied and independently re-verified live. The separate, still-live Service-recipe system (`templates`/`template_tasks`/`template_checklist_items`, `apply_template`, Company-detail "Apply template") is explicitly preserved and confirmed unaffected. Phase 0 of the Template terminology redesign; Phase 1 (Service → Template rename) is not started. See `decisions.md` and `data-and-supabase.md`.
 
 ## 5. Open ticket(s)
 
 - **CD-193** — Normalize local-date handling across task and dashboard date surfaces. Status `New`, not started, no branch created. See `decisions.md` and `troubleshooting.md` for exactly what this covers and what it deliberately excludes (CD-190 already fixed the time-entry-specific instance of this bug class).
-- **CD-205** — Retire the dormant legacy "Project Template" bundle architecture at the schema/source level. `In Progress`, branch `feature/CD-205-retire-project-template-bundle`, not yet merged. TypeScript/ESLint clean; forward-only migration written but **not yet applied to hosted Supabase** (no authenticated hosted-Supabase access was available to first take the required read-only row-count/DDL backup). The separate, still-live Service-recipe system (`templates`/`template_tasks`/`template_checklist_items`) is explicitly untouched. See `decisions.md` and `data-and-supabase.md`.
 
 ## 6. Current Jira states
 
-CD-162, CD-190, and CD-196: `pending deployment` (merged + validated, awaiting a hosting decision — see `current-state.md` for each ticket's exact status). CD-194: `Sign-off`. CD-193: `New`. CD-205: `In Progress`. Full workflow state list and the reasoning behind each transition: `current-state.md`.
+CD-162, CD-190, CD-196, and CD-205: `pending deployment` (merged + validated, awaiting a hosting decision — see `current-state.md` for each ticket's exact status). CD-194: `Sign-off`. CD-193: `New`. Full workflow state list and the reasoning behind each transition: `current-state.md`.
 
 ## 7. Current deployment state
 
@@ -141,7 +141,7 @@ STACK: Next.js 16.2.11 (App Router — has real breaking changes vs. older Next.
   node_modules/next/dist/docs/ before assuming an API), React 19, TypeScript (strict),
   Tailwind CSS, Supabase (Postgres + Auth).
 
-CURRENT MAIN HEAD: fa65e339f73123c34089679df07be583a5f44ad7 (re-verify — this drifts)
+CURRENT MAIN HEAD: 83bff9c454011aafee29992872d8fe2b1a0bc2c6 (re-verify — this drifts)
 
 RECENTLY COMPLETED (merged to main):
 - CD-162: Boss Feedback MVP Simplification (PR #1)
@@ -151,21 +151,21 @@ RECENTLY COMPLETED (merged to main):
 - CD-196: Clarify Dashboard and My Day information architecture, plus a Product
   Owner-approved polish pass (Team Workload layout fix, Services-inspired
   Notifications redesign, notification safe-routing fix) (PR #4)
-CD-162, CD-190, and CD-196 currently sit at "pending deployment" (merged + validated,
-no hosting target exists yet to deploy to); CD-194 at "Sign-off".
+- CD-205: Retire the legacy "Project Template" bundle architecture
+  (project_templates/project_template_services/project_template_activities + their
+  RPCs/triggers/RLS/grants + dead provider/hook/type source) at the schema and source
+  level (PR #5). Hosted migration 20260921090000_retire_project_template_bundle.sql
+  applied and independently re-verified live (object absence/presence, exact
+  function-body match on admin_delete_activity/create_project/create_client_project,
+  unaffected operational row counts). The separate, still-live Service-recipe system
+  (templates/template_tasks/template_checklist_items, apply_template, Company-detail
+  "Apply template") is explicitly preserved and confirmed unaffected.
+CD-162, CD-190, CD-196, and CD-205 currently sit at "pending deployment" (merged +
+validated, no hosting target exists yet to deploy to); CD-194 at "Sign-off".
 
 OPEN TICKETS:
 - CD-193 — Normalize local-date handling across task and dashboard date surfaces.
   Status "New," not started. Do not implement unless explicitly asked to.
-- CD-205 — Retire the dormant legacy "Project Template" bundle architecture
-  (project_templates/project_template_services/project_template_activities + their
-  RPCs/triggers/RLS/grants + dead provider/hook/type source). Status "In Progress,"
-  branch feature/CD-205-retire-project-template-bundle, not yet merged. Forward-only
-  migration 20260921090000_retire_project_template_bundle.sql written but NOT yet
-  applied to hosted Supabase (no authenticated hosted access was available to first
-  take the required read-only row-count/DDL backup). The separate, still-live
-  Service-recipe system (templates/template_tasks/template_checklist_items,
-  apply_template, Company-detail "Apply template") is explicitly untouched.
 
 DOMAIN HIERARCHY (locked): Project → Service → Activity → Task → Checklist.
 No Subtask level exists — it was built, then deliberately fully removed. "Service" is
