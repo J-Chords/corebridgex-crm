@@ -26,19 +26,21 @@ import { DEFAULT_TASK_FILTERS, filterTasks, groupTasksBy } from "@/lib/data/hook
 import { isAssigneeColumnRedundantForViewer, isTaskClosed, isTaskOverdue } from "@/lib/data/task-display";
 import {
   operationalProjectIdentity,
-  serviceLineDisplayName,
   isProjectActiveForNewWork,
   projectNotActiveMessage,
 } from "@/lib/data/project-display";
-import { canConfigureWorkstreamActivities, canCreateWorkstreamInProject, canManageProjects, isEmployee, isSupervisor } from "@/lib/data/permissions";
+import { canConfigureWorkstreamActivities, canCreateWorkstreamInProject, canManageProjects, isEmployee } from "@/lib/data/permissions";
 import { AddServiceActivitiesDialog } from "@/components/workstreams/add-service-activities-dialog";
 import type { WorkstreamWithRelations } from "@/lib/data/providers/workstreams-provider";
-import { PeopleInline } from "@/components/projects/people-inline";
+import type { ProjectWithRelations } from "@/lib/data/providers/projects-provider";
+import type { CompanyWithRelations } from "@/lib/data/providers/companies-provider";
 import { workstreamDisplayHeading } from "@/lib/data/workstream-name";
 import { SafeMarkdown } from "@/lib/markdown-lite";
 import { ROLE_LABELS } from "@/lib/data/role-labels";
 import type { ClientContact, ProjectIssue, TaskStatus } from "@/lib/data/types";
 import type { TaskWithRelations } from "@/lib/data/providers/tasks-provider";
+import { cn } from "@/lib/utils";
+import { todayDateOnly, parseDateOnly, formatDateOnly, startOfWeekMonday, startOfMonth, addDays } from "@/lib/planner-dates";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -97,109 +99,77 @@ const TABS: { key: TabKey; label: string }[] = [
   { key: "reports", label: "Reports" },
 ];
 
-/** Short "Sep 8" form for a Next Due date — no year, matches the Project list's own convention. */
-function formatShortDate(iso: string | null): string {
-  if (!iso) return "—";
-  return new Date(`${iso}T00:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric" });
-}
-
 /**
- * A compact `Overdue`/`Waiting`/`Blocked` + `Next due` panel — Section 16's "Work needing
- * attention," reused for both the project-wide Admin/Team Lead view and the "my work" Employee
- * view (same shape, different counts/labels fed in — Section 12's "shared visual system, not three
- * unrelated designs"). All figures come from the Tasks already fetched on this page; nothing new
- * is queried, nothing is fabricated (Section 25) — zero of everything renders as one calm empty
- * state rather than a row of dashes (Section 17).
+ * CD-207 Project Overview redesign — a single clickable KPI tile. Reused for every KPI except
+ * Due (which needs its own period selector alongside the count — see `DueKpiTile`). A real
+ * `<button>`, not a `<Card>` with a synthetic onClick, so it's keyboard-operable and gets a
+ * visible focus ring for free.
  */
-function AttentionPanel({
-  title,
-  overdueCount,
-  waitingCount,
-  blockedCount,
-  openCount,
-  nextDueTask,
-  onViewTasks,
-}: {
-  title: string;
-  overdueCount: number;
-  waitingCount: number;
-  blockedCount: number;
-  openCount?: number;
-  /** Step 4 Section 7 — the next-due item's own identity, never a bare date. */
-  nextDueTask: { title: string; dueDate: string } | null;
-  onViewTasks: () => void;
-}) {
-  const nothingToShow = overdueCount === 0 && waitingCount === 0 && blockedCount === 0 && !nextDueTask;
+function KpiTile({ label, value, onClick }: { label: string; value: number; onClick: () => void }) {
   return (
-    <Card>
-      <CardHeader className="flex items-center justify-between">
-        <CardTitle className="text-base">{title}</CardTitle>
-        <button type="button" onClick={onViewTasks} className="text-sm text-muted-foreground hover:underline">
-          View Tasks
-        </button>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-3">
-        {nothingToShow ? (
-          <p className="text-sm text-muted-foreground">
-            {openCount ? `${openCount} open, nothing overdue or blocked.` : "No upcoming work."}
-          </p>
-        ) : (
-          <>
-            <div className="flex flex-wrap items-center gap-2">
-              {overdueCount > 0 && <Badge variant="destructive">{overdueCount} overdue</Badge>}
-              {waitingCount > 0 && <Badge variant="secondary">{waitingCount} waiting</Badge>}
-              {blockedCount > 0 && <Badge variant="secondary">{blockedCount} blocked</Badge>}
-            </div>
-            {nextDueTask && (
-              <p className="text-sm text-muted-foreground">
-                Next due: <span className="font-medium text-foreground">{nextDueTask.title}</span> —{" "}
-                {formatShortDate(nextDueTask.dueDate)}
-              </p>
-            )}
-          </>
-        )}
-      </CardContent>
-    </Card>
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex flex-col items-start gap-1 rounded-lg border bg-card p-3 text-left outline-none transition-colors hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring/50"
+    >
+      <span className="text-2xl font-semibold leading-none">{value}</span>
+      <span className="text-xs text-muted-foreground">{label}</span>
+    </button>
   );
 }
 
-/** Section 15 — actual global Service Line names, a compact 3-item + overflow list, never a bare
- * count or a duplicate metric card. */
-function ServicesSummaryPanel({
-  workstreams,
-  serviceLines,
-  onViewServices,
+type DuePeriod = "today" | "week" | "month";
+const DUE_PERIOD_OPTIONS: { key: DuePeriod; label: string }[] = [
+  { key: "today", label: "Today" },
+  { key: "week", label: "Week" },
+  { key: "month", label: "Month" },
+];
+
+/**
+ * The Due KPI tile — same look as `KpiTile`, but carries a compact Today/Week/Month period
+ * selector as a SEPARATE sibling control next to the count button (not nested inside it), so the
+ * period pills can never accidentally trigger tile navigation and need no stopPropagation.
+ */
+function DueKpiTile({
+  value,
+  period,
+  onPeriodChange,
+  onClick,
 }: {
-  workstreams: { name: string; serviceLineId: string | null }[];
-  serviceLines: { id: string; name: string }[];
-  onViewServices: () => void;
+  value: number;
+  period: DuePeriod;
+  onPeriodChange: (period: DuePeriod) => void;
+  onClick: () => void;
 }) {
-  const names = workstreams.map((w) => serviceLineDisplayName(w, serviceLines));
-  const shown = names.slice(0, 3);
-  const overflow = names.length - shown.length;
   return (
-    <Card>
-      <CardHeader className="flex items-center justify-between">
-        <CardTitle className="text-base">Templates</CardTitle>
-        <button type="button" onClick={onViewServices} className="text-sm text-muted-foreground hover:underline">
-          View Templates
-        </button>
-      </CardHeader>
-      <CardContent>
-        {names.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No Templates configured yet.</p>
-        ) : (
-          <div className="flex flex-col gap-1">
-            {shown.map((name, i) => (
-              <span key={`${name}-${i}`} className="text-sm">
-                {name}
-              </span>
-            ))}
-            {overflow > 0 && <span className="text-xs text-muted-foreground">+{overflow} more</span>}
-          </div>
-        )}
-      </CardContent>
-    </Card>
+    <div className="flex flex-col items-start gap-1 rounded-lg border bg-card p-3">
+      <button
+        type="button"
+        onClick={onClick}
+        className="flex flex-col items-start gap-1 rounded outline-none text-left focus-visible:ring-2 focus-visible:ring-ring/50"
+      >
+        <span className="text-2xl font-semibold leading-none">{value}</span>
+        <span className="text-xs text-muted-foreground">Due</span>
+      </button>
+      <div className="flex items-center gap-1 pt-1">
+        {DUE_PERIOD_OPTIONS.map((option) => (
+          <button
+            key={option.key}
+            type="button"
+            aria-pressed={period === option.key}
+            onClick={() => onPeriodChange(option.key)}
+            className={cn(
+              "rounded px-1.5 py-0.5 text-[11px] outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
+              period === option.key
+                ? "bg-primary text-primary-foreground"
+                : "text-muted-foreground hover:bg-muted",
+            )}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -297,24 +267,172 @@ function ServiceRow({
   );
 }
 
-/** Section 9E/10E — compact Project participants, never a giant people grid. */
-function TeamPanel({
-  members,
-  onViewMembers,
+/**
+ * CD-207 — the single Administrative Details card, same structure for every role (Admin/Team
+ * Lead/Employee). Consolidates the former separately-gated "Project Details" (public) and
+ * "Administrative Details" (Admin-only) cards into one, with zero field loss — every field below
+ * was already unconditionally fetched for every role (`useCompany`/`useCompanyLookups` run
+ * regardless of viewer), so only the *read-only render* gate widens to all roles; the edit
+ * affordances (header Edit button, "+ Add contact", per-contact "Edit") stay `canManageProjects`
+ * only, unchanged from before.
+ */
+function AdministrativeDetailsCard({
+  project,
+  projectGroups,
+  company,
+  clientContacts,
+  canEdit,
+  onEditCompany,
+  onAddContact,
+  onEditContact,
 }: {
-  members: { id: string; fullName: string }[];
-  onViewMembers: () => void;
+  project: ProjectWithRelations;
+  projectGroups: { id: string; name: string }[];
+  company: CompanyWithRelations | null;
+  clientContacts: ClientContact[];
+  canEdit: boolean;
+  onEditCompany: () => void;
+  onAddContact: () => void;
+  onEditContact: (contact: ClientContact) => void;
 }) {
+  // Boss-Aligned Project Status Restoration — two intentionally distinct dates, never shown under
+  // one label, and never lost just because the CURRENT status has since moved on. "Completed On"
+  // (`completionDate`, stamped once, never overwritten by a later transition) is shown whenever
+  // it's genuinely set, regardless of current status. "Archived On" / "Previously Archived On"
+  // (`archivedAt`, always the latest Archive) work the same way, just re-labeled depending on
+  // whether the Project is CURRENTLY Archived or has since moved elsewhere. "Client Since" (from
+  // `contractStartDate`, never fabricated) reads as a client-relationship fact while the client is
+  // genuinely still engaged (Active/On Hold).
+  const detailItems = [
+    project.projectGroupId && { label: "Project Group", value: projectGroups.find((g) => g.id === project.projectGroupId)?.name },
+    project.startDate && { label: "Start date", value: formatDate(project.startDate) },
+    project.endDate && { label: "End date", value: formatDate(project.endDate) },
+    (project.status === "active" || project.status === "on-hold") &&
+      project.contractStartDate && { label: "Client Since", value: formatDate(project.contractStartDate) },
+    project.completionDate && { label: "Completed On", value: formatDate(project.completionDate) },
+    project.status === "archived"
+      ? project.archivedAt && { label: "Archived On", value: formatDate(project.archivedAt) }
+      : project.archivedAt && { label: "Previously Archived On", value: formatDate(project.archivedAt) },
+  ].filter((x): x is { label: string; value: string | undefined } => !!x);
+  const hasMoreDetails = detailItems.length > 0 || project.tags.length > 0;
+
   return (
     <Card>
       <CardHeader className="flex items-center justify-between">
-        <CardTitle className="text-base">Team</CardTitle>
-        <button type="button" onClick={onViewMembers} className="text-sm text-muted-foreground hover:underline">
-          View Members
-        </button>
+        <CardTitle className="text-base">Administrative Details</CardTitle>
+        {canEdit && (
+          <Button size="sm" variant="outline" onClick={onEditCompany}>
+            <Pencil /> Edit
+          </Button>
+        )}
       </CardHeader>
-      <CardContent>
-        <PeopleInline people={members} emptyText="No Project members yet." />
+      <CardContent className="flex flex-col gap-4">
+        {project.description && (
+          <SafeMarkdown text={project.description} className="text-sm text-muted-foreground [&_p]:m-0" />
+        )}
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+          <div className="flex flex-col gap-0.5">
+            <span className="font-mono text-[10px] tracking-wide text-muted-foreground uppercase">Owner</span>
+            <span className="text-sm">{project.owner.fullName}</span>
+          </div>
+          {detailItems.map((item) => (
+            <div key={item.label} className="flex flex-col gap-0.5">
+              <span className="font-mono text-[10px] tracking-wide text-muted-foreground uppercase">{item.label}</span>
+              <span className="text-sm">{item.value}</span>
+            </div>
+          ))}
+        </div>
+        {project.tags.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {project.tags.map((tag) => (
+              <Badge key={tag} variant="neutral">
+                {tag}
+              </Badge>
+            ))}
+          </div>
+        )}
+        {!hasMoreDetails && !project.description && (
+          <p className="text-sm text-muted-foreground">No additional Project details have been added.</p>
+        )}
+
+        {company && (
+          <>
+            <Separator />
+            <div className="grid grid-cols-2 gap-4">
+              <div className="flex flex-col gap-0.5">
+                <span className="font-mono text-[10px] tracking-wide text-muted-foreground uppercase">Account Status</span>
+                <CompanyStatusBadge status={company.status} />
+              </div>
+              <div className="flex flex-col gap-0.5">
+                <span className="font-mono text-[10px] tracking-wide text-muted-foreground uppercase">Partner Brand</span>
+                <span className="text-sm">{company.brand?.name ?? "No brand yet"}</span>
+              </div>
+              <div className="flex flex-col gap-0.5">
+                <span className="font-mono text-[10px] tracking-wide text-muted-foreground uppercase">Contract Start</span>
+                <span className="text-sm">{formatDate(company.contractStartDate)}</span>
+              </div>
+              <div className="flex flex-col gap-0.5">
+                <span className="font-mono text-[10px] tracking-wide text-muted-foreground uppercase">Renewal Date</span>
+                <span className="text-sm">{formatDate(company.renewalDate)}</span>
+              </div>
+            </div>
+
+            <Separator />
+
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center justify-between">
+                <span className="font-mono text-[10px] tracking-wide text-muted-foreground uppercase">Contacts</span>
+                {canEdit && (
+                  <button type="button" onClick={onAddContact} className="text-xs text-muted-foreground hover:underline">
+                    + Add contact
+                  </button>
+                )}
+              </div>
+              {clientContacts.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No contacts yet.</p>
+              ) : (
+                <div className="flex flex-col gap-1">
+                  {clientContacts.map((contact, i) => (
+                    <div key={contact.id}>
+                      {i > 0 && <Separator className="my-2" />}
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex flex-col">
+                          <span className="flex items-center gap-1.5 text-sm font-medium">
+                            {contact.name}
+                            {contact.isPrimary && (
+                              <Badge variant="secondary" className="text-[10px]">
+                                Primary
+                              </Badge>
+                            )}
+                          </span>
+                          <span className="text-xs text-muted-foreground">
+                            {[contact.title, contact.email, contact.phone].filter(Boolean).join(" · ") || "—"}
+                          </span>
+                        </div>
+                        {canEdit && (
+                          <button
+                            type="button"
+                            onClick={() => onEditContact(contact)}
+                            className="text-xs text-muted-foreground hover:underline"
+                          >
+                            Edit
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </>
+        )}
+
+        <Separator />
+
+        <div className="flex flex-col gap-1">
+          <span className="font-mono text-[10px] tracking-wide text-muted-foreground uppercase">Created by</span>
+          <span className="text-sm">{project.createdBy.fullName}</span>
+        </div>
       </CardContent>
     </Card>
   );
@@ -324,8 +442,9 @@ function TeamPanel({
  * Phase 13B (redesigned, Reference 1's visual language) — the Project workspace is the primary
  * Employee/Supervisor operational entry point for Client work, deliberately NOT duplicated by a
  * separate Client route (rejected — see docs/phase-13-client-history-audit.md Section 21).
- * Deliberately no Contacts/Company-admin-metadata/Company-edit-controls anywhere on this page —
- * that stays on the Company admin pages, Superadmin-only.
+ * CD-207 — Administrative Details (Contacts + Company metadata, read-only) is visible to every
+ * role on this page; only its edit controls (header Edit, "+ Add contact", per-contact Edit) stay
+ * `canManageProjects`-gated. Company edit/admin routes remain Superadmin-only for actual mutation.
  *
  * Split into an outer loading/not-found wrapper + `LoadedProjectDetailPage`, mounted only once a
  * real Project is guaranteed — the same Rules-of-Hooks-safe pattern `TaskDrawer`/the full Task page
@@ -393,7 +512,7 @@ function LoadedProjectDetailPage({
   const [editContact, setEditContact] = useState<ClientContact | "new" | null>(null);
   const { notes } = useCompanyNotes(project.companyId);
   const { runningTimer } = useRunningTimer();
-  const { assignableStaff, serviceLines } = useCompanyLookups();
+  const { assignableStaff } = useCompanyLookups();
   const { groups: projectGroups } = useProjectGroups();
   // CD-162 post-manual-QA pass — Archived (status "cancelled") Project Services stay fully
   // accessible (their own Tasks/Time/Comments history is never hidden — see `useTasks` above, which
@@ -506,49 +625,50 @@ function LoadedProjectDetailPage({
   const taskGroups = useMemo(() => groupTasksBy(filteredTasks, "status"), [filteredTasks]);
   const showAssignee = isEmployee(user) ? !isAssigneeColumnRedundantForViewer(filteredTasks, user.id) : true;
   const projectIdentity = operationalProjectIdentity(project.companyName, project.name);
-  const statusCounts = useMemo(() => {
-    const counts: Record<TaskStatus, number> = {
-      "not-started": 0,
-      "in-progress": 0,
-      waiting: 0,
-      blocked: 0,
-      completed: 0,
-      canceled: 0,
-    };
-    for (const t of tasks) counts[t.status] += 1;
-    return counts;
-  }, [tasks]);
   // Boss Feedback Alignment, Section 3 — `tasks` is already the viewer's own correctly-scoped set
   // (Superadmin: every Task on this Project; Supervisor: only their managed team's; Employee: only
-  // what canAccessTask already allows them). openCount/overdueCount used to read the raw, UNSCOPED
-  // `project.tasks.openCount`/`overdueCount` (a real data-visibility bug for Team Lead — it silently
-  // showed org-wide counts, not their own scope) — now derived from this same already-fetched,
+  // what canAccessTask already allows them). openCount used to read the raw, UNSCOPED
+  // `project.tasks.openCount` (a real data-visibility bug for Team Lead — it silently showed
+  // org-wide counts, not their own scope) — now derived from this same already-fetched,
   // already-scoped array instead, closing that gap while keeping Admin's number identical (Admin's
   // scope already covers every Task on the Project either way).
   const openCount = tasks.filter((t) => !isTaskClosed(t.status)).length;
-  const overdueCount = tasks.filter((t) => isTaskOverdue(t)).length;
 
-// Manual Acceptance Step 3/4 — Overview role-awareness. All derived from Tasks/Services/Members
-  // already fetched above; nothing new queried, nothing fabricated (Section 25). Next Due always
-  // carries the Task itself (title + date), never a bare date with no item identity (Step 4
-  // Section 7).
-  const isTeamLead = isSupervisor(user);
-  const nextDueTask = useMemo(() => {
-    const withDue = tasks
-      .filter((t) => !isTaskClosed(t.status) && t.dueDate != null)
-      .map((t) => ({ title: t.title, dueDate: t.dueDate as string }));
-    return withDue.sort((a, b) => (a.dueDate < b.dueDate ? -1 : 1))[0] ?? null;
-  }, [tasks]);
   const myTasks = useMemo(
     () => tasks.filter((t) => !isTaskClosed(t.status) && t.assignees.some((a) => a.id === user.id)),
     [tasks, user.id]
   );
-  const today = new Date().toISOString().slice(0, 10);
-  const myOverdueCount = myTasks.filter((t) => t.dueDate != null && t.dueDate < today).length;
-  const myNextDueTask = useMemo(() => {
-    const withDue = myTasks.filter((t) => t.dueDate != null).map((t) => ({ title: t.title, dueDate: t.dueDate as string }));
-    return withDue.sort((a, b) => (a.dueDate < b.dueDate ? -1 : 1))[0] ?? null;
-  }, [myTasks]);
+
+  // CD-207 — Attention KPI: unique (deduplicated) Tasks that are overdue OR Waiting, explicitly
+  // excluding Blocked (Blocked stays fully live everywhere else in the app — only folded out of
+  // this one KPI's definition). A single filter pass over one array guarantees a Task that's both
+  // overdue and Waiting is counted once, never twice.
+  const attentionScope = isEmployee(user) ? myTasks : tasks;
+  const attentionCount = attentionScope.filter((t) => isTaskOverdue(t) || t.status === "waiting").length;
+
+  // CD-207 — Due KPI: incomplete, non-overdue Tasks due within the selected period. Reuses the
+  // same local-calendar-date semantics as My Day's own Week/Month views (`planner-dates.ts`) —
+  // never a new date-comparison scheme, and never `isTaskOverdue`'s own internal UTC-slice
+  // "today" (out of this phase's scope — see CD-193).
+  const [duePeriod, setDuePeriod] = useState<DuePeriod>("today");
+  const dueCount = useMemo(() => {
+    const scoped = isEmployee(user) ? myTasks : tasks;
+    const todayDate = parseDateOnly(todayDateOnly());
+    let startKey = formatDateOnly(todayDate);
+    let endKey = startKey;
+    if (duePeriod === "week") {
+      const weekStart = startOfWeekMonday(todayDate);
+      startKey = formatDateOnly(weekStart);
+      endKey = formatDateOnly(addDays(weekStart, 6));
+    } else if (duePeriod === "month") {
+      const monthStart = startOfMonth(todayDate);
+      startKey = formatDateOnly(monthStart);
+      endKey = formatDateOnly(new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 0));
+    }
+    return scoped.filter(
+      (t) => !isTaskClosed(t.status) && t.dueDate != null && !isTaskOverdue(t) && t.dueDate >= startKey && t.dueDate <= endKey
+    ).length;
+  }, [tasks, myTasks, user, duePeriod]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -684,223 +804,36 @@ function LoadedProjectDetailPage({
 
       {tab === "overview" && (
         <div className="flex flex-col gap-4">
-          {/* B. Compact operational summary — Boss Feedback Alignment, Section 3: ONE shared 4-tile
-              KPI structure for every role (Admin/Team Lead/Employee), never a role-branched shell.
-              Only the Employee variant's underlying numbers narrow to "my own work" (`myTasks`) —
-              already the correctly-scoped, most personally-relevant figure for that role; Admin and
-              Team Lead share the identical `openCount`/`overdueCount`/`nextDueTask` computed above
-              from this page's own already-viewer-scoped `tasks`. */}
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-            {[
-              { label: "Templates", value: activeWorkstreams.length },
-              { label: "Open Work", value: isEmployee(user) ? myTasks.length : openCount },
-              { label: "Attention", value: isEmployee(user) ? myOverdueCount : overdueCount },
-              {
-                label: "Next Due",
-                value: formatShortDate((isEmployee(user) ? myNextDueTask : nextDueTask)?.dueDate ?? null),
-              },
-            ].map((item) => (
-              <Card key={item.label} className="p-3">
-                <span className="font-mono text-[10px] tracking-wide text-muted-foreground uppercase">{item.label}</span>
-                <span className="text-lg leading-tight font-semibold">{item.value}</span>
-              </Card>
-            ))}
+          {/* CD-207 — ONE shared 5-tile KPI row for every role (Admin/Team Lead/Employee), never a
+              role-branched shell. Open Tasks/Attention/Due narrow to "my own work" (`myTasks`) only
+              for Employees — already the correctly-scoped, most personally-relevant figure for that
+              role. Every tile navigates via `handleTabChange` (never raw `setTab`), so the visible
+              tab and the URL can never drift apart. */}
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+            <KpiTile label="Templates" value={activeWorkstreams.length} onClick={() => handleTabChange("services")} />
+            <KpiTile
+              label="Open Tasks"
+              value={isEmployee(user) ? myTasks.length : openCount}
+              onClick={() => handleTabChange("tasks")}
+            />
+            <KpiTile label="Attention" value={attentionCount} onClick={() => handleTabChange("tasks")} />
+            <DueKpiTile value={dueCount} period={duePeriod} onPeriodChange={setDuePeriod} onClick={() => handleTabChange("tasks")} />
+            <KpiTile label="Members" value={project.members.length} onClick={() => handleTabChange("members")} />
           </div>
 
-          {/* C + D. Work needing attention, and Services — one coherent grouped panel each, side
-              by side at desktop width, never split into many equal-weight cards (Section 5/16). */}
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-            {isEmployee(user) ? (
-              <AttentionPanel
-                title="My work"
-                overdueCount={myOverdueCount}
-                waitingCount={myTasks.filter((t) => t.status === "waiting").length}
-                blockedCount={myTasks.filter((t) => t.status === "blocked").length}
-                openCount={myTasks.length}
-                nextDueTask={myNextDueTask}
-                onViewTasks={() => setTab("tasks")}
-              />
-            ) : (
-              <AttentionPanel
-                title="Work needing attention"
-                overdueCount={overdueCount}
-                waitingCount={statusCounts.waiting}
-                blockedCount={statusCounts.blocked}
-                openCount={openCount}
-                nextDueTask={nextDueTask}
-                onViewTasks={() => setTab("tasks")}
-              />
-            )}
-            <ServicesSummaryPanel workstreams={activeWorkstreams} serviceLines={serviceLines} onViewServices={() => setTab("services")} />
-          </div>
-
-          {/* E + F. Team, and (Admin-only) Administrative Details — Admin gets both side by side;
-              Team Lead gets Team alone; Employee gets neither (Section 9E/9F/10D/11). */}
-          {canManageProjects(user) ? (
-            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-              <TeamPanel members={project.members} onViewMembers={() => setTab("members")} />
-              {company && (
-                <Card>
-                  <CardHeader className="flex items-center justify-between">
-                    <CardTitle className="text-base">Administrative Details</CardTitle>
-                    <Button size="sm" variant="outline" onClick={() => setEditCompanyOpen(true)}>
-                      <Pencil /> Edit
-                    </Button>
-                  </CardHeader>
-                  <CardContent className="flex flex-col gap-4">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="flex flex-col gap-0.5">
-                        <span className="font-mono text-[10px] tracking-wide text-muted-foreground uppercase">Account Status</span>
-                        <CompanyStatusBadge status={company.status} />
-                      </div>
-                      <div className="flex flex-col gap-0.5">
-                        <span className="font-mono text-[10px] tracking-wide text-muted-foreground uppercase">Partner Brand</span>
-                        <span className="text-sm">{company.brand?.name ?? "No brand yet"}</span>
-                      </div>
-                      <div className="flex flex-col gap-0.5">
-                        <span className="font-mono text-[10px] tracking-wide text-muted-foreground uppercase">Contract Start</span>
-                        <span className="text-sm">{formatDate(company.contractStartDate)}</span>
-                      </div>
-                      <div className="flex flex-col gap-0.5">
-                        <span className="font-mono text-[10px] tracking-wide text-muted-foreground uppercase">Renewal Date</span>
-                        <span className="text-sm">{formatDate(company.renewalDate)}</span>
-                      </div>
-                    </div>
-
-                    <Separator />
-
-                    <div className="flex flex-col gap-2">
-                      <div className="flex items-center justify-between">
-                        <span className="font-mono text-[10px] tracking-wide text-muted-foreground uppercase">Contacts</span>
-                        <button
-                          type="button"
-                          onClick={() => setEditContact("new")}
-                          className="text-xs text-muted-foreground hover:underline"
-                        >
-                          + Add contact
-                        </button>
-                      </div>
-                      {clientContacts.length === 0 ? (
-                        <p className="text-sm text-muted-foreground">No contacts yet.</p>
-                      ) : (
-                        <div className="flex flex-col gap-1">
-                          {clientContacts.map((contact, i) => (
-                            <div key={contact.id}>
-                              {i > 0 && <Separator className="my-2" />}
-                              <div className="flex flex-wrap items-center justify-between gap-2">
-                                <div className="flex flex-col">
-                                  <span className="flex items-center gap-1.5 text-sm font-medium">
-                                    {contact.name}
-                                    {contact.isPrimary && (
-                                      <Badge variant="secondary" className="text-[10px]">
-                                        Primary
-                                      </Badge>
-                                    )}
-                                  </span>
-                                  <span className="text-xs text-muted-foreground">
-                                    {[contact.title, contact.email, contact.phone].filter(Boolean).join(" · ") || "—"}
-                                  </span>
-                                </div>
-                                <button
-                                  type="button"
-                                  onClick={() => setEditContact(contact)}
-                                  className="text-xs text-muted-foreground hover:underline"
-                                >
-                                  Edit
-                                </button>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-
-                    <Separator />
-
-                    <div className="flex flex-col gap-1">
-                      <span className="font-mono text-[10px] tracking-wide text-muted-foreground uppercase">Created by</span>
-                      <span className="text-sm">{project.createdBy.fullName}</span>
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-            </div>
-          ) : isTeamLead ? (
-            <TeamPanel members={project.members} onViewMembers={() => setTab("members")} />
-          ) : null}
-
-          {/* Shared Project information — compact by default (Step 4 Section 8): Owner is always
-              shown; Group/dates/Tags only take space when at least one actually has a value, never
-              a grid of "Not set"/"—" placeholders. Read-only for everyone except via the header's
-              own Admin-only Edit button. */}
-          {(() => {
-            // Boss-Aligned Project Status Restoration — two intentionally distinct dates, never
-            // shown under one label, and never lost just because the CURRENT status has since moved
-            // on. "Completed On" (`completionDate`, stamped once, never overwritten by a later
-            // transition) is shown whenever it's genuinely set, regardless of current status — a
-            // Project that was Completed and later Archived (or Reactivated, or moved to On Hold/
-            // Canceled) must keep showing its real completion history, never silently lose it.
-            // "Archived On" / "Previously Archived On" (`archivedAt`, always the latest Archive) work
-            // the same way: shown whenever set, just re-labeled depending on whether the Project is
-            // CURRENTLY Archived or has since moved elsewhere. Both dates can and do coexist
-            // truthfully on the same Project. "Client Since" (from `contractStartDate`, never
-            // fabricated) reads as a client-relationship fact while the client is genuinely still
-            // engaged (Active/On Hold) — no lifecycle-event-history table (only the single latest
-            // Archive date is retained, as instructed).
-            const detailItems = [
-              project.projectGroupId && { label: "Project Group", value: projectGroups.find((g) => g.id === project.projectGroupId)?.name },
-              project.startDate && { label: "Start date", value: formatDate(project.startDate) },
-              project.endDate && { label: "End date", value: formatDate(project.endDate) },
-              (project.status === "active" || project.status === "on-hold") &&
-                project.contractStartDate && { label: "Client Since", value: formatDate(project.contractStartDate) },
-              project.completionDate && { label: "Completed On", value: formatDate(project.completionDate) },
-              project.status === "archived"
-                ? project.archivedAt && { label: "Archived On", value: formatDate(project.archivedAt) }
-                : project.archivedAt && { label: "Previously Archived On", value: formatDate(project.archivedAt) },
-            ].filter((x): x is { label: string; value: string | undefined } => !!x);
-            const hasMoreDetails = detailItems.length > 0 || project.tags.length > 0;
-            return (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base">Project Details</CardTitle>
-                </CardHeader>
-                <CardContent className="flex flex-col gap-3">
-                  {project.description && (
-                    <SafeMarkdown text={project.description} className="text-sm text-muted-foreground [&_p]:m-0" />
-                  )}
-                  <div className="flex flex-col gap-0.5">
-                    <span className="font-mono text-[10px] tracking-wide text-muted-foreground uppercase">Owner</span>
-                    <span className="text-sm">{project.owner.fullName}</span>
-                  </div>
-                  {hasMoreDetails ? (
-                    <>
-                      {detailItems.length > 0 && (
-                        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
-                          {detailItems.map((item) => (
-                            <div key={item.label} className="flex flex-col gap-0.5">
-                              <span className="font-mono text-[10px] tracking-wide text-muted-foreground uppercase">{item.label}</span>
-                              <span className="text-sm">{item.value}</span>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                      {project.tags.length > 0 && (
-                        <div className="flex flex-wrap gap-1.5">
-                          {project.tags.map((tag) => (
-                            <Badge key={tag} variant="neutral">
-                              {tag}
-                            </Badge>
-                          ))}
-                        </div>
-                      )}
-                    </>
-                  ) : (
-                    <p className="text-sm text-muted-foreground">No additional Project details have been added.</p>
-                  )}
-                </CardContent>
-              </Card>
-            );
-          })()}
+          {/* CD-207 — the single Administrative Details card, same structure for every role. Only
+              its edit affordances (header Edit, "+ Add contact", per-contact Edit) stay
+              `canManageProjects`-gated; the read-only data underneath is visible to everyone. */}
+          <AdministrativeDetailsCard
+            project={project}
+            projectGroups={projectGroups}
+            company={company}
+            clientContacts={clientContacts}
+            canEdit={canManageProjects(user)}
+            onEditCompany={() => setEditCompanyOpen(true)}
+            onAddContact={() => setEditContact("new")}
+            onEditContact={(contact) => setEditContact(contact)}
+          />
         </div>
       )}
 
