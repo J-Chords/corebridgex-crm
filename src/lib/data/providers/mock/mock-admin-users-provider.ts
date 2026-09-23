@@ -128,7 +128,7 @@ export const mockAdminUsersProvider: AdminUsersProvider = {
     const target = db.users.find((u) => u.id === userId);
     if (!target) throw new Error(`User ${userId} not found.`);
     if (target.role !== "supervisor" || !target.active) {
-      throw new Error("Only an active Team Lead can lead a Service.");
+      throw new Error("Only an active Team Lead can lead a Template.");
     }
     db.serviceTeamLeads = [
       ...db.serviceTeamLeads.filter((r) => r.userId !== userId),
@@ -142,7 +142,7 @@ export const mockAdminUsersProvider: AdminUsersProvider = {
     const target = db.users.find((u) => u.id === userId);
     if (!target) throw new Error(`User ${userId} not found.`);
     if (target.role === "superadmin" || !target.active) {
-      throw new Error("Only an active Employee or Team Lead can be a Service member.");
+      throw new Error("Only an active Employee or Team Lead can be a Template member.");
     }
     db.serviceEmployees = [
       ...db.serviceEmployees.filter((r) => r.userId !== userId),

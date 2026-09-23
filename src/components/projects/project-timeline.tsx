@@ -107,7 +107,7 @@ export function ProjectTimeline({ tasks, notes, reports, workstreams }: ProjectT
         timestamp: workstream.createdAt,
         icon: Sparkles,
         iconClassName: "text-primary",
-        title: `${workstream.name} Service created`,
+        title: `${workstream.name} Template created`,
       });
     }
 

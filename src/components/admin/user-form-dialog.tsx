@@ -318,34 +318,34 @@ export function UserFormDialog({ open, onOpenChange, mode, targetUser, serviceLi
             </FormDialogColumns>
 
             {(form.role === "supervisor" || form.role === "employee") && (
-              <FormDrawerSection label="Service Staffing">
+              <FormDrawerSection label="Template Staffing">
                 <FormDialogColumns>
                   {form.role === "supervisor" && (
-                    <FormDrawerField label="Services Led">
+                    <FormDrawerField label="Templates Led">
                       <p className="text-xs text-muted-foreground">
-                        Services this Team Lead is responsible for across all Projects.
+                        Templates this Team Lead is responsible for across all Projects.
                       </p>
                       <MultiSelect
                         options={serviceOptions}
                         value={form.serviceLeadershipIds}
                         onChange={(ids) => setForm((p) => ({ ...p, serviceLeadershipIds: ids }))}
-                        placeholder="Leads no Services"
-                        searchPlaceholder="Search Services…"
-                        aria-label="Services Led"
+                        placeholder="Leads no Templates"
+                        searchPlaceholder="Search Templates…"
+                        aria-label="Templates Led"
                       />
                     </FormDrawerField>
                   )}
-                  <FormDrawerField label="Works In Services">
+                  <FormDrawerField label="Works In Templates">
                     <p className="text-xs text-muted-foreground">
-                      Services where this user participates as an operational team member.
+                      Templates where this user participates as an operational team member.
                     </p>
                     <MultiSelect
                       options={serviceOptions}
                       value={form.serviceMembershipIds}
                       onChange={(ids) => setForm((p) => ({ ...p, serviceMembershipIds: ids }))}
-                      placeholder="Works in no Services"
-                      searchPlaceholder="Search Services…"
-                      aria-label="Works In Services"
+                      placeholder="Works in no Templates"
+                      searchPlaceholder="Search Templates…"
+                      aria-label="Works In Templates"
                     />
                   </FormDrawerField>
                 </FormDialogColumns>
@@ -375,11 +375,11 @@ export function UserFormDialog({ open, onOpenChange, mode, targetUser, serviceLi
       <ConfirmDialog
         open={pendingCleanupConfirm}
         onOpenChange={setPendingCleanupConfirm}
-        title="Remove Service leadership?"
+        title="Remove Template leadership?"
         description={
           affectedServiceNames.length > 0
             ? `Changing this user's role to ${ROLE_LABELS[form.role]} will remove their Team Lead assignment for: ${affectedServiceNames.join(", ")}. This can't be undone automatically — you'd need to re-add them as a member afterward if that's still wanted.`
-            : "Changing this user's role will remove their current Service staffing assignments."
+            : "Changing this user's role will remove their current Template staffing assignments."
         }
         confirmLabel="Change role"
         onConfirm={() => void performSave()}

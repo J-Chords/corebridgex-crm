@@ -19,7 +19,7 @@ async function fetchStaffing(serviceLineId: string): Promise<ServiceStaffing> {
 export const supabaseServiceMembershipProvider: ServiceMembershipProvider = {
   async listServiceStaffing(viewer) {
     if (!canManageAdminUsers(viewer)) {
-      throw new Error("Only an admin can manage Service staffing.");
+      throw new Error("Only an admin can manage Template staffing.");
     }
     const supabase = createClient();
     const [{ data: lines, error }, { data: leads }, { data: members }] = await Promise.all([
@@ -58,7 +58,7 @@ export const supabaseServiceMembershipProvider: ServiceMembershipProvider = {
 
   async setTeamLeads(viewer, serviceLineId, userIds) {
     if (!canManageAdminUsers(viewer)) {
-      throw new Error("Only an admin can manage Service staffing.");
+      throw new Error("Only an admin can manage Template staffing.");
     }
     const supabase = createClient();
     const { error } = await supabase.rpc("admin_set_service_team_leads", {
@@ -71,7 +71,7 @@ export const supabaseServiceMembershipProvider: ServiceMembershipProvider = {
 
   async setEmployees(viewer, serviceLineId, userIds) {
     if (!canManageAdminUsers(viewer)) {
-      throw new Error("Only an admin can manage Service staffing.");
+      throw new Error("Only an admin can manage Template staffing.");
     }
     const supabase = createClient();
     const { error } = await supabase.rpc("admin_set_service_employees", {

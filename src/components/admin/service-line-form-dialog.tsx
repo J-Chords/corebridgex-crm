@@ -15,24 +15,26 @@ import { AlertCircle } from "lucide-react";
 interface ServiceLineFormDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** Omit to create a new Service. */
+  /** Omit to create a new Template. */
   serviceLine?: ServiceLine;
   onSaved: () => void;
   /** Create mode only — fires instead of `onSaved` when the Admin chose "Create & Add Activities."
-   * The caller should open that Service's existing Activities manager (never build a second one). */
+   * The caller should open that Template's existing Activities manager (never build a second one). */
   onCreatedAndConfigure?: (created: ServiceLine) => void;
 }
 
 type SubmitIntent = "save" | "save-and-configure";
 
 /**
- * Service Level Phase B, Section 10 — the global Service catalog's own create/edit surface.
- * Admin-only (the page that renders this already gates on `canManageAdminUsers`). Deliberately
- * minimal — name + description are the only catalog fields V1 asks for; active/inactive and
- * Team Lead/Employee staffing are edited inline from the catalog table row itself. Activities are
- * optional at creation — a Service may legitimately exist before its Activity catalog is configured;
- * "Create & Add Activities" (create mode only) is a pure convenience that reuses the existing
- * `ManageServiceActivitiesDialog` afterward rather than duplicating any Activity UI here.
+ * Service Level Phase B, Section 10 — the global Template catalog's own create/edit surface
+ * (visible rename; the underlying `ServiceLine`/`service_lines` persistence is unchanged — see
+ * docs/decisions.md's Phase 1 Template workspace entry). Admin-only (the page that renders this
+ * already gates on `canManageAdminUsers`). Deliberately minimal — name + description are the only
+ * catalog fields V1 asks for; active/inactive and Team Lead/Member staffing are edited from the
+ * Template's own detail page. Activities are optional at creation — a Template may legitimately
+ * exist before its Activity catalog is configured; "Create & Add Activities" (create mode only) is
+ * a pure convenience that reuses the existing `ManageServiceActivitiesDialog` afterward rather than
+ * duplicating any Activity UI here.
  */
 export function ServiceLineFormDialog({ open, onOpenChange, serviceLine, onSaved, onCreatedAndConfigure }: ServiceLineFormDialogProps) {
   const { user } = useAuth();
@@ -69,7 +71,7 @@ export function ServiceLineFormDialog({ open, onOpenChange, serviceLine, onSaved
         }
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to save Service.");
+      setError(err instanceof Error ? err.message : "Unable to save Template.");
     } finally {
       setPendingIntent(null);
     }
@@ -87,7 +89,7 @@ export function ServiceLineFormDialog({ open, onOpenChange, serviceLine, onSaved
       <DialogContent className="sm:max-w-md">
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <DialogHeader>
-            <DialogTitle>{serviceLine ? "Edit Service" : "New Service"}</DialogTitle>
+            <DialogTitle>{serviceLine ? "Edit Template" : "New Template"}</DialogTitle>
           </DialogHeader>
 
           <div className="flex flex-col gap-1.5">
@@ -128,7 +130,7 @@ export function ServiceLineFormDialog({ open, onOpenChange, serviceLine, onSaved
               </Button>
             )}
             <Button type="submit" disabled={isSubmitting || !name.trim()}>
-              {pendingIntent === "save" ? "Saving…" : serviceLine ? "Save changes" : "Create Service"}
+              {pendingIntent === "save" ? "Saving…" : serviceLine ? "Save changes" : "Create Template"}
             </Button>
           </DialogFooter>
         </form>

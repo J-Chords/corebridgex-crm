@@ -345,15 +345,15 @@ export default function ProjectsPage() {
           </SelectContent>
         </Select>
         <Select
-          items={{ all: "All Services", ...Object.fromEntries(serviceLines.map((s) => [s.id, s.name])) }}
+          items={{ all: "All Templates", ...Object.fromEntries(serviceLines.map((s) => [s.id, s.name])) }}
           value={serviceLineFilter}
           onValueChange={(v) => setServiceLineFilter(v ?? "all")}
         >
-          <SelectTrigger aria-label="Filter by Service" className="w-40">
-            <SelectValue placeholder="Service" />
+          <SelectTrigger aria-label="Filter by Template" className="w-40">
+            <SelectValue placeholder="Template" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All Services</SelectItem>
+            <SelectItem value="all">All Templates</SelectItem>
             {serviceLines.map((s) => (
               <SelectItem key={s.id} value={s.id}>
                 {s.name}
@@ -524,7 +524,7 @@ function ProjectIdentity({ project }: { project: ProjectWithRelations }) {
 const ROLE_COLUMNS: Record<RoleView, { key: string; label: string; width: string }[]> = {
   admin: [
     { key: "project", label: "Project", width: "minmax(240px, 2fr)" },
-    { key: "services", label: "Services", width: "160px" },
+    { key: "services", label: "Templates", width: "160px" },
     { key: "leads", label: "Team Leads", width: "170px" },
     { key: "team", label: "Team", width: "170px" },
     { key: "open", label: "Open Work", width: "100px" },
@@ -532,7 +532,7 @@ const ROLE_COLUMNS: Record<RoleView, { key: string; label: string; width: string
   ],
   "team-lead": [
     { key: "project", label: "Project", width: "minmax(240px, 2fr)" },
-    { key: "services", label: "Services", width: "160px" },
+    { key: "services", label: "Templates", width: "160px" },
     { key: "open", label: "Open Tasks", width: "100px" },
     { key: "overdue", label: "Overdue", width: "90px" },
     { key: "waiting", label: "Waiting", width: "90px" },

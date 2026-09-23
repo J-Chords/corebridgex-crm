@@ -58,10 +58,9 @@ export function WorkspaceSection() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Service lines</CardTitle>
+          <CardTitle>Templates</CardTitle>
           <CardDescription>
-            {plural(serviceLines.length, "service line")} defined across all brands. Full in-app service-line
-            management is a later phase.
+            {plural(serviceLines.length, "Template")} defined across all brands. Manage them in Admin &gt; Templates.
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-wrap gap-1.5">

@@ -128,7 +128,7 @@ export function DailyUpdateEntries({
       <div className="hidden gap-3 px-3 text-[10px] font-mono tracking-wide text-muted-foreground uppercase md:grid md:grid-cols-[minmax(0,1.3fr)_minmax(0,1.1fr)_minmax(0,1.1fr)_5.5rem_5.5rem_minmax(0,1fr)]">
         <span>Task / work</span>
         <span>Client / Project</span>
-        <span>Service / Activity</span>
+        <span>Template / Activity</span>
         <span>Scheduled</span>
         <span>Actual</span>
         <span>Progress</span>

@@ -88,7 +88,7 @@ export function ProjectTimeTeam({ user, tasks }: ProjectTimeTeamProps) {
     const totals = new Map<string, number>();
     for (const e of inRange) {
       const task = taskMap.get(e.taskId);
-      const label = task ? workstreamDisplayHeading(task.workstream.name, task.workstream.serviceLineName) : "Unknown service";
+      const label = task ? workstreamDisplayHeading(task.workstream.name, task.workstream.serviceLineName) : "Unknown Template";
       totals.set(label, (totals.get(label) ?? 0) + (e.durationMinutes ?? 0));
     }
     return Array.from(totals, ([label, minutes]) => ({ label, minutes })).sort((a, b) => b.minutes - a.minutes);
@@ -205,7 +205,7 @@ export function ProjectTimeTeam({ user, tasks }: ProjectTimeTeamProps) {
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Card size="sm">
-              <CardHeader><CardTitle className="text-sm">By Service</CardTitle></CardHeader>
+              <CardHeader><CardTitle className="text-sm">By Template</CardTitle></CardHeader>
               <CardContent className="flex flex-col gap-2">
                 {byService.length === 0 ? (
                   <p className="text-sm text-muted-foreground">No time logged in this period.</p>

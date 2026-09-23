@@ -126,15 +126,15 @@ export function TaskFilterBar({
       )}
       {activeFields.includes("workstream") && workstreams && (
         <Select
-          items={{ all: "All services", ...Object.fromEntries(workstreams.map((e) => [e.id, e.name])) }}
+          items={{ all: "All templates", ...Object.fromEntries(workstreams.map((e) => [e.id, e.name])) }}
           value={filters.workstreamId}
           onValueChange={(v) => onChange({ workstreamId: v ?? "all" })}
         >
-          <SelectTrigger aria-label="Filter by service">
-            <SelectValue placeholder="Service" />
+          <SelectTrigger aria-label="Filter by template">
+            <SelectValue placeholder="Template" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All services</SelectItem>
+            <SelectItem value="all">All templates</SelectItem>
             {workstreams.map((e) => (
               <SelectItem key={e.id} value={e.id}>
                 {e.name}

@@ -117,10 +117,10 @@ export function ProjectCompletedWork({ tasks }: ProjectCompletedWorkProps) {
       {(serviceOptions.length > 1 || activityOptions.length > 1 || periodOptions.length > 1) && (
         <div className="flex flex-wrap items-center gap-2">
           {serviceOptions.length > 1 && (
-            <Select items={{ [ALL]: "All services", ...Object.fromEntries(serviceOptions.map((o) => [o.id, o.name])) }} value={serviceFilter} onValueChange={(v) => setServiceFilter(v ?? ALL)}>
+            <Select items={{ [ALL]: "All Templates", ...Object.fromEntries(serviceOptions.map((o) => [o.id, o.name])) }} value={serviceFilter} onValueChange={(v) => setServiceFilter(v ?? ALL)}>
               <SelectTrigger className="h-8 w-44"><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value={ALL}>All services</SelectItem>
+                <SelectItem value={ALL}>All Templates</SelectItem>
                 {serviceOptions.map((o) => <SelectItem key={o.id} value={o.id}>{o.name}</SelectItem>)}
               </SelectContent>
             </Select>

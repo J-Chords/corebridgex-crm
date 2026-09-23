@@ -494,19 +494,19 @@ export function TaskFormDialog({
                     </SelectContent>
                   </Select>
                   <p className="text-xs text-muted-foreground">
-                    Narrows the service list below — pick a project first, or just pick the service directly.
+                    Narrows the template list below — pick a project first, or just pick the template directly.
                   </p>
                 </div>
 
                 <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="task-workstream">Service</Label>
+                  <Label htmlFor="task-workstream">Template</Label>
                   <Select
                     items={Object.fromEntries(workstreams.map((w) => [w.id, workstreamTriggerLabel(w)]))}
                     value={form.workstreamId}
                     onValueChange={(v) => handleWorkstreamChange(v ?? "")}
                   >
                     <SelectTrigger id="task-workstream" className="w-full">
-                      <SelectValue placeholder="Select service" />
+                      <SelectValue placeholder="Select template" />
                     </SelectTrigger>
                     <SelectContent>
                       {workstreamGroups
@@ -530,8 +530,8 @@ export function TaskFormDialog({
                   </Select>
                   {!selectedWorkstream && (
                     <p className="text-xs text-muted-foreground">
-                      Only Services already attached to the selected Project appear here. Configure this Project&apos;s
-                      Services from Project &gt; Services first.
+                      Only Templates already attached to the selected Project appear here. Configure this Project&apos;s
+                      Templates from Project &gt; Templates first.
                     </p>
                   )}
                 </div>
@@ -576,7 +576,7 @@ export function TaskFormDialog({
                       </Select>
                       {form.workstreamId && departments.length === 0 && (
                         <p className="text-xs text-muted-foreground">
-                          Configure this Service and its Activities from Project &gt; Services first.
+                          Configure this Template and its Activities from Project &gt; Templates first.
                         </p>
                       )}
                       {activityRequired && form.activityId === NO_ACTIVITY && (

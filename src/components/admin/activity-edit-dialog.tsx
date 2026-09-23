@@ -123,7 +123,7 @@ export function ActivityEditDialog({ open, onOpenChange, activity, serviceLine, 
 
           <div className="grid grid-cols-2 gap-4 rounded-md border bg-muted/30 p-3 text-sm">
             <div className="flex flex-col gap-0.5">
-              <span className="text-xs font-medium text-muted-foreground">Service</span>
+              <span className="text-xs font-medium text-muted-foreground">Template</span>
               <span>{serviceLine.name}</span>
             </div>
             <div className="flex flex-col gap-0.5">
@@ -143,7 +143,7 @@ export function ActivityEditDialog({ open, onOpenChange, activity, serviceLine, 
           </label>
 
           <div className="flex flex-col gap-2">
-            <Label>Suggested Tasks</Label>
+            <Label>Tasks</Label>
             {suggestedTasks.map((title, i) => (
               <div key={i} className="flex items-center gap-2">
                 <Input value={title} onChange={(e) => updateSuggestedTask(i, e.target.value)} />
@@ -151,7 +151,7 @@ export function ActivityEditDialog({ open, onOpenChange, activity, serviceLine, 
                   type="button"
                   variant="ghost"
                   size="icon-sm"
-                  aria-label={`Remove suggested task ${i + 1}`}
+                  aria-label={`Remove task ${i + 1}`}
                   onClick={() => removeSuggestedTask(i)}
                 >
                   <X />
@@ -162,7 +162,7 @@ export function ActivityEditDialog({ open, onOpenChange, activity, serviceLine, 
               <Input
                 value={newTaskTitle}
                 onChange={(e) => setNewTaskTitle(e.target.value)}
-                placeholder="Add a suggested task…"
+                placeholder="Add a task…"
                 onKeyDown={(e) => {
                   if (e.key === "Enter") {
                     e.preventDefault();

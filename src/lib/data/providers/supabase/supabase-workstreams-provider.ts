@@ -345,7 +345,7 @@ export const supabaseWorkstreamsProvider: WorkstreamsProvider = {
       // same friendly message create_workstream's own app-level check already uses for the create
       // path.
       if (error.code === "23505") {
-        throw new Error("This Service is already active on this Project.");
+        throw new Error("This Template is already active on this Project.");
       }
       throw new Error(error.message);
     }

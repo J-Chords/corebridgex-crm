@@ -40,7 +40,7 @@ function requireWorkstreamAccess(viewer: User, workstream: Workstream) {
     { leadUserId: workstream.leadUserId, teamUserIds: workstreamTeamIds(workstream.id), companyId: workstream.companyId },
     db.users
   );
-  if (!accessible) throw new Error("You don't have access to that service.");
+  if (!accessible) throw new Error("You don't have access to that Template.");
 }
 
 /**
@@ -67,7 +67,7 @@ function requireActiveProjectForWorkstream(workstream: Workstream) {
  */
 function requireActiveWorkstreamForTaskAssignment(workstream: Workstream, previousWorkstreamId: string | null) {
   if (workstream.status === "cancelled" && workstream.id !== previousWorkstreamId) {
-    throw new Error("This Service is archived — reactivate it before adding new Tasks.");
+    throw new Error("This Template is archived — reactivate it before adding new Tasks.");
   }
 }
 
@@ -86,7 +86,7 @@ function requireActivityEnabledOnWorkstream(workstreamId: string, activityId: st
     .map((wa) => wa.activityId);
   if (enabledIds.length === 0) return;
   if (!enabledIds.includes(activityId)) {
-    throw new Error("That activity isn't enabled for this service.");
+    throw new Error("That activity isn't enabled for this Template.");
   }
 }
 
@@ -125,12 +125,12 @@ function resolveActivityForTaskCreation(viewer: User, workstream: Workstream, ac
   if (alreadyEnabled) return;
 
   if (!canExtendWorkstreamActivities(viewer, workstream)) {
-    throw new Error("That activity is not yet enabled for this service, and you don't have permission to add it.");
+    throw new Error("That activity is not yet enabled for this Template, and you don't have permission to add it.");
   }
   const activity = db.activities.find((a) => a.id === activityId);
   const department = activity ? db.departments.find((d) => d.id === activity.departmentId) : undefined;
   if (!department || department.serviceLineId !== workstream.serviceLineId) {
-    throw new Error("That activity doesn't belong to this service.");
+    throw new Error("That activity doesn't belong to this Template.");
   }
   db.workstreamActivities = [...db.workstreamActivities, { workstreamId: workstream.id, activityId }];
 }
@@ -386,7 +386,7 @@ export const mockTasksProvider: TasksProvider = {
 
   async createTask(viewer, input) {
     const workstream = db.workstreams.find((e) => e.id === input.workstreamId);
-    if (!workstream) throw new Error("Service not found.");
+    if (!workstream) throw new Error("Template not found.");
     requireWorkstreamAccess(viewer, workstream);
     requireActiveProjectForWorkstream(workstream);
     requireActiveWorkstreamForTaskAssignment(workstream, null);
@@ -451,7 +451,7 @@ export const mockTasksProvider: TasksProvider = {
     const nextActivityId = input.activityId ?? null;
 
     const workstream = db.workstreams.find((e) => e.id === input.workstreamId);
-    if (!workstream) throw new Error("Service not found.");
+    if (!workstream) throw new Error("Template not found.");
     requireWorkstreamAccess(viewer, workstream);
     requireActiveWorkstreamForTaskAssignment(workstream, existing.workstreamId);
     requireActivityEnabledOnWorkstream(workstream.id, input.activityId);

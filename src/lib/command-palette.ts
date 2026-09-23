@@ -18,9 +18,10 @@ export const PALETTE_CATEGORY_LABELS: Record<PaletteCategory, string> = {
   // stays "companies" internally), only the visible label and result destinations changed.
   companies: "Projects",
   tasks: "Tasks",
-  // Service Level Phase B — Workstream is the legacy internal implementation name; the product
-  // term is Service (category key stays "workstreams" internally, only the visible label changed).
-  workstreams: "Services",
+  // Service Level Phase B; Phase 1 Template workspace — Workstream is the legacy internal
+  // implementation name; the product term is Template (category key stays "workstreams"
+  // internally, only the visible label changed).
+  workstreams: "Templates",
   reports: "Reports",
   people: "People",
   actions: "Actions",

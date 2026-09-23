@@ -101,7 +101,7 @@ export function AppSidebar() {
   ];
   const adminItems: NavItem[] = [
     ...(user && isSuperadmin(user) ? [{ href: "/dashboard/admin/users", label: "Users", icon: UsersRound }] : []),
-    ...(user && isSuperadmin(user) ? [{ href: "/dashboard/admin/services", label: "Services", icon: ShieldCheck }] : []),
+    ...(user && isSuperadmin(user) ? [{ href: "/dashboard/admin/templates", label: "Templates", icon: ShieldCheck }] : []),
   ];
   const groups: NavGroup[] = [
     { label: "Workspace", items: workspaceItems },

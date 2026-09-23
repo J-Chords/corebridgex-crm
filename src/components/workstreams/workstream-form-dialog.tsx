@@ -229,7 +229,7 @@ export function WorkstreamFormDialog({
         onOpenChange(false);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to save service.");
+      setError(err instanceof Error ? err.message : "Unable to save template.");
     } finally {
       setIsSubmitting(false);
     }
@@ -244,20 +244,20 @@ export function WorkstreamFormDialog({
     <FormDialog
       open={open}
       onOpenChange={onOpenChange}
-      srTitle={mode === "create" ? `New service for ${company.name}` : `Editing "${workstream?.name ?? "this service"}"`}
+      srTitle={mode === "create" ? `New template for ${company.name}` : `Editing "${workstream?.name ?? "this template"}"`}
     >
       <form onSubmit={handleSubmit} className="flex h-full min-h-0 flex-col">
         <FormDrawerHeader
-          title={mode === "create" ? "New Service" : "Edit Service"}
+          title={mode === "create" ? "New Template" : "Edit Template"}
           context={company.name}
           secondaryContext={company.brand ? `Partner brand: ${company.brand.name}` : "No Brand set for this client yet"}
         />
         <FormDrawerBody>
-          <FormDrawerSection label="Service">
+          <FormDrawerSection label="Template">
             <div className="flex flex-col gap-1.5">
               <Select
                 items={{
-                  ...(allowNoService ? { [NO_SERVICE_LINE]: "Select a service…" } : {}),
+                  ...(allowNoService ? { [NO_SERVICE_LINE]: "Select a Template…" } : {}),
                   ...Object.fromEntries(selectableServiceLines.map((sl) => [sl.id, sl.name])),
                 }}
                 value={form.serviceLineId}
@@ -266,10 +266,10 @@ export function WorkstreamFormDialog({
                 <SelectTrigger
                   autoFocus
                   id="workstream-service-line"
-                  aria-label="Service"
+                  aria-label="Template"
                   className="h-auto w-full justify-start gap-2 rounded-none border-0 bg-transparent p-0 text-xl font-semibold tracking-tight shadow-none focus-visible:ring-0"
                 >
-                  <SelectValue placeholder="Select a service…" />
+                  <SelectValue placeholder="Select a Template…" />
                 </SelectTrigger>
                 <SelectContent>
                   {allowNoService && <SelectItem value={NO_SERVICE_LINE}>None</SelectItem>}
@@ -281,9 +281,7 @@ export function WorkstreamFormDialog({
                   ))}
                 </SelectContent>
               </Select>
-              {!serviceSatisfied && (
-                <p className="text-xs text-warning">Required — every client Service must be tied to a Service Line.</p>
-              )}
+              {!serviceSatisfied && <p className="text-xs text-warning">Required — select a Template.</p>}
             </div>
 
             {/* MVP Gap Closure (boss feedback) — kept deliberately: this is the one place the
@@ -313,11 +311,11 @@ export function WorkstreamFormDialog({
           <FormDialogColumns>
             <FormDrawerSection label="Ownership">
               {isEmployee(user) ? (
-                <FormDrawerField label="Project Service Lead">
-                  <p className="text-sm text-muted-foreground">You — Services you create are always your own.</p>
+                <FormDrawerField label="Project Template Lead">
+                  <p className="text-sm text-muted-foreground">You — Templates you create are always your own.</p>
                 </FormDrawerField>
               ) : (
-                <FormDrawerField label="Project Service Lead" htmlFor="workstream-lead">
+                <FormDrawerField label="Project Template Lead" htmlFor="workstream-lead">
                   <Select
                     items={Object.fromEntries(
                       assignableStaff.map((s) => [
@@ -341,8 +339,8 @@ export function WorkstreamFormDialog({
                     </SelectContent>
                   </Select>
                   <p className="text-xs text-muted-foreground">
-                    The operational owner of this Service within this Project — distinct from a Global Team Lead&apos;s
-                    org-wide responsibility for the Service itself.
+                    The operational owner of this Template within this Project — distinct from a Global Team Lead&apos;s
+                    org-wide responsibility for the Template itself.
                   </p>
                 </FormDrawerField>
               )}
@@ -360,7 +358,7 @@ export function WorkstreamFormDialog({
                   onChange={(e) => setForm((p) => ({ ...p, startDate: e.target.value }))}
                 />
               </FormDrawerField>
-              <FormDrawerField label="Service end date" htmlFor="workstream-end-date">
+              <FormDrawerField label="Template end date" htmlFor="workstream-end-date">
                 <Input
                   id="workstream-end-date"
                   type="date"
@@ -369,7 +367,7 @@ export function WorkstreamFormDialog({
                 />
               </FormDrawerField>
               <p className="text-xs text-muted-foreground">
-                Start/end are both optional — an ongoing service doesn&apos;t need a fixed end date.
+                Start/end are both optional — an ongoing template doesn&apos;t need a fixed end date.
               </p>
             </FormDrawerSection>
           </FormDialogColumns>
@@ -377,7 +375,7 @@ export function WorkstreamFormDialog({
           <FormDrawerSection label="Recurrence">
             <label className="flex items-center justify-between gap-4 rounded-lg border bg-muted/20 p-3">
               <div className="flex flex-col gap-0.5">
-                <span className="text-sm font-medium">This service recurs</span>
+                <span className="text-sm font-medium">This template recurs</span>
                 <span className="text-xs text-muted-foreground">
                   Set a cadence so &quot;Generate next occurrence&quot; knows when the next period is due.
                 </span>
@@ -448,17 +446,17 @@ export function WorkstreamFormDialog({
           </FormDrawerSection>
 
           {!isEmployee(user) && (
-            <FormDrawerSection label="Project Service Team">
+            <FormDrawerSection label="Project Template Team">
               <MultiSelect
                 options={assignableStaff.map((s) => ({ id: s.id, label: s.fullName, sublabel: s.email }))}
                 value={form.teamUserIds}
                 onChange={(ids) => setForm((p) => ({ ...p, teamUserIds: ids }))}
                 placeholder="No team members"
                 searchPlaceholder="Search people…"
-                aria-label="Project Service Team"
+                aria-label="Project Template Team"
               />
               <p className="text-xs text-muted-foreground">
-                This Project&apos;s own staffing for this Service — separate from org-wide &quot;Works In Services&quot;
+                This Project&apos;s own staffing for this Template — separate from org-wide &quot;Works In Templates&quot;
                 membership.
               </p>
             </FormDrawerSection>
@@ -472,9 +470,9 @@ export function WorkstreamFormDialog({
             }
           >
             {form.serviceLineId === NO_SERVICE_LINE ? (
-              <p className="text-sm text-muted-foreground">Select a service to configure its activities.</p>
+              <p className="text-sm text-muted-foreground">Select a Template to configure its activities.</p>
             ) : activityDepartments.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No activities set up for this service yet.</p>
+              <p className="text-sm text-muted-foreground">No activities set up for this template yet.</p>
             ) : (
               <>
                 <MultiSelect
@@ -495,7 +493,7 @@ export function WorkstreamFormDialog({
                   placeholder="No activities selected"
                   searchPlaceholder="Search activities…"
                   emptyText="All available Activities are configured."
-                  aria-label="Activities for this Service"
+                  aria-label="Activities for this Template"
                 />
                 {!activitiesSatisfied && (
                   <p className="text-xs text-warning">Select at least one activity to continue.</p>
@@ -517,7 +515,7 @@ export function WorkstreamFormDialog({
             Cancel
           </Button>
           <Button type="submit" disabled={!canSubmit}>
-            {isSubmitting ? "Saving…" : mode === "create" ? "Create service" : "Save changes"}
+            {isSubmitting ? "Saving…" : mode === "create" ? "Create Template" : "Save changes"}
           </Button>
         </FormDrawerFooter>
       </form>

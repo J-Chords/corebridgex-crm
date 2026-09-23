@@ -185,18 +185,18 @@ export function EmployeeDashboard() {
         />
       </div>
 
-      <SectionBreak num="01" label="My Services" />
+      <SectionBreak num="01" label="My Templates" />
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">My Services</CardTitle>
+          <CardTitle className="text-base">My Templates</CardTitle>
           <CardAction>
-            <CardExpandButton onClick={() => setWorkstreamsFocusOpen(true)} label="Expand My Services" />
+            <CardExpandButton onClick={() => setWorkstreamsFocusOpen(true)} label="Expand My Templates" />
           </CardAction>
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
           {activeWorkstreams.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No active services right now.</p>
+            <p className="text-sm text-muted-foreground">No active Templates right now.</p>
           ) : (
             <>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
@@ -226,11 +226,11 @@ export function EmployeeDashboard() {
       <DashboardWidgetFocusDialog
         open={workstreamsFocusOpen}
         onOpenChange={setWorkstreamsFocusOpen}
-        title="My Services"
-        description={`${activeWorkstreams.length} active service${activeWorkstreams.length === 1 ? "" : "s"}`}
+        title="My Templates"
+        description={`${activeWorkstreams.length} active Template${activeWorkstreams.length === 1 ? "" : "s"}`}
       >
         {activeWorkstreams.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No active services right now.</p>
+          <p className="text-sm text-muted-foreground">No active Templates right now.</p>
         ) : (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
             {activeWorkstreams.map((workstream, i) => (

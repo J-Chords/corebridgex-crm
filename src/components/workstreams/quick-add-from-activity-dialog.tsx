@@ -93,7 +93,7 @@ export function QuickAddFromActivityDialog({ open, onOpenChange, workstream, onA
         <DialogHeader>
           <DialogTitle>Add from activity</DialogTitle>
           <DialogDescription>
-            Pick one of this service&apos;s own activities to see its curated quick-start tasks — click one to add it here, unassigned and ready to be picked up.
+            Pick one of this template&apos;s own activities to see its curated quick-start tasks — click one to add it here, unassigned and ready to be picked up.
           </DialogDescription>
         </DialogHeader>
 
@@ -125,7 +125,7 @@ export function QuickAddFromActivityDialog({ open, onOpenChange, workstream, onA
             </Select>
             {departments.length === 0 && (
               <p className="text-xs text-muted-foreground">
-                {workstream.serviceLineId ? "No activities set up for this service yet." : "No activities set up for this brand yet."}
+                {workstream.serviceLineId ? "No activities set up for this template yet." : "No activities set up for this brand yet."}
               </p>
             )}
           </div>

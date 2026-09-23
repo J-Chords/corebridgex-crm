@@ -38,15 +38,15 @@ function validateWorkstreamTaskActivity(
   activityId: string | null
 ) {
   if (workstreamId && !db.workstreams.some((w) => w.id === workstreamId && w.projectId === projectId)) {
-    throw new Error("Service not found on this project.");
+    throw new Error("Template not found on this project.");
   }
   if (taskId && !db.tasks.some((t) => t.id === taskId && t.workstreamId === workstreamId)) {
     throw new Error("Task not found on this project.");
   }
   if (activityId) {
-    if (!workstreamId) throw new Error("An Activity requires its Service to be selected too.");
+    if (!workstreamId) throw new Error("An Activity requires its Template to be selected too.");
     if (!db.workstreamActivities.some((wa) => wa.workstreamId === workstreamId && wa.activityId === activityId)) {
-      throw new Error("That Activity does not belong to the selected Service.");
+      throw new Error("That Activity does not belong to the selected Template.");
     }
   }
 }

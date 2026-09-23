@@ -199,7 +199,7 @@ export function GenerateOccurrenceDialog({
           <DialogTitle>Generate next occurrence</DialogTitle>
           <DialogDescription>
             {step === "form"
-              ? `Create the next period's service for "${workstream.name}", reusing its current tasks with due dates shifted forward.`
+              ? `Create the next period's template for "${workstream.name}", reusing its current tasks with due dates shifted forward.`
               : "Review what this will create before it commits."}
           </DialogDescription>
         </DialogHeader>
@@ -208,7 +208,7 @@ export function GenerateOccurrenceDialog({
           <>
             <div className="flex max-h-[65vh] flex-col gap-4 overflow-y-auto pr-1">
               <FloatingLabelInput
-                label="Service name"
+                label="Template name"
                 required
                 value={form.name}
                 onChange={(e) => {
@@ -308,11 +308,11 @@ export function GenerateOccurrenceDialog({
 
               <div>
                 <p className="mb-2 text-sm font-medium">
-                  {`${sourceTasks.length} task${sourceTasks.length === 1 ? "" : "s"} will be created, reusing this service's current tasks and assignees`}
+                  {`${sourceTasks.length} task${sourceTasks.length === 1 ? "" : "s"} will be created, reusing this template's current tasks and assignees`}
                 </p>
                 {sourceTasks.length === 0 ? (
                   <p className="text-xs text-muted-foreground">
-                    This service has no tasks yet — only the service itself will be created.
+                    This template has no tasks yet — only the template itself will be created.
                   </p>
                 ) : (
                   <div className="flex flex-col gap-1">
@@ -350,7 +350,7 @@ export function GenerateOccurrenceDialog({
                 Back
               </Button>
               <Button type="button" disabled={isSubmitting} onClick={handleConfirm}>
-                {isSubmitting ? "Creating…" : `Create service & ${sourceTasks.length} task${sourceTasks.length === 1 ? "" : "s"}`}
+                {isSubmitting ? "Creating…" : `Create template & ${sourceTasks.length} task${sourceTasks.length === 1 ? "" : "s"}`}
               </Button>
             </DialogFooter>
           </>

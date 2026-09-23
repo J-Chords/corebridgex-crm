@@ -16,12 +16,11 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/lib/auth/auth-context";
 import { useWorkstream } from "@/lib/data/hooks/use-workstreams";
-import { useCompany, useCompanyLookups } from "@/lib/data/hooks/use-companies";
+import { useCompany } from "@/lib/data/hooks/use-companies";
 import { useProject } from "@/lib/data/hooks/use-projects";
 import { isProjectActiveForNewWork, projectNotActiveMessage } from "@/lib/data/project-display";
 import { useTasks } from "@/lib/data/hooks/use-tasks";
 import { useWorkstreamActivities } from "@/lib/data/hooks/use-workstream-activities";
-import { useServiceLineStaffing } from "@/lib/data/hooks/use-service-membership";
 import { useRunningTimer } from "@/lib/data/hooks/use-time-entries";
 import { canManageWorkstreams } from "@/lib/data/permissions";
 import { workstreamDisplayHeading } from "@/lib/data/workstream-name";
@@ -83,7 +82,7 @@ function WorkstreamDetailPageContent({ params }: { params: Promise<{ id: string 
           Back to projects
         </Link>
         <p className="text-sm text-muted-foreground">
-          This service doesn&apos;t exist, or you don&apos;t have access to it.
+          This template doesn&apos;t exist, or you don&apos;t have access to it.
         </p>
       </div>
     );
@@ -107,10 +106,6 @@ function LoadedWorkstreamDetailPage({
   const toastManager = useToastManager();
   const { tasks, isLoading: tasksLoading, refresh: refreshTasks } = useTasks({ workstreamId: workstream.id });
   const { departments: activityDepartments, isLoading: activitiesLoading } = useWorkstreamActivities(workstream);
-  const { staffing: serviceStaffing } = useServiceLineStaffing(workstream.serviceLineId ? [workstream.serviceLineId] : []);
-  const globalStaffing = serviceStaffing[0];
-  const { assignableStaff } = useCompanyLookups();
-  const nameFor = (userId: string) => assignableStaff.find((s) => s.id === userId)?.fullName ?? "Unknown";
   const { runningTimer } = useRunningTimer();
   const runningTaskId = runningTimer?.taskId ?? null;
 
@@ -178,7 +173,7 @@ function LoadedWorkstreamDetailPage({
                 href={backHref}
                 className="w-fit text-xs text-muted-foreground hover:text-foreground hover:underline"
               >
-                {workstream.company.name} / Services
+                {workstream.company.name} &gt; Templates
               </Link>
             )}
             <div className="flex flex-wrap items-center gap-2.5">
@@ -195,7 +190,7 @@ function LoadedWorkstreamDetailPage({
           {canManage && (
             <div className="flex items-center gap-2">
               <Button variant="outline" onClick={() => setEditOpen(true)}>
-                <Pencil /> Edit Service
+                <Pencil /> Edit Template
               </Button>
               <WorkstreamLifecycleMenu workstream={workstream} onChanged={refresh} />
             </div>
@@ -284,19 +279,19 @@ function LoadedWorkstreamDetailPage({
               (Employee never sees Time vs. Budget, so Service Details takes the full row for them),
               stacked on small screens. */}
           <div className={`grid grid-cols-1 gap-4 ${canManage ? "sm:grid-cols-2" : ""}`}>
-            {/* CD-162 post-manual-QA pass — "Global Team Leads" stays off this card: it's org-wide
-                staffing metadata, not this Project Service's own operational info, and is already
-                covered by the Team tab's own "Global Service Staffing" section. Created By is kept
-                but demoted to a quiet footer line — still useful for audit context, but shouldn't
+            {/* CD-162 post-manual-QA pass — global, org-wide Team Lead staffing stays off this card;
+                it's not this Project Template's own operational info (Phase 1 also removed the
+                Team tab's org-wide staffing display entirely — see below). Created By is kept but
+                demoted to a quiet footer line — still useful for audit context, but shouldn't
                 compete visually with the Lead. */}
             <Card size="sm">
               <CardHeader className="pb-1">
-                <CardTitle className="text-sm text-muted-foreground">Service Details</CardTitle>
+                <CardTitle className="text-sm text-muted-foreground">Template Details</CardTitle>
               </CardHeader>
               <CardContent className="flex flex-col gap-2 pt-0">
                 {workstream.description && <p className="text-sm text-muted-foreground">{workstream.description}</p>}
                 <span className="text-sm">
-                  Project Service Lead: <span className="font-medium text-foreground">{workstream.lead.fullName}</span>
+                  Project Template Lead: <span className="font-medium text-foreground">{workstream.lead.fullName}</span>
                 </span>
                 {workstream.recurrence && <RecurrenceIndicator recurrence={workstream.recurrence} />}
                 <span className="text-xs text-muted-foreground/70">Created by {workstream.createdBy.fullName}</span>
@@ -320,60 +315,32 @@ function LoadedWorkstreamDetailPage({
       )}
 
       {tab === "team" && (
-        // CD-162 post-manual-QA pass — the two Team-tab cards ("This Project" / "Global Service
-        // Staffing") were two full card frames around genuinely small amounts of content, reading
-        // as stretched/empty. One card with two clearly-labeled sections keeps the same information
-        // at a fraction of the visual weight.
+        // Phase 1 Template workspace — the org-wide "Global Service Staffing" column was removed
+        // (display-only cleanup; the underlying global staffing data/model is untouched, still
+        // shown on the Template's own admin detail page). This Project's own Lead/Team is all that
+        // remains here.
         <Card size="sm">
-          <CardContent className="grid grid-cols-1 gap-5 pt-4 sm:grid-cols-2">
-            <div className="flex flex-col gap-3">
-              <span className="font-mono text-[10px] tracking-wide text-muted-foreground uppercase">This Project</span>
-              <div className="flex flex-col gap-1">
-                <span className="text-xs font-medium text-muted-foreground">Project Service Lead</span>
-                <span className="text-sm">{workstream.lead.fullName}</span>
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <span className="text-xs font-medium text-muted-foreground">Project Service Team</span>
-                {workstream.team.length === 0 ? (
-                  <span className="text-sm text-muted-foreground">No team members.</span>
-                ) : (
-                  <div className="flex flex-col gap-1.5">
-                    {workstream.team.map((member) => (
-                      <div key={member.id} className="flex items-center gap-2">
-                        <Avatar size="sm">
-                          <AvatarFallback className="text-[0.65rem]">{initials(member.fullName)}</AvatarFallback>
-                        </Avatar>
-                        <span className="text-sm">{member.fullName}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
+          <CardContent className="flex flex-col gap-3 pt-4">
+            <div className="flex flex-col gap-1">
+              <span className="text-xs font-medium text-muted-foreground">Project Template Lead</span>
+              <span className="text-sm">{workstream.lead.fullName}</span>
             </div>
-
-            <div className="flex flex-col gap-3 sm:border-l sm:pl-5">
-              <span className="font-mono text-[10px] tracking-wide text-muted-foreground uppercase">
-                Global Service Staffing
-              </span>
-              <div className="flex flex-col gap-1">
-                <span className="text-xs font-medium text-muted-foreground">Global Team Leads</span>
-                <span className="text-sm">
-                  {globalStaffing && globalStaffing.teamLeadUserIds.length > 0
-                    ? globalStaffing.teamLeadUserIds.map(nameFor).join(", ")
-                    : "None"}
-                </span>
-              </div>
-              <div className="flex flex-col gap-1">
-                <span className="text-xs font-medium text-muted-foreground">Works In Service</span>
-                <span className="text-sm">
-                  {globalStaffing && globalStaffing.employeeUserIds.length > 0
-                    ? globalStaffing.employeeUserIds.map(nameFor).join(", ")
-                    : "None"}
-                </span>
-              </div>
-              <p className="text-xs text-muted-foreground italic">
-                Org-wide — doesn&apos;t by itself grant access to this or any other Project.
-              </p>
+            <div className="flex flex-col gap-1.5">
+              <span className="text-xs font-medium text-muted-foreground">Project Template Team</span>
+              {workstream.team.length === 0 ? (
+                <span className="text-sm text-muted-foreground">No team members.</span>
+              ) : (
+                <div className="flex flex-col gap-1.5">
+                  {workstream.team.map((member) => (
+                    <div key={member.id} className="flex items-center gap-2">
+                      <Avatar size="sm">
+                        <AvatarFallback className="text-[0.65rem]">{initials(member.fullName)}</AvatarFallback>
+                      </Avatar>
+                      <span className="text-sm">{member.fullName}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -387,7 +354,7 @@ function LoadedWorkstreamDetailPage({
                 line for the common no-schedule case, the real grid only when there's something to
                 show. */}
             {!workstream.startDate && !workstream.endDate && !workstream.recurrence ? (
-              <p className="text-sm text-muted-foreground">No schedule configured for this service.</p>
+              <p className="text-sm text-muted-foreground">No schedule configured for this template.</p>
             ) : (
               <>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -396,7 +363,7 @@ function LoadedWorkstreamDetailPage({
                 <span className="text-sm">{workstream.startDate ?? "Not set"}</span>
               </div>
               <div className="flex flex-col gap-1">
-                <span className="text-xs font-medium text-muted-foreground">Service end date</span>
+                <span className="text-xs font-medium text-muted-foreground">Template end date</span>
                 <span className="text-sm">{workstream.endDate ?? "Not set"}</span>
               </div>
             </div>
@@ -417,7 +384,7 @@ function LoadedWorkstreamDetailPage({
                 </div>
               </div>
             ) : (
-              <p className="text-sm text-muted-foreground">This service doesn&apos;t recur.</p>
+              <p className="text-sm text-muted-foreground">This template doesn&apos;t recur.</p>
             )}
             {canManage && workstream.recurrence?.isActive && workstream.recurrence.nextOccurrenceDate != null && (
               <Button variant="outline" className="w-fit" onClick={() => setGenerateOpen(true)}>
