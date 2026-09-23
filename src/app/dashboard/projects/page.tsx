@@ -2,7 +2,6 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { Archive, ArrowLeft, Ban, CheckCircle2, ChevronDown, PauseCircle, PlayCircle, Plus, Search, Trash2 } from "lucide-react";
 import { useAuth } from "@/lib/auth/auth-context";
 import { useProjects, useProjectGroups } from "@/lib/data/hooks/use-projects";
@@ -80,7 +79,6 @@ export default function ProjectsPage() {
   const { tasks } = useTasks();
   const { groups: projectGroups } = useProjectGroups();
   const { serviceLines, assignableStaff } = useCompanyLookups();
-  const router = useRouter();
   const [search, setSearch] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   // Archived/Trash start collapsed (same "hidden from ordinary browsing by default, reachable on
@@ -234,10 +232,6 @@ export default function ProjectsPage() {
       else next.add(status);
       return next;
     });
-  }
-
-  function openProject(id: string) {
-    router.push(`/dashboard/projects/${id}`);
   }
 
   async function handleRestore(id: string) {
@@ -454,7 +448,6 @@ export default function ProjectsPage() {
             serviceLines={serviceLines}
             isCollapsed={collapsedGroups.has(group.status)}
             onToggleCollapse={() => toggleGroup(group.status)}
-            onOpenProject={openProject}
             onRestore={group.status === "trash" && canCreate ? handleRestore : undefined}
           />
         ))}
@@ -563,7 +556,6 @@ function ProjectTableGroup({
   serviceLines,
   isCollapsed,
   onToggleCollapse,
-  onOpenProject,
   onRestore,
 }: {
   status: ProjectStatus;
@@ -573,7 +565,6 @@ function ProjectTableGroup({
   serviceLines: { id: string; name: string }[];
   isCollapsed: boolean;
   onToggleCollapse: () => void;
-  onOpenProject: (id: string) => void;
   /** Admin-only, only ever passed for the Trash view — an explicit action, never status-select. */
   onRestore?: (id: string) => void;
 }) {
@@ -613,19 +604,11 @@ function ProjectTableGroup({
           {projects.map((project) => {
             const stats = rowStats.get(project.id);
             return (
-              <div
+              <Link
                 key={project.id}
-                role="button"
-                tabIndex={0}
-                onClick={() => onOpenProject(project.id)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    onOpenProject(project.id);
-                  }
-                }}
+                href={`/dashboard/projects/${project.id}`}
                 className={cn(
-                  "grid h-12 min-w-fit cursor-pointer items-center gap-3 px-3 text-sm transition-colors hover:bg-muted/50",
+                  "grid h-12 min-w-fit items-center gap-3 px-3 text-sm outline-none transition-colors hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/50",
                   project.isInternal && "bg-muted/20"
                 )}
                 style={{ gridTemplateColumns }}
@@ -701,6 +684,7 @@ function ProjectTableGroup({
                     size="sm"
                     variant="outline"
                     onClick={(e) => {
+                      e.preventDefault();
                       e.stopPropagation();
                       onRestore(project.id);
                     }}
@@ -708,7 +692,7 @@ function ProjectTableGroup({
                     Restore
                   </Button>
                 )}
-              </div>
+              </Link>
             );
           })}
         </div>

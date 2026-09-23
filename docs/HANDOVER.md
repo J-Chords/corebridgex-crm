@@ -16,19 +16,20 @@ An internal Project Management / PSA (Professional Services Automation) web app 
 ## 3. Current `main` head
 
 ```
-ab9aa8f1c27931a488c543b81163feaaa16d4fd4
+726c0f98dd346a5ce427a297a1bb2e455bd3f0dd
 ```
 
 Re-verify with `git rev-parse origin/main` — this file goes stale the moment another PR merges. See `current-state.md` for the live picture.
 
-## 4. Recently completed tickets
+## 4. Recently completed / in-flight tickets
 
 - **CD-162** — Boss Feedback MVP Simplification (Dashboard naming, My Day/Planner merge, Project tab consolidation 9→7, Service/Task hierarchy UI polish, employee-service-activity authorization parity). PR #1, merged.
 - **CD-190** — Merge Team Updates + Team Time into Team Activity, plus a local-calendar-date time-entry stabilization fix. PR #2, merged.
 - **CD-194** — Technical documentation and developer handover (this document set). PR #3, merged.
 - **CD-196** — Clarify Dashboard and My Day information architecture, plus a Product Owner-approved follow-up polish pass (Team Workload layout fix, Services-inspired Notifications redesign, notification safe-routing fix). PR #4, merged. Locks Dashboard = role-scoped overview/attention, My Day = personal execution/planning (personal by default for every role); see `decisions.md` for the full placement decisions.
 - **CD-205** — Retire the legacy "Project Template" bundle architecture at the schema/source level (`project_templates`/`project_template_services`/`project_template_activities`, their RPCs/triggers/RLS/grants, and dead provider/hook/type source). PR #5, merged. Hosted migration `20260921090000_retire_project_template_bundle.sql` applied and independently re-verified live. The separate, still-live Service-recipe system (`templates`/`template_tasks`/`template_checklist_items`, `apply_template`, Company-detail "Apply template") is explicitly preserved and confirmed unaffected. Phase 0 of the Template terminology redesign. See `decisions.md` and `data-and-supabase.md`.
-- **CD-206** — Phase 1 Template workspace and terminology: the visible product term for the Service catalog becomes "Template" (Admin nav + new `/dashboard/admin/templates` list/detail routes, Project-facing "Templates" tab with "Global Service Staffing" removed, Task List column changes — Assignee column removed, Start Date column added — staffing-terminology relabel, Activity catalog "Suggested Tasks"→"Tasks"). PR #7, merged. `service_lines`/`workstreams` persistence and all authorization/RLS/RPCs are unchanged; no migration needed. The separate, still-live Service-recipe system (Company-detail "Apply template" and the Accomplishments Report's own unrelated "Add service" Activity-picker) is explicitly preserved and confirmed unaffected. Product Owner Try-It-Yourself review approved. See `decisions.md`'s "Phase 1 — Template workspace and terminology" entry. Phase 2 (next stage of the Template redesign) is not started.
+- **CD-206** — Phase 1 Template workspace and terminology: the visible product term for the Service catalog becomes "Template" (Admin nav + new `/dashboard/admin/templates` list/detail routes, Project-facing "Templates" tab with "Global Service Staffing" removed, Task List column changes — Assignee column removed, Start Date column added — staffing-terminology relabel, Activity catalog "Suggested Tasks"→"Tasks"). PR #7, merged. `service_lines`/`workstreams` persistence and all authorization/RLS/RPCs are unchanged; no migration needed. The separate, still-live Service-recipe system (Company-detail "Apply template" and the Accomplishments Report's own unrelated "Add service" Activity-picker) is explicitly preserved and confirmed unaffected. Product Owner Try-It-Yourself review approved. See `decisions.md`'s "Phase 1 — Template workspace and terminology" entry.
+- **CD-207** — Phase 2 Project Overview redesign + KPI navigation: one shared Overview structure for every role, a locked 5-tile clickable KPI row (Templates/Open Tasks/Attention/Due/Members), Attention/Due definitions reusing existing Task/date helpers, the former "Project Details"/"Administrative Details" cards consolidated into one with zero field loss, a real Project tab/URL desync bug fixed, and Projects list rows converted to real `<Link>` navigation. **Implemented on branch `feature/CD-207-project-overview-redesign`. Product Owner manual review: approved (2026-09-23) — being checkpointed for PR/merge.** See `decisions.md`'s "Phase 2 — Project Overview redesign + KPI navigation" entry.
 
 ## 5. Open ticket(s)
 
@@ -36,7 +37,7 @@ Re-verify with `git rev-parse origin/main` — this file goes stale the moment a
 
 ## 6. Current Jira states
 
-CD-162, CD-190, CD-196, CD-205, and CD-206: `pending deployment` (merged + validated, awaiting a hosting decision — see `current-state.md` for each ticket's exact status). CD-194: `Sign-off`. CD-193: `New`. Full workflow state list and the reasoning behind each transition: `current-state.md`.
+CD-162, CD-190, CD-196, CD-205, and CD-206: `pending deployment` (merged + validated, awaiting a hosting decision — see `current-state.md` for each ticket's exact status). CD-194: `Sign-off`. CD-193: `New`. CD-207: `In Progress` (implemented, validated, and Product Owner-approved; moving to `Code review` once the implementation PR is opened). Full workflow state list and the reasoning behind each transition: `current-state.md`.
 
 ## 7. Current deployment state
 
@@ -142,7 +143,7 @@ STACK: Next.js 16.2.11 (App Router — has real breaking changes vs. older Next.
   node_modules/next/dist/docs/ before assuming an API), React 19, TypeScript (strict),
   Tailwind CSS, Supabase (Postgres + Auth).
 
-CURRENT MAIN HEAD: ab9aa8f1c27931a488c543b81163feaaa16d4fd4 (re-verify — this drifts)
+CURRENT MAIN HEAD: 726c0f98dd346a5ce427a297a1bb2e455bd3f0dd (re-verify — this drifts)
 
 RECENTLY COMPLETED (merged to main):
 - CD-162: Boss Feedback MVP Simplification (PR #1)
@@ -173,10 +174,27 @@ RECENTLY COMPLETED (merged to main):
   Accomplishments Report's own unrelated "Add service" Activity-picker) is explicitly
   preserved and confirmed unaffected. Product Owner Try-It-Yourself review approved.
   See decisions.md's "Phase 1 — Template workspace and terminology" entry for full
-  scope. Phase 2 (next stage of the Template redesign) is not started.
+  scope.
 CD-162, CD-190, CD-196, CD-205, and CD-206 currently sit at "pending deployment"
 (merged + validated, no hosting target exists yet to deploy to); CD-194 at
 "Sign-off".
+
+IN-FLIGHT, PRODUCT OWNER-APPROVED, BEING CHECKPOINTED FOR MERGE:
+- CD-207: Phase 2 Project Overview redesign + KPI navigation, on branch
+  feature/CD-207-project-overview-redesign (based on main at 726c0f9). One shared
+  Overview structure for every role; locked 5-tile clickable KPI row (Templates/Open
+  Tasks/Attention/Due/Members); Attention = deduplicated overdue-or-Waiting Tasks
+  (Blocked excluded from this one KPI only, untouched everywhere else — Blocked exists
+  globally, unchanged, and its retirement to Waiting remains Phase 5, not touched
+  here); Due gets a Today/Week/Month period selector reusing planner-dates.ts; former
+  "Project Details"/"Administrative Details" cards consolidated into one with zero
+  field loss; a real Project tab/URL desync bug fixed; Projects list rows converted to
+  real <Link> navigation. TypeScript/ESLint/git diff --check clean, all 4 provider
+  builds pass, isolated interactive QA (Admin/Team Lead/Employee, responsive) passed.
+  Product Owner manual review: approved (2026-09-23). Jira CD-207 sits at "In
+  Progress", moving to "Code review" once the implementation PR is opened. See
+  decisions.md's "Phase 2 — Project Overview redesign + KPI navigation" entry for full
+  scope before doing anything with this branch.
 
 OPEN TICKETS:
 - CD-193 — Normalize local-date handling across task and dashboard date surfaces.
