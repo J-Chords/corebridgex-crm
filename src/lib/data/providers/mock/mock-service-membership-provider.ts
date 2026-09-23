@@ -14,7 +14,7 @@ function toStaffing(serviceLineId: string): ServiceStaffing {
 export const mockServiceMembershipProvider: ServiceMembershipProvider = {
   async listServiceStaffing(viewer) {
     if (!canManageAdminUsers(viewer)) {
-      throw new Error("Only an admin can manage Service staffing.");
+      throw new Error("Only an admin can manage Template staffing.");
     }
     return db.serviceLines.map((line) => toStaffing(line.id));
   },
@@ -26,7 +26,7 @@ export const mockServiceMembershipProvider: ServiceMembershipProvider = {
 
   async setTeamLeads(viewer, serviceLineId, userIds) {
     if (!canManageAdminUsers(viewer)) {
-      throw new Error("Only an admin can manage Service staffing.");
+      throw new Error("Only an admin can manage Template staffing.");
     }
     for (const userId of userIds) {
       const user = db.users.find((u) => u.id === userId);
@@ -43,7 +43,7 @@ export const mockServiceMembershipProvider: ServiceMembershipProvider = {
 
   async setEmployees(viewer, serviceLineId, userIds) {
     if (!canManageAdminUsers(viewer)) {
-      throw new Error("Only an admin can manage Service staffing.");
+      throw new Error("Only an admin can manage Template staffing.");
     }
     for (const userId of userIds) {
       const user = db.users.find((u) => u.id === userId);

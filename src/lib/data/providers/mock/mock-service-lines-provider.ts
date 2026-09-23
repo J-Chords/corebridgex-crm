@@ -5,17 +5,17 @@ import { db } from "./mock-db";
 
 function requireAdmin(viewer: User) {
   if (!canManageAdminUsers(viewer)) {
-    throw new Error("Only an admin can manage the Service catalog.");
+    throw new Error("Only an admin can manage the Template catalog.");
   }
 }
 
 function requireUniqueName(name: string, excludeId?: string) {
   const trimmed = name.trim();
-  if (!trimmed) throw new Error("Service name is required.");
+  if (!trimmed) throw new Error("Template name is required.");
   const clash = db.serviceLines.some(
     (sl) => sl.id !== excludeId && sl.name.toLowerCase() === trimmed.toLowerCase()
   );
-  if (clash) throw new Error(`A Service named "${trimmed}" already exists.`);
+  if (clash) throw new Error(`A Template named "${trimmed}" already exists.`);
   return trimmed;
 }
 
@@ -45,7 +45,7 @@ export const mockServiceLinesProvider: ServiceLinesProvider = {
   async update(viewer, id, input: ServiceLineInput) {
     requireAdmin(viewer);
     const existing = db.serviceLines.find((sl) => sl.id === id);
-    if (!existing) throw new Error("Service not found.");
+    if (!existing) throw new Error("Template not found.");
     const name = requireUniqueName(input.name, id);
     const updated: ServiceLine = {
       ...existing,
@@ -60,7 +60,7 @@ export const mockServiceLinesProvider: ServiceLinesProvider = {
   async setActive(viewer, id, isActive) {
     requireAdmin(viewer);
     const existing = db.serviceLines.find((sl) => sl.id === id);
-    if (!existing) throw new Error("Service not found.");
+    if (!existing) throw new Error("Template not found.");
     const updated: ServiceLine = { ...existing, isActive, updatedAt: new Date().toISOString() };
     db.serviceLines = db.serviceLines.map((sl) => (sl.id === id ? updated : sl));
     return updated;
@@ -69,7 +69,7 @@ export const mockServiceLinesProvider: ServiceLinesProvider = {
   async delete(viewer, id) {
     requireAdmin(viewer);
     const existing = db.serviceLines.find((sl) => sl.id === id);
-    if (!existing) throw new Error("Service not found.");
+    if (!existing) throw new Error("Template not found.");
     // Mirrors the hosted RPC's own FK-violation proof (RESTRICT on every referencing table) —
     // checked explicitly here since the in-memory mock has no real foreign-key engine to lean on.
     const inUse =
@@ -80,8 +80,11 @@ export const mockServiceLinesProvider: ServiceLinesProvider = {
       db.serviceTeamLeads.some((r) => r.serviceLineId === id) ||
       db.serviceEmployees.some((r) => r.serviceLineId === id);
     if (inUse) {
+      // "Service Recipes" here names the separate, still-live templates/template_tasks system
+      // (see docs/decisions.md) — deliberately not "Templates," which would now collide with this
+      // catalog entity's own new visible name.
       throw new Error(
-        "This Service has historical usage (Projects, Templates, Activities, or staffing) and can't be deleted — deactivate it instead."
+        "This Template has historical usage (Projects, Service Recipes, Activities, or staffing) and can't be deleted — deactivate it instead."
       );
     }
     db.serviceLines = db.serviceLines.filter((sl) => sl.id !== id);
@@ -89,7 +92,7 @@ export const mockServiceLinesProvider: ServiceLinesProvider = {
 
   async createActivity(viewer, serviceLineId, brandId, name) {
     requireAdmin(viewer);
-    if (!db.serviceLines.some((sl) => sl.id === serviceLineId)) throw new Error("Service not found.");
+    if (!db.serviceLines.some((sl) => sl.id === serviceLineId)) throw new Error("Template not found.");
     if (!db.brands.some((b) => b.id === brandId)) throw new Error("Brand not found.");
     const trimmedName = name.trim();
     if (!trimmedName) throw new Error("Activity name is required.");

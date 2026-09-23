@@ -152,7 +152,7 @@ export default function CompanyDetailPage({ params }: { params: Promise<{ id: st
           </CardHeader>
           <CardContent className="grid gap-4 sm:grid-cols-2">
             <div>
-              <span className="font-mono text-xs tracking-wide text-muted-foreground uppercase">Service lines</span>
+              <span className="font-mono text-xs tracking-wide text-muted-foreground uppercase">Templates</span>
               <div className="mt-1.5 flex flex-wrap gap-1.5">
                 {company.serviceLines.length === 0 ? (
                   <span className="text-sm text-muted-foreground">None assigned</span>
@@ -217,7 +217,7 @@ export default function CompanyDetailPage({ params }: { params: Promise<{ id: st
 
       <Card>
         <CardHeader className="flex items-center justify-between">
-          <CardTitle className="text-base">Services</CardTitle>
+          <CardTitle className="text-base">Templates</CardTitle>
           {!companyProjectActive ? (
             <span className="text-xs text-muted-foreground">{projectNotActiveMessage(companyProject?.status ?? null)}</span>
           ) : (
@@ -227,7 +227,7 @@ export default function CompanyDetailPage({ params }: { params: Promise<{ id: st
                   <Sparkles /> Apply template
                 </Button>
                 <Button size="sm" variant="outline" onClick={() => setWorkstreamDialogOpen(true)}>
-                  <Plus /> Add Service
+                  <Plus /> Add Template
                 </Button>
               </div>
             )
@@ -235,7 +235,7 @@ export default function CompanyDetailPage({ params }: { params: Promise<{ id: st
         </CardHeader>
         <CardContent className="flex flex-col gap-1">
           {!workstreamsLoading && workstreams.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No Services set up for this company yet.</p>
+            <p className="text-sm text-muted-foreground">No Templates set up for this company yet.</p>
           ) : (
             workstreams.map((workstream, i) => (
               <div key={workstream.id}>
@@ -250,7 +250,7 @@ export default function CompanyDetailPage({ params }: { params: Promise<{ id: st
                       <WorkstreamStatusBadge status={workstream.status} />
                     </div>
                     <span className="text-xs text-muted-foreground">
-                      {workstream.serviceLine?.name ?? "No service line"} · Lead: {workstream.lead.fullName}
+                      {workstream.serviceLine?.name ?? "No Template"} · Lead: {workstream.lead.fullName}
                     </span>
                   </div>
                   <div className="flex w-full flex-col gap-2 sm:w-48">
@@ -268,13 +268,13 @@ export default function CompanyDetailPage({ params }: { params: Promise<{ id: st
       {workstreams.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Time vs. Budget — All Services</CardTitle>
+            <CardTitle className="text-base">Time vs. Budget — All Templates</CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col gap-2">
             <BudgetBar budget={budgetRollup} />
             {budgetRollup.workstreamsWithBudget < budgetRollup.totalWorkstreams && (
               <p className="text-xs text-muted-foreground">
-                {budgetRollup.workstreamsWithBudget} of {budgetRollup.totalWorkstreams} services have a budget set
+                {budgetRollup.workstreamsWithBudget} of {budgetRollup.totalWorkstreams} Templates have a budget set
                 — expected hours above only totals those.
               </p>
             )}
@@ -341,7 +341,7 @@ export default function CompanyDetailPage({ params }: { params: Promise<{ id: st
               !companyProjectActive
                 ? projectNotActiveMessage(companyProject?.status ?? null)
                 : workstreams.length === 0
-                  ? "Add a Service first to be able to add tasks."
+                  ? "Add a Template first to be able to add tasks."
                   : undefined
             }
             data-shortcut="new-task"
@@ -352,7 +352,7 @@ export default function CompanyDetailPage({ params }: { params: Promise<{ id: st
         <CardContent>
           {workstreams.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              No Services yet — add one above before creating tasks for this company.
+              No Templates yet — add one above before creating tasks for this company.
             </p>
           ) : (
             <TaskRowList tasks={tasks} isLoading={tasksLoading} emptyMessage="No tasks for this company yet." />

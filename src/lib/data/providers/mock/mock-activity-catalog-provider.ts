@@ -34,7 +34,7 @@ export const mockActivityCatalogProvider: ActivityCatalogProvider = {
     const clash = db.activities.some(
       (a) => a.id !== id && a.departmentId === existing.departmentId && a.name.trim().toLowerCase() === name.toLowerCase()
     );
-    if (clash) throw new Error(`An Activity named "${name}" already exists for this Service.`);
+    if (clash) throw new Error(`An Activity named "${name}" already exists for this Template.`);
     const updated: Activity = {
       ...existing,
       name,

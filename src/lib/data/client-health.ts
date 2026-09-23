@@ -98,7 +98,7 @@ export function computeClientHealth(
     status = "needs-attention";
   }
 
-  const reasons = [plural(overdueTasks.length, "overdue task"), plural(stalledWorkstreams.length, "stalled service")];
+  const reasons = [plural(overdueTasks.length, "overdue task"), plural(stalledWorkstreams.length, "stalled Template")];
   if (dueSoonTasks.length > 0) {
     reasons.push(`${plural(dueSoonTasks.length, "task")} due within ${DUE_SOON_DAYS} days`);
   }

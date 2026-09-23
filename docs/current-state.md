@@ -1,6 +1,6 @@
 # Current State
 
-**Last verified: 2026-09-22.** This document changes often — re-verify against Jira and `git log`/`gh pr list` before relying on it for anything consequential.
+**Last verified: 2026-09-23.** This document changes often — re-verify against Jira and `git log`/`gh pr list` before relying on it for anything consequential.
 
 ## Current `main`
 
@@ -21,6 +21,12 @@ Verify freshly with `git rev-parse origin/main`.
 
 All four are merged into `main` and validated (TypeScript/ESLint/all four provider builds/role-based or isolated QA all passed at merge time). None have been deployed anywhere — see `deployment.md`.
 
+## In progress
+
+| Ticket | Summary | Status |
+|---|---|---|
+| **CD-206** | Phase 1 Template workspace and terminology — visible product term for the Service catalog becomes "Template" (Admin nav + a new Template catalog list/detail route pair, Project-facing "Templates" tab, Task List column changes, staffing-terminology relabel). `service_lines`/`workstreams` persistence and all authorization/RLS/RPCs are unchanged — visible-terminology and UX only, no migration needed. The separate, still-live Service-recipe system (Company-detail "Apply template" and the Accomplishments Report's own unrelated "Add service" Activity-picker) is explicitly preserved. See `decisions.md`'s "Phase 1 — Template workspace and terminology" entry for the full scope. TypeScript/ESLint clean, all 4 provider builds pass, isolated mock-mode browser QA (navigation/list/detail/Activities/Project flow/Task List/Apply-template regression/all 3 roles) and a 390px responsive check all pass. **Product Owner Try-It-Yourself review: APPROVED (2026-09-23).** | `In Progress` — branch `feature/CD-206-template-workspace-terminology`, approved, being committed/pushed/PR'd |
+
 ## Open / future work
 
 | Ticket | Summary | Status |
@@ -35,7 +41,7 @@ All four are merged into `main` and validated (TypeScript/ESLint/all four provid
 
 ## Jira workflow states seen on this project
 
-`New → Groomed → Ready to start → In Progress → Code review → End to end testing → pending deployment → Ready for demo → Sign-off` (plus a parallel `Blocked` state). CD-162, CD-190, CD-196, and CD-205 currently sit at `pending deployment` — they are merged and validated, awaiting an actual hosting decision before progressing further. See `HANDOVER.md` for the Git/Jira workflow this project follows end-to-end.
+`New → Groomed → Ready to start → In Progress → Code review → End to end testing → pending deployment → Ready for demo → Sign-off` (plus a parallel `Blocked` state). CD-162, CD-190, CD-196, and CD-205 currently sit at `pending deployment` — they are merged and validated, awaiting an actual hosting decision before progressing further. CD-206 sits at `In Progress` (implementation approved by the Product Owner; being committed/pushed for Code review). See `HANDOVER.md` for the Git/Jira workflow this project follows end-to-end.
 
 ## Immediate next milestone
 

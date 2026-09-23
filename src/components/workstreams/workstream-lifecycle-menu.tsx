@@ -68,7 +68,7 @@ export function WorkstreamLifecycleMenu({ workstream, onChanged, onEdit }: Works
         activityIds: workstream.activities.map((a) => a.id),
       });
       onChanged();
-      toastManager.add({ description: status === "cancelled" ? "Service archived" : "Service reactivated" });
+      toastManager.add({ description: status === "cancelled" ? "Template archived" : "Template reactivated" });
     } catch (err) {
       toastManager.add({ description: err instanceof Error ? err.message : "Couldn't change status." });
     } finally {
@@ -82,9 +82,9 @@ export function WorkstreamLifecycleMenu({ workstream, onChanged, onEdit }: Works
     try {
       await workstreamsProvider.deleteWorkstream(user, workstream.id);
       onChanged();
-      toastManager.add({ description: "Service removed" });
+      toastManager.add({ description: "Template removed" });
     } catch (err) {
-      toastManager.add({ description: err instanceof Error ? err.message : "Couldn't remove this service." });
+      toastManager.add({ description: err instanceof Error ? err.message : "Couldn't remove this template." });
     } finally {
       setIsSubmitting(false);
     }
@@ -102,7 +102,7 @@ export function WorkstreamLifecycleMenu({ workstream, onChanged, onEdit }: Works
     <>
       <DropdownMenu>
         <DropdownMenuTrigger
-          render={<Button size="sm" variant="outline" disabled={isSubmitting} aria-label="More service actions" />}
+          render={<Button size="sm" variant="outline" disabled={isSubmitting} aria-label="More template actions" />}
         >
           <MoreHorizontal className="size-4" aria-hidden="true" />
         </DropdownMenuTrigger>
@@ -124,8 +124,8 @@ export function WorkstreamLifecycleMenu({ workstream, onChanged, onEdit }: Works
       <ConfirmDialog
         open={confirmArchive}
         onOpenChange={setConfirmArchive}
-        title="Archive this Service?"
-        description="It's excluded from the active Services list by default, but every Task, Activity, and time entry stays fully accessible — reactivate it any time."
+        title="Archive this Template?"
+        description="It's excluded from the active Templates list by default, but every Task, Activity, and time entry stays fully accessible — reactivate it any time."
         confirmLabel="Archive"
         onConfirm={() => void applyStatus("cancelled")}
       />
@@ -133,8 +133,8 @@ export function WorkstreamLifecycleMenu({ workstream, onChanged, onEdit }: Works
       <ConfirmDialog
         open={confirmRemove}
         onOpenChange={setConfirmRemove}
-        title="Remove this Service?"
-        description="This permanently deletes the Service. This can't be undone — only available while it has no Tasks."
+        title="Remove this Template?"
+        description="This permanently deletes the Template. This can't be undone — only available while it has no Tasks."
         confirmLabel="Remove"
         confirmVariant="destructive"
         onConfirm={() => void handleRemove()}

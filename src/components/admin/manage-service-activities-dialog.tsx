@@ -87,7 +87,7 @@ export function ManageServiceActivitiesDialog({ open, onOpenChange, serviceLine 
               </span>
               <div className="flex max-h-80 flex-col gap-3 overflow-y-auto rounded-md border p-3">
                 {!isLoading && departments.length === 0 && (
-                  <p className="text-sm text-muted-foreground">No Activities set up for this Service yet.</p>
+                  <p className="text-sm text-muted-foreground">No Activities set up for this Template yet.</p>
                 )}
                 {departments.map((dept) => {
                   const brand = brands.find((b) => b.id === dept.brandId);
@@ -112,7 +112,7 @@ export function ManageServiceActivitiesDialog({ open, onOpenChange, serviceLine 
                                     </Badge>
                                   </div>
                                   <span className="truncate text-xs text-muted-foreground">
-                                    {a.defaultTaskTitles.length} suggested task{a.defaultTaskTitles.length === 1 ? "" : "s"} · Created by{" "}
+                                    {a.defaultTaskTitles.length} task{a.defaultTaskTitles.length === 1 ? "" : "s"} · Created by{" "}
                                     {createdByLabel}
                                   </span>
                                 </div>

@@ -101,7 +101,7 @@ export function AddProjectServiceDialog({
       onSaved();
       onOpenChange(false);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to add service.");
+      setError(err instanceof Error ? err.message : "Unable to add template.");
     } finally {
       setIsSubmitting(false);
     }
@@ -119,10 +119,10 @@ export function AddProjectServiceDialog({
           <div className="min-h-0 flex-1 overflow-y-auto">
             <div className="flex flex-col gap-2 px-6 pt-6 pb-2">
               <SheetTitle className="font-mono text-xs tracking-wider text-muted-foreground uppercase">
-                Add service
+                Add template
               </SheetTitle>
               <SheetDescription className="text-sm text-muted-foreground">
-                Select an existing Service for {company.name} and the Activities that apply.
+                Select an existing Template for {company.name} and the Activities that apply.
               </SheetDescription>
             </div>
             <div className="flex flex-col gap-4 px-6 py-4">
@@ -135,10 +135,10 @@ export function AddProjectServiceDialog({
               />
 
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="add-service-lead">Project Service Lead</Label>
+                <Label htmlFor="add-service-lead">Project Template Lead</Label>
                 {isEmployee(user) ? (
                   <p className="text-sm text-muted-foreground">
-                    You will be assigned as the Project Service Lead for this Service — the operational
+                    You will be assigned as the Project Template Lead for this Template — the operational
                     owner within this Project.
                   </p>
                 ) : (
@@ -161,8 +161,8 @@ export function AddProjectServiceDialog({
                     </Select>
                     <p className="text-xs text-muted-foreground">
                       {isSuperadmin(user)
-                        ? "The operational owner of this Service within this Project — any active team member."
-                        : "The operational owner of this Service within this Project — yourself or one of your own direct reports."}
+                        ? "The operational owner of this Template within this Project — any active team member."
+                        : "The operational owner of this Template within this Project — yourself or one of your own direct reports."}
                     </p>
                   </>
                 )}
@@ -181,7 +181,7 @@ export function AddProjectServiceDialog({
               Cancel
             </Button>
             <Button type="submit" disabled={!canSubmit}>
-              {isSubmitting ? "Adding…" : "Add service"}
+              {isSubmitting ? "Adding…" : "Add template"}
             </Button>
           </SheetFooter>
         </form>

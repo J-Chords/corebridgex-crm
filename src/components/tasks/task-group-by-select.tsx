@@ -13,7 +13,7 @@ const GROUP_BY_ITEMS: Record<TaskGroupBy, string> = {
   none: "None",
   project: "Project",
   company: "Client",
-  workstream: "Service",
+  workstream: "Template",
   activity: "Activity",
   status: "Status",
   assignee: "Assignee",

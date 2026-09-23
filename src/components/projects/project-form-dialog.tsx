@@ -386,7 +386,7 @@ export function ProjectFormDialog({ open, onOpenChange, mode, project, onSaved, 
       onSaved();
       if (failures.length > 0) {
         setError(
-          `Project created, but ${failures.length} of ${form.services.length} service(s) couldn't be attached (${failures.join("; ")}). Add them from the Project's Services tab.`
+          `Project created, but ${failures.length} of ${form.services.length} template(s) couldn't be attached (${failures.join("; ")}). Add them from the Project's Templates tab.`
         );
         setIsSubmitting(false);
         return;
@@ -531,8 +531,8 @@ export function ProjectFormDialog({ open, onOpenChange, mode, project, onSaved, 
                       </div>
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      Choose a Partner Brand to configure Services and Activities. You can also create the Project now
-                      and add Services later. Contract/renewal is optional master data, distinct from this Project&apos;s
+                      Choose a Partner Brand to configure Templates and Activities. You can also create the Project now
+                      and add Templates later. Contract/renewal is optional master data, distinct from this Project&apos;s
                       own Start/End dates below.
                     </p>
                   </>
@@ -702,13 +702,13 @@ export function ProjectFormDialog({ open, onOpenChange, mode, project, onSaved, 
 
               {mode === "create" && (
                 <CollapsibleSection
-                  label="Services (optional)"
-                  description="Select existing Services and their Activities."
+                  label="Templates (optional)"
+                  description="Select existing Templates and their Activities."
                   expanded={expandedSections.has("services")}
                   onToggle={() => toggleSection("services")}
                 >
                   <p className="text-xs text-muted-foreground">
-                    Select existing Services this Project uses, and which of each Service&apos;s existing Activities
+                    Select existing Templates this Project uses, and which of each Template&apos;s existing Activities
                     apply — leave empty to start with none.
                   </p>
                   {!isGlobalCreate && !selectedCompany ? (

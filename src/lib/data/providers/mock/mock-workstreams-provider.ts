@@ -138,8 +138,8 @@ function resolveProject(companyId: string, projectId: string | null | undefined)
     return { projectId: project.id, companyId: project.companyId };
   }
   const matches = db.projects.filter((p) => p.companyId === companyId);
-  if (matches.length === 0) throw new Error("This company has no project yet — create one before adding a service.");
-  if (matches.length > 1) throw new Error("This company has more than one project — a service must specify which project it belongs to.");
+  if (matches.length === 0) throw new Error("This company has no project yet — create one before adding a template.");
+  if (matches.length > 1) throw new Error("This company has more than one project — a template must specify which project it belongs to.");
   return { projectId: matches[0].id, companyId: matches[0].companyId };
 }
 
@@ -149,12 +149,12 @@ function requireAccess(viewer: User, workstream: Workstream) {
     { leadUserId: workstream.leadUserId, teamUserIds: workstreamTeamIds(workstream.id), companyId: workstream.companyId },
     db.users
   );
-  if (!accessible) throw new Error("You don't have access to this service.");
+  if (!accessible) throw new Error("You don't have access to this template.");
 }
 
 function requireManage(viewer: User, workstream?: Workstream) {
   if (!canManageWorkstreams(viewer)) {
-    throw new Error("Only an admin can edit a Service's details.");
+    throw new Error("Only an admin can edit a Template's details.");
   }
   if (workstream) requireAccess(viewer, workstream);
 }
@@ -181,13 +181,13 @@ function syncWorkstreamActivities(workstreamId: string, activityIds: string[]) {
 function requireActivitiesBelongToService(activityIds: string[], serviceLineId: string | null) {
   if (activityIds.length === 0) return;
   if (!serviceLineId) {
-    throw new Error("Activities can only be selected once a service is chosen.");
+    throw new Error("Activities can only be selected once a template is chosen.");
   }
   for (const activityId of activityIds) {
     const activity = db.activities.find((a) => a.id === activityId);
     const department = activity ? db.departments.find((d) => d.id === activity.departmentId) : undefined;
     if (!department || department.serviceLineId !== serviceLineId) {
-      throw new Error("One of the selected activities doesn't belong to this service.");
+      throw new Error("One of the selected activities doesn't belong to this template.");
     }
   }
 }
@@ -228,10 +228,10 @@ export const mockWorkstreamsProvider: WorkstreamsProvider = {
 
     if (input.projectId) {
       if (!canCreateWorkstreamInProject(viewer)) {
-        throw new Error("You don't have access to create a service in that project.");
+        throw new Error("You don't have access to create a template in that project.");
       }
     } else if (!canCreateWorkstream(viewer)) {
-      throw new Error("You don't have access to create a service for that company.");
+      throw new Error("You don't have access to create a template for that company.");
     }
     if (isSupervisor(viewer)) {
       // Parity fix (Boss Feedback Alignment) — create_workstream's real hosted RPC has always
@@ -250,7 +250,7 @@ export const mockWorkstreamsProvider: WorkstreamsProvider = {
     const company = db.companies.find((c) => c.id === resolved.companyId);
     if (!company) throw new Error("Company not found.");
     if (!company.brandId) {
-      throw new Error("This client has no Brand set yet — add a Brand to this client before creating a Service.");
+      throw new Error("This client has no Brand set yet — add a Brand to this client before creating a Template.");
     }
     // CD-162 post-manual-QA pass — duplicate-active-service prevention, enforced here (not just by
     // the picker hiding already-attached options) so a direct provider call can never create a
@@ -262,7 +262,7 @@ export const mockWorkstreamsProvider: WorkstreamsProvider = {
         (w) => w.projectId === resolved.projectId && w.serviceLineId === input.serviceLineId && w.status !== "cancelled"
       );
       if (duplicateActive) {
-        throw new Error("This Service is already active on this Project.");
+        throw new Error("This Template is already active on this Project.");
       }
     }
     requireActivitiesBelongToService(input.activityIds, input.serviceLineId);
@@ -299,7 +299,7 @@ export const mockWorkstreamsProvider: WorkstreamsProvider = {
 
   async updateWorkstream(viewer, id, input) {
     const existing = db.workstreams.find((e) => e.id === id);
-    if (!existing) throw new Error("Service not found.");
+    if (!existing) throw new Error("Template not found.");
     requireManage(viewer, existing);
     if (!canAccessCompany(viewer, input.companyId, db.users)) {
       throw new Error("You don't have access to that company.");
@@ -310,7 +310,7 @@ export const mockWorkstreamsProvider: WorkstreamsProvider = {
     // `workstreams_update` — see 20260904*_workstream_lead_reassignment_hardening.sql.
     const newLead = db.users.find((u) => u.id === input.leadUserId);
     if (!newLead || !managesUser(viewer, newLead)) {
-      throw new Error("You can only assign yourself or one of your own direct reports as Project Service Lead.");
+      throw new Error("You can only assign yourself or one of your own direct reports as Project Template Lead.");
     }
     // CD-162 database hardening — the same duplicate-active-service guard createWorkstream already
     // enforces, applied here too: Reactivate (status "cancelled" -> anything else) — or any other
@@ -327,7 +327,7 @@ export const mockWorkstreamsProvider: WorkstreamsProvider = {
           w.status !== "cancelled"
       );
       if (duplicateActive) {
-        throw new Error("This Service is already active on this Project.");
+        throw new Error("This Template is already active on this Project.");
       }
     }
     requireActivitiesBelongToService(input.activityIds, input.serviceLineId);
@@ -356,7 +356,7 @@ export const mockWorkstreamsProvider: WorkstreamsProvider = {
 
   async setWorkstreamActivities(viewer, workstreamId, activityIds) {
     const workstream = db.workstreams.find((w) => w.id === workstreamId);
-    if (!workstream) throw new Error("Service not found.");
+    if (!workstream) throw new Error("Template not found.");
     const project = workstream.projectId ? (db.projects.find((p) => p.id === workstream.projectId) ?? null) : null;
     const allowed = canConfigureWorkstreamActivities(
       viewer,
@@ -365,7 +365,7 @@ export const mockWorkstreamsProvider: WorkstreamsProvider = {
       project ? { companyId: project.companyId, ownerId: project.ownerId, memberUserIds: projectMemberIds(project.id) } : null
     );
     if (!allowed) {
-      throw new Error("You don't have permission to configure this service's activities.");
+      throw new Error("You don't have permission to configure this template's activities.");
     }
     // Boss-Aligned Project Status Restoration — authoritative enforcement (not just hidden UI)
     // that Activity configuration is new operational setup, only allowed while Active.
@@ -378,7 +378,7 @@ export const mockWorkstreamsProvider: WorkstreamsProvider = {
 
   async createActivityForWorkstream(viewer, workstreamId, name) {
     const workstream = db.workstreams.find((w) => w.id === workstreamId);
-    if (!workstream) throw new Error("Service not found.");
+    if (!workstream) throw new Error("Template not found.");
 
     // Service Level Phase B, Section 9 — creating a new GLOBAL Activity catalog entry is Admin-only;
     // a Project Service Lead/team member may still SELECT/CONFIGURE existing catalog Activities onto
@@ -389,7 +389,7 @@ export const mockWorkstreamsProvider: WorkstreamsProvider = {
       throw new Error("Only an admin can create a new Activity — pick an existing one instead.");
     }
     if (!workstream.serviceLineId) {
-      throw new Error("This service has no service line — an activity can't be created for it.");
+      throw new Error("This template has no catalog entry set — an activity can't be created for it.");
     }
 
     const trimmedName = name.trim();
@@ -449,13 +449,13 @@ export const mockWorkstreamsProvider: WorkstreamsProvider = {
 
   async deleteWorkstream(viewer, id) {
     const existing = db.workstreams.find((w) => w.id === id);
-    if (!existing) throw new Error("Service not found.");
+    if (!existing) throw new Error("Template not found.");
     requireManage(viewer, existing);
     // Re-verified here, not trusted from the caller — this is the one gate standing between
     // "remove an empty Service" and destroying real Task/Time history.
     const taskCount = db.tasks.filter((t) => t.workstreamId === id).length;
     if (taskCount > 0) {
-      throw new Error(`This Service has ${taskCount} task${taskCount === 1 ? "" : "s"} and can't be removed — archive it instead.`);
+      throw new Error(`This Template has ${taskCount} task${taskCount === 1 ? "" : "s"} and can't be removed — archive it instead.`);
     }
     db.workstreams = db.workstreams.filter((w) => w.id !== id);
     db.workstreamMembers = db.workstreamMembers.filter((m) => m.workstreamId !== id);

@@ -264,7 +264,7 @@ export function ProjectLifecycleMenu({
         open={confirmArchive}
         onOpenChange={setConfirmArchive}
         title="Archive this client?"
-        description="This client is excluded from active work by default, but every Service, Task, Comment, document, and time entry stays fully accessible — reactivate this same workspace any time."
+        description="This client is excluded from active work by default, but every Template, Task, Comment, document, and time entry stays fully accessible — reactivate this same workspace any time."
         confirmLabel="Archive"
         onConfirm={() => void applyStatus("archived")}
       />

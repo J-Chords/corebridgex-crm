@@ -28,7 +28,7 @@ function toServiceLine(row: ServiceLineRow): ServiceLine {
 export const supabaseServiceLinesProvider: ServiceLinesProvider = {
   async listAll(viewer) {
     if (!canManageAdminUsers(viewer)) {
-      throw new Error("Only an admin can manage the Service catalog.");
+      throw new Error("Only an admin can manage the Template catalog.");
     }
     const supabase = createClient();
     const { data, error } = await supabase.from("service_lines").select("*").order("name");

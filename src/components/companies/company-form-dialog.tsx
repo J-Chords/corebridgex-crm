@@ -197,7 +197,7 @@ export function CompanyFormDialog({ open, onOpenChange, mode, company, onSaved }
                     </SelectContent>
                   </Select>
                   <p className="text-xs text-muted-foreground">
-                    Client/master data — required only before this client&apos;s first Service can be created.
+                    Client/master data — required only before this client&apos;s first Template can be created.
                   </p>
                 </div>
               </div>
@@ -224,7 +224,7 @@ export function CompanyFormDialog({ open, onOpenChange, mode, company, onSaved }
               </div>
 
               <fieldset className="flex flex-col gap-2">
-                <legend className="mb-1 text-sm font-medium">Service lines</legend>
+                <legend className="mb-1 text-sm font-medium">Templates</legend>
                 <div className="grid grid-cols-2 gap-2">
                   {serviceLines.map((sl) => (
                     <label key={sl.id} className="flex items-center gap-2 text-sm">

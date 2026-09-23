@@ -36,7 +36,7 @@ function ServiceActivityFields({ brandId, serviceLineId, activityIds, onChange }
   }
 
   if (departments.length === 0) {
-    return <p className="text-xs text-muted-foreground">No activities set up for this service yet.</p>;
+    return <p className="text-xs text-muted-foreground">No activities set up for this template yet.</p>;
   }
 
   return (
@@ -102,8 +102,8 @@ export function ProjectServicePicker({
     return (
       <p className="text-sm text-muted-foreground">
         {context === "new-project"
-          ? "Choose a Partner Brand to configure Services and Activities. You can also create the Project now and add Services later."
-          : "This Project has no Partner Brand set yet — add one before configuring Services."}
+          ? "Choose a Partner Brand to configure Templates and Activities. You can also create the Project now and add Templates later."
+          : "This Project has no Partner Brand set yet — add one before configuring Templates."}
       </p>
     );
   }
@@ -136,7 +136,7 @@ export function ProjectServicePicker({
               <button
                 type="button"
                 onClick={() => removeService(entry.serviceLineId)}
-                aria-label={`Remove ${sl?.name ?? "service"}`}
+                aria-label={`Remove ${sl?.name ?? "template"}`}
                 className="rounded-full p-0.5 text-muted-foreground hover:bg-muted-foreground/20"
               >
                 <X className="size-3.5" aria-hidden="true" />
@@ -160,7 +160,7 @@ export function ProjectServicePicker({
             onValueChange={(v) => setPendingAdd(v ?? "")}
           >
             <SelectTrigger className="w-full">
-              <SelectValue placeholder="Select a service to add…" />
+              <SelectValue placeholder="Select a Template to add…" />
             </SelectTrigger>
             <SelectContent>
               {available.map((s) => (
@@ -176,7 +176,7 @@ export function ProjectServicePicker({
         </div>
       ) : (
         <p className="text-xs text-muted-foreground">
-          {value.length > 0 ? "All available services are added." : "No services available."}
+          {value.length > 0 ? "All available Templates are added." : "No Templates available."}
         </p>
       )}
     </div>

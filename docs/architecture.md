@@ -98,16 +98,17 @@ Every authenticated route lives under `/dashboard`, because `src/app/dashboard/l
 | `/dashboard/my-day` | Today/Week/Month personal work + time view (absorbed the old standalone Planner) | All roles |
 | `/dashboard/planner` | Redirect stub → `/dashboard/my-day?view=week` | Legacy bookmark compatibility only |
 | `/dashboard/tasks`, `/dashboard/tasks/[id]` | Global Task list (List/Board/Timeline) and Task detail | List: Team Lead/Admin scope by default; Task detail per `canAccessTask` |
-| `/dashboard/projects`, `/dashboard/projects/[id]` | Project portfolio and Project workspace (7 tabs: Overview/Services/Tasks/Members/Comments/Time/Reports) | Per `canAccessProject` |
-| `/dashboard/workstreams/[id]` | One Service's detail page (no index route — reached via a Project) | Per `canAccessWorkstream` |
+| `/dashboard/projects`, `/dashboard/projects/[id]` | Project portfolio and Project workspace (7 tabs: Overview/Templates/Tasks/Members/Comments/Time/Reports — visible "Services" tab renamed "Templates" in Phase 1, CD-206) | Per `canAccessProject` |
+| `/dashboard/workstreams/[id]` | One Template's detail page (no index route — reached via a Project); internal route segment stays `workstreams`, unrenamed | Per `canAccessWorkstream` |
 | `/dashboard/team-activity` | Merged Team Updates + Team Time (`?view=updates` / `?view=time`) | Team Lead/Admin only — Employee blocked, in-page message |
 | `/dashboard/team-updates`, `/dashboard/team-time` | 307 redirects → the routes above | Legacy bookmark compatibility only |
 | `/dashboard/companies`, `/dashboard/companies/[id]` | Technical company master record (Admin-level; day-to-day editing happens from the owning Project's Overview instead) | Admin |
 | `/dashboard/reports`, `/dashboard/reports/[id]`, `/dashboard/reports/trash` | Accomplishments Report list/detail/trash | Team Lead/Admin |
 | `/dashboard/reports/client`, `/dashboard/reports/client/[id]` | Client Report list/detail (name-free, client-facing) | Team Lead/Admin |
 | `/dashboard/settings` | Profile / Appearance / Notifications / Workspace (Admin-only) / About | All roles, tab-gated |
-| `/dashboard/admin/users` | User administration — create/edit/deactivate, global Service staffing, password reset | Admin only |
-| `/dashboard/admin/services` | Global Service catalog admin (staffing viewed from the Service's own angle) | Admin only |
+| `/dashboard/admin/users` | User administration — create/edit/deactivate, global Template staffing, password reset | Admin only |
+| `/dashboard/admin/templates`, `/dashboard/admin/templates/[id]` | Global Template catalog admin (list + Phase 1's new per-Template detail page — name/description/Activities/compact staffing); internal `service_lines`/`ServiceLine` persistence unrenamed | Admin only |
+| `/dashboard/admin/services` | 307 redirect → `/dashboard/admin/templates` | Legacy bookmark compatibility only |
 
 Not planned: any client-facing/public route. Client Contacts never authenticate — there is no portal.
 

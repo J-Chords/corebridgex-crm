@@ -9,7 +9,7 @@ function csvField(value: string): string {
 }
 
 /**
- * Service/Activity/Task/Date/Duration/Details only — no generatedByName, no comments, no history.
+ * Template/Activity/Task/Date/Duration/Details only — no generatedByName, no comments, no history.
  * Nothing here is ever a staff name by construction. One row per actual dated detail row (Phase
  * 9D) — never an additional row for a multi-day Task's presentation-only weekly summary, since a
  * spreadsheet SUM over the Duration column must equal Total Week Hours exactly once per Time Entry,
@@ -27,8 +27,8 @@ function csvField(value: string): string {
 function reportToCsv(report: ClientReport): string {
   const hasVisitColumn = report.dailyVisitMinutes !== null;
   const header = hasVisitColumn
-    ? ["Record Type", "Service", "Activity", "Task", "Date", "Duration", "Details"]
-    : ["Service", "Activity", "Task", "Date", "Duration", "Details"];
+    ? ["Record Type", "Template", "Activity", "Task", "Date", "Duration", "Details"]
+    : ["Template", "Activity", "Task", "Date", "Duration", "Details"];
   const rows: string[][] = [header];
   for (const dept of report.departments) {
     for (const activity of dept.activities) {

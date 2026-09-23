@@ -19,7 +19,6 @@ import { useProject, useProjectGroups } from "@/lib/data/hooks/use-projects";
 import { useWorkstreams } from "@/lib/data/hooks/use-workstreams";
 import { useTasks } from "@/lib/data/hooks/use-tasks";
 import { useCompany, useCompanyLookups } from "@/lib/data/hooks/use-companies";
-import { useServiceLineStaffing } from "@/lib/data/hooks/use-service-membership";
 import { useCompanyNotes } from "@/lib/data/hooks/use-notes";
 import { useRunningTimer } from "@/lib/data/hooks/use-time-entries";
 import { projectsProvider, projectIssuesProvider } from "@/lib/data/providers";
@@ -90,7 +89,7 @@ type TabKey = "overview" | "services" | "tasks" | "members" | "comments" | "time
 type TaskView = "list" | "board" | "timeline";
 const TABS: { key: TabKey; label: string }[] = [
   { key: "overview", label: "Overview" },
-  { key: "services", label: "Services" },
+  { key: "services", label: "Templates" },
   { key: "tasks", label: "Tasks" },
   { key: "members", label: "Members" },
   { key: "comments", label: "Comments" },
@@ -181,14 +180,14 @@ function ServicesSummaryPanel({
   return (
     <Card>
       <CardHeader className="flex items-center justify-between">
-        <CardTitle className="text-base">Services</CardTitle>
+        <CardTitle className="text-base">Templates</CardTitle>
         <button type="button" onClick={onViewServices} className="text-sm text-muted-foreground hover:underline">
-          View Services
+          View Templates
         </button>
       </CardHeader>
       <CardContent>
         {names.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No Services configured yet.</p>
+          <p className="text-sm text-muted-foreground">No Templates configured yet.</p>
         ) : (
           <div className="flex flex-col gap-1">
             {shown.map((name, i) => (
@@ -219,8 +218,6 @@ function ServiceRow({
   project,
   user,
   openTaskCount,
-  staffing,
-  nameFor,
   onConfigureActivities,
   onEdit,
   onChanged,
@@ -229,8 +226,6 @@ function ServiceRow({
   project: NonNullable<ReturnType<typeof useProject>["project"]>;
   user: import("@/lib/data/types").User;
   openTaskCount: number;
-  staffing: { teamLeadUserIds: string[]; employeeUserIds: string[] } | undefined;
-  nameFor: (userId: string) => string;
   onConfigureActivities: () => void;
   onEdit: () => void;
   onChanged: () => void;
@@ -284,7 +279,7 @@ function ServiceRow({
                   onConfigureActivities();
                 }}
               >
-                <SlidersHorizontal /> Configure Activities
+                <SlidersHorizontal /> View Activities
               </Button>
             )}
             <span
@@ -298,18 +293,6 @@ function ServiceRow({
           </div>
         </div>
       </Link>
-      {workstream.serviceLine && staffing && (staffing.teamLeadUserIds.length > 0 || staffing.employeeUserIds.length > 0) && (
-        <div className="mx-3 mb-2.5 flex flex-col gap-0.5 rounded-md border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-          <span className="font-mono text-[10px] tracking-wide uppercase">Global Service Staffing</span>
-          <span>
-            Global Team Leads: {staffing.teamLeadUserIds.length > 0 ? staffing.teamLeadUserIds.map(nameFor).join(", ") : "None"}
-          </span>
-          <span>
-            Service Members: {staffing.employeeUserIds.length > 0 ? staffing.employeeUserIds.map(nameFor).join(", ") : "None"}
-          </span>
-          <span className="italic">These assignments apply to this Service across all Projects.</span>
-        </div>
-      )}
     </div>
   );
 }
@@ -412,11 +395,6 @@ function LoadedProjectDetailPage({
   const { runningTimer } = useRunningTimer();
   const { assignableStaff, serviceLines } = useCompanyLookups();
   const { groups: projectGroups } = useProjectGroups();
-  const serviceLineIds = useMemo(
-    () => Array.from(new Set(workstreams.map((w) => w.serviceLine?.id).filter((id): id is string => !!id))),
-    [workstreams]
-  );
-  const { staffing: globalServiceStaffing } = useServiceLineStaffing(serviceLineIds);
   // CD-162 post-manual-QA pass — Archived (status "cancelled") Project Services stay fully
   // accessible (their own Tasks/Time/Comments history is never hidden — see `useTasks` above, which
   // deliberately keeps reading from the unfiltered `workstreams`), but no longer clutter the normal
@@ -714,7 +692,7 @@ function LoadedProjectDetailPage({
               from this page's own already-viewer-scoped `tasks`. */}
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
             {[
-              { label: "Services", value: activeWorkstreams.length },
+              { label: "Templates", value: activeWorkstreams.length },
               { label: "Open Work", value: isEmployee(user) ? myTasks.length : openCount },
               { label: "Attention", value: isEmployee(user) ? myOverdueCount : overdueCount },
               {
@@ -1011,14 +989,14 @@ function LoadedProjectDetailPage({
               canAddService &&
               company && (
                 <Button size="sm" onClick={() => setAddServiceOpen(true)}>
-                  <Plus /> Add Service
+                  <Plus /> Add Template
                 </Button>
               )
             )}
           </div>
           {!workstreamsLoading && activeWorkstreams.length === 0 && (
             <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
-              No services yet for this project.
+              No templates yet for this project.
             </div>
           )}
           <div className="flex flex-col gap-2">
@@ -1029,8 +1007,6 @@ function LoadedProjectDetailPage({
                 project={project}
                 user={user}
                 openTaskCount={tasks.filter((t) => t.workstreamId === workstream.id && !isTaskClosed(t.status)).length}
-                staffing={globalServiceStaffing.find((s) => s.serviceLineId === workstream.serviceLine?.id)}
-                nameFor={(userId) => assignableStaff.find((s) => s.id === userId)?.fullName ?? "Unknown"}
                 onConfigureActivities={() => setConfigureActivitiesFor(workstream)}
                 onEdit={() => setEditingWorkstream(workstream)}
                 onChanged={refreshWorkstreams}
@@ -1038,9 +1014,9 @@ function LoadedProjectDetailPage({
             ))}
           </div>
 
-          {/* CD-162 post-manual-QA pass — Archived (status "cancelled") Services stay fully
+          {/* CD-162 post-manual-QA pass — Archived (status "cancelled") Templates stay fully
               reachable (Reactivate lives in the same lifecycle menu) but default-collapsed, so a
-              Project with archived history doesn't clutter the normal active Services view. */}
+              Project with archived history doesn't clutter the normal active Templates view. */}
           {archivedWorkstreams.length > 0 && (
             <div className="flex flex-col gap-2">
               <button
@@ -1052,7 +1028,7 @@ function LoadedProjectDetailPage({
                   className={"size-4 transition-transform duration-200" + (showArchivedServices ? "" : " -rotate-90")}
                   aria-hidden="true"
                 />
-                Archived Services ({archivedWorkstreams.length})
+                Archived Templates ({archivedWorkstreams.length})
               </button>
               {showArchivedServices && (
                 <div className="flex flex-col gap-2 opacity-75">
@@ -1063,8 +1039,6 @@ function LoadedProjectDetailPage({
                       project={project}
                       user={user}
                       openTaskCount={tasks.filter((t) => t.workstreamId === workstream.id && !isTaskClosed(t.status)).length}
-                      staffing={globalServiceStaffing.find((s) => s.serviceLineId === workstream.serviceLine?.id)}
-                      nameFor={(userId) => assignableStaff.find((s) => s.id === userId)?.fullName ?? "Unknown"}
                       onConfigureActivities={() => setConfigureActivitiesFor(workstream)}
                       onEdit={() => setEditingWorkstream(workstream)}
                       onChanged={refreshWorkstreams}

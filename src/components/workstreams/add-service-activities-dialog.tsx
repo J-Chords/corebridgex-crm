@@ -89,7 +89,7 @@ export function AddServiceActivitiesDialog({ open, onOpenChange, workstream, onS
         <DialogHeader>
           <DialogTitle>Add activities to {workstream.name}</DialogTitle>
           <DialogDescription>
-            Pick any existing catalog activities not yet part of this service. They&apos;ll be
+            Pick any existing catalog activities not yet part of this template. They&apos;ll be
             available in every Task&apos;s own single &quot;Activity for this Task&quot; picker right away.
           </DialogDescription>
         </DialogHeader>
@@ -101,7 +101,7 @@ export function AddServiceActivitiesDialog({ open, onOpenChange, workstream, onS
         )}
 
         {unconfigured.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Every catalog activity for this service is already enabled.</p>
+          <p className="text-sm text-muted-foreground">Every catalog activity for this template is already enabled.</p>
         ) : (
           <div className="flex max-h-72 flex-col gap-2 overflow-y-auto">
             {unconfigured.map((activity) => (

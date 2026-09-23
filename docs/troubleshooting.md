@@ -36,6 +36,16 @@ Two migrations dated 2026-09-11 still say "NOT YET APPLIED TO THE HOSTED PROJECT
 
 **Where else this can recur**: any `grid`/`flex` container whose direct child is itself a wrapper `<div>` (not the card component directly) — the wrapper is the thing that needs `min-w-0`, and adding more `truncate`s deeper inside won't fix it. Check new dashboard/My Day grid sections for this pattern before assuming a mobile overflow is caused by the card's own content.
 
+## The same `min-w-0` gotcha, one level deeper: a measuring element needs its own override, not just its ancestors' (the CD-206 Template list truncation bug)
+
+**Symptom**: on the Templates admin list (`/dashboard/admin/templates`), a Template with a long, single-line description rendered at full, unclipped content width instead of a one-line "…"-truncated preview with "View more" — visually forcing the Description column, and the table as a whole, wider than intended (the table only declares `min-w-[1040px]`, not a hard cap, so nothing stopped it growing).
+
+**Root cause**: `TruncatedText` (`src/components/ui/truncated-text.tsx`) measures overflow via `scrollWidth > clientWidth` on a `<span>` that sits inside a `flex flex-col` wrapper. That wrapper, and its own ancestors up to the table cell, all correctly had `min-w-0` — but the measuring `<span>` itself did not. Per the CD-196 lesson above, `min-w-0` on a parent only fixes the parent's own sizing; it does not cascade to a child that is *itself* a flex item. The span's default `min-width: auto` resolved to its own unbroken (`white-space: nowrap`, via the `truncate` utility) content width, which won out over `max-w-full` — so the span (and the table cell/column containing it) rendered exactly as wide as the full description, `scrollWidth` and `clientWidth` came out equal, `overflows` computed `false`, and "View more" never appeared at all.
+
+**Fix applied**: added `min-w-0` directly to the measuring `<span>` in `TruncatedText`, not just its wrapper divs.
+
+**Where else this can recur**: any component that measures or constrains a *specific* nested element's overflow inside a multi-level flex chain — giving the outer wrapper `min-w-0` is necessary but not sufficient if a deeper descendant is also a flex item with its own unbreakable (`nowrap`) content. Check the actual overflow-prone leaf node itself, not just its containers, before concluding a `min-w-0` fix is complete.
+
 ## Next.js dynamic routes unexpectedly return 404 in development (the CD-196 `.next` incident)
 
 **Symptom**: `/dashboard/projects/[id]` and `/dashboard/tasks/[id]` (and any other dynamic-segment route) started returning a genuine framework-level "404 — This page could not be found" in a running `next dev` session, while their sibling static list routes (`/dashboard/projects`, `/dashboard/tasks`) kept working fine. The route source files (`page.tsx`) were untouched and present the whole time — this was never a source or data/permissions problem (permission/not-found states in this app are always handled gracefully in-page, e.g. "This task doesn't exist, or you don't have access to it" — never a raw framework 404).

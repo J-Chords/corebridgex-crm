@@ -3,14 +3,18 @@
 ## The locked hierarchy
 
 ```
-Project → Service → Activity → Task → Checklist
+Project → Template → Activity → Task → Checklist
 ```
 
 This is the accepted, final product hierarchy. **There is no "Subtask" concept.** A Subtask model existed historically (`tasks.parent_task_id`) but was deliberately, fully removed — schema, triggers, and UI — by migration `20260908130000_remove_subtask_architecture.sql`, whose own header states the decision plainly: *"THERE ARE NO SUBTASKS IN COREBRIDGE X... Unexpected additional work becomes another ordinary Task."* If you're tempted to add nested tasks, don't — read [decisions.md](decisions.md) first.
 
-## "Service" vs. "Workstream" — one concept, two names
+## "Template" vs. "Service Line"/"Workstream" — one concept, several names
 
-**Service** is the only user-facing term. **Workstream** is the internal/legacy implementation name and appears only in code: the `workstreams` table, `WorkstreamWithRelations` type, `workstreams-provider.ts`, the route `/dashboard/workstreams/[id]`, RPC/RLS helper names, etc. No UI text may say "Workstream."
+**Template** is the current, locked, user-facing term (Phase 1 Template workspace, CD-206) for both the global catalog item (e.g. "Accounting," "Payroll," "Compliance") and the one instance of it a Project has. This replaced "Service" as the visible term — see [decisions.md](decisions.md) for the full rationale and scope.
+
+**Internal persistence is deliberately unchanged.** `service_lines` (catalog table) / `ServiceLine` (type) and `workstreams` (per-Project instance table) / `Workstream` (type) keep their existing names — no renaming migration exists or is planned. Code, table names, the route `/dashboard/workstreams/[id]`, RPC/RLS helper names, and internal variables/component names still say "Service"/"Workstream" throughout, and that's expected — only what a user actually reads on screen changed. Visible and internal naming are allowed to diverge; don't "fix" internal identifiers to match the new visible word.
+
+**Do not confuse this with the separate "Service Template" recipe feature** (`templates`/`template_tasks`/`template_checklist_items` tables, `apply_template` RPC, the Company-detail "Apply template" button/dialog) — that is a different, older, still-live feature, explicitly untouched and unrenamed by this terminology change. See `decisions.md`'s CD-205/CD-206 entries.
 
 A Workstream's *displayed* name is derived, not stored verbatim — see `src/lib/data/workstream-name.ts`:
 - `workstreamDisplayHeading(name, serviceLineName)` returns `serviceLineName ?? name` — the catalog Service Line's name wins whenever one is set.
@@ -18,19 +22,19 @@ A Workstream's *displayed* name is derived, not stored verbatim — see `src/lib
 
 ## Four staffing/identity concepts that look similar but are not
 
-These are frequently confused and are **deliberately separate authorization axes** — confirmed directly against `permissions.ts` and the Workstream/ServiceStaffing types, not just documented intent:
+These are frequently confused and are **deliberately separate authorization axes** — confirmed directly against `permissions.ts` and the Workstream/ServiceStaffing types, not just documented intent. Visible labels changed in Phase 1; storage and authorization behavior did not:
 
-| Concept | Scope | Storage | Grants elevated permission on a specific Project's Service? |
-|---|---|---|---|
-| **Global Team Lead** ("Services Led") | Org-wide, per catalog Service Line | `service_team_leads` table / `ServiceStaffing.teamLeadUserIds` | **No.** `canManageWorkstreams`/`canConfigureWorkstreamActivities` check `workstream.leadUserId`, never `ServiceStaffing` |
-| **Project Service Lead** | One Project's one Service instance | `workstream.leadUserId` | This is the actual authority-bearing field for Service-level actions (Team Lead scope) |
-| **Works In Services** | Org-wide, per catalog Service Line | `service_employees` table / `ServiceStaffing.employeeUserIds` | **No.** Never auto-populates a Workstream's `team` or a Task's assignees — confirmed no code path reads it for either |
-| **Project Service Team** | One Project's one Service instance | `workstream.team` (join table `workstream_members`) | This is the actual per-Project team roster |
-| **Creator** (`createdById`) | Historical, immutable | Separate field on Workstream/Project/Task | Never implies leadership or ownership for permission purposes |
+| Concept | Visible label | Scope | Storage | Grants elevated permission on a specific Project's Template? |
+|---|---|---|---|---|
+| **Global Team Lead** | "Templates Led" | Org-wide, per catalog Service Line | `service_team_leads` table / `ServiceStaffing.teamLeadUserIds` | **No.** `canManageWorkstreams`/`canConfigureWorkstreamActivities` check `workstream.leadUserId`, never `ServiceStaffing` |
+| **Project Template Lead** | "Project Template Lead" | One Project's one Template instance | `workstream.leadUserId` | This is the actual authority-bearing field for Template-level actions (Team Lead scope) |
+| **Works In Templates** | "Works In Templates" | Org-wide, per catalog Service Line | `service_employees` table / `ServiceStaffing.employeeUserIds` | **No.** Never auto-populates a Workstream's `team` or a Task's assignees — confirmed no code path reads it for either |
+| **Project Template Team** | "Project Template Team" | One Project's one Template instance | `workstream.team` (join table `workstream_members`) | This is the actual per-Project team roster |
+| **Creator** (`createdById`) | "Created by" | Historical, immutable | Separate field on Workstream/Project/Task | Never implies leadership or ownership for permission purposes |
 
-**The rule to remember**: a Global Team Lead relationship is informational/preferred-candidate labeling only (the Workstream form surfaces Global Team Leads as suggested picks when choosing a *Project* Service Lead) — it never auto-grants or auto-populates anything. Every Project-level staffing decision (lead, team) is an explicit, separate action.
+**The rule to remember**: a Global Team Lead relationship is informational/preferred-candidate labeling only (the Workstream form surfaces Global Team Leads as suggested picks when choosing a *Project* Template Lead) — it never auto-grants or auto-populates anything. Every Project-level staffing decision (lead, team) is an explicit, separate action. **No authorization behavior changed in Phase 1** — only display labels.
 
-The code states this directly (`workstream-form-dialog.tsx`): *"Global Team Leads for the selected Service — surfaced as preferred/contextual candidates when picking a Project Service Lead, never auto-selected or auto-authorized... a global Team Lead relationship grants no automatic Project authority in V1."*
+The code states this directly (`workstream-form-dialog.tsx`): *"Global Team Leads for the selected Template — surfaced as preferred/contextual candidates when picking a Project Template Lead, never auto-selected or auto-authorized... a global Team Lead relationship grants no automatic Project authority in V1."*
 
 ## Project
 
@@ -76,19 +80,19 @@ Two related but distinct filters:
 - `isTaskActiveWork` (`task-display.ts`) — the stricter "counts as active operational work" rule used across every dashboard KPI/summary card: `!isTaskClosed(status) && isTaskInActiveProject(task)`.
 - The main Projects list itself does **not** filter Archived/Trash out — it just starts those two status groups collapsed by default, while every other status group starts expanded.
 
-## Service (Workstream)
+## Template (Workstream)
 
-A Service is one client-facing service line delivered within one Project (e.g. "Accounting" inside the "Alderleaf Manufacturing" Project). Status values: `active | on-hold | completed | cancelled`. The UI's "Archive" action for a Service reuses `cancelled`, relabeled **"Archived"** (neutral, not destructive) — this is intentional reuse of an existing status value, not a new column.
+A Template is one client-facing service line delivered within one Project (e.g. "Accounting" inside the "Alderleaf Manufacturing" Project). Status values: `active | on-hold | completed | cancelled`. The UI's "Archive" action for a Template reuses `cancelled`, relabeled **"Archived"** (neutral, not destructive) — this is intentional reuse of an existing status value, not a new column.
 
-Duplicate prevention: a Project may not have two *active* Services for the same catalog Service Line (`workstreams_project_service_line_active_unique_idx`, a partial unique index excluding archived rows) — a previously-archived instance doesn't block re-adding the Service.
+Duplicate prevention: a Project may not have two *active* Templates for the same catalog Service Line (`workstreams_project_service_line_active_unique_idx`, a partial unique index excluding archived rows) — a previously-archived instance doesn't block re-adding the Template.
 
-Archived-Service task guard: a Task's `workstream_id` can never be newly set (create, or move) to a Service whose status is `cancelled` (archived) — enforced by the `enforce_task_invariants` trigger, with a friendlier duplicate check also in `create_task()` for better error UX.
+Archived-Template task guard: a Task's `workstream_id` can never be newly set (create, or move) to a Template whose status is `cancelled` (archived) — enforced by the `enforce_task_invariants` trigger, with a friendlier duplicate check also in `create_task()` for better error UX.
 
 > **Hosted-DB status note**: both of the above guarantees were introduced by migrations dated 2026-09-11 whose own file headers say "NOT YET APPLIED TO THE HOSTED PROJECT." That header text is stale — both were subsequently applied and verified against hosted Supabase during CD-162's final deployment (see `current-state.md` and `data-and-supabase.md`'s migration table). **Don't trust a migration file's own header comment as a live status indicator** — check `current-state.md` or the actual hosted schema.
 
 ## Activity
 
-A catalog tag (grouped under a Department) that a Service can be configured to use. Configuring which Activities a Service uses is Supervisor/Superadmin only (`canConfigureWorkstreamActivities`) — Employees, even as the Service's own lead, cannot, at either the application layer or the hosted RLS layer. (An older code comment on `canConfigureWorkstreamActivities` still describes this as an open app-layer/RLS parity gap — it was closed by migration `20260910090000_employee_service_activity_authorization_parity.sql`, applied to hosted; the comment itself is just stale. See `troubleshooting.md`.)
+A catalog tag (grouped under a Department) that a Template can be configured to use. Configuring which Activities a Template uses is Supervisor/Superadmin only (`canConfigureWorkstreamActivities`) — Employees, even as the Template's own lead, cannot, at either the application layer or the hosted RLS layer. (An older code comment on `canConfigureWorkstreamActivities` still describes this as an open app-layer/RLS parity gap — it was closed by migration `20260910090000_employee_service_activity_authorization_parity.sql`, applied to hosted; the comment itself is just stale. See `troubleshooting.md`.)
 
 ## Task
 
@@ -134,7 +138,11 @@ List (default) / Board / Timeline. Board deliberately omits a Canceled column (i
 
 ### Create/Edit fields (`TaskFormDialog`)
 
-Title (required), Description, Project, Service (required), Activity (optional/conditionally required, with an auto-suggest + "reuse from past task" feature), Status + conditional reason, Priority, Start date, Due date, Estimated time, Assignees (**hidden from Employee viewers** — self-assignment is implicit for them), Checklist items.
+Title (required), Description, Project, Template (required), Activity (optional/conditionally required, with an auto-suggest + "reuse from past task" feature), Status + conditional reason, Priority, Start date, Due date, Estimated time, Assignees (**hidden from Employee viewers** — self-assignment is implicit for them), Checklist items.
+
+### Task List columns (Phase 1)
+
+The Task List's locked visible column set is **Task / Priority / Project-Template / Start Date / Due Date**. The Assignee column was removed from the List's visible columns — Assignee remains fully available as Task detail data, a List filter (`TaskFilters.assigneeId`), and assignment functionality; only the List's own column was dropped. Start Date reuses `Task.startDate` (already a real field, previously shown only in the Task Drawer/Properties Rail and Timeline, never in the List) and the same `formatDueDateShort` helper Due Date already used.
 
 ## Team Activity (Updates + Time)
 

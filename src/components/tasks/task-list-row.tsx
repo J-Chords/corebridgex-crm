@@ -1,7 +1,6 @@
 import { useRouter } from "next/navigation";
 import { ListChecks, Play } from "lucide-react";
 import type { TaskWithRelations } from "@/lib/data/providers/tasks-provider";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { CompanyProjectAvatar } from "@/components/companies/company-project-avatar";
 import { TaskPriorityBadge } from "@/components/tasks/task-priority-badge";
 import { TaskStatusAvatar } from "@/components/tasks/task-status-avatar";
@@ -12,36 +11,40 @@ import { STAGGER_ITEM_CLASS, staggerDelay } from "@/lib/stagger";
 import { cn } from "@/lib/utils";
 import { TaskActionsMenu } from "@/components/tasks/task-actions-menu";
 
-import { getInitials as initials } from "@/lib/initials";
-
 /**
- * Which Task list surface a row/header is rendering in — controls how much Project/Service/
- * Activity context is shown, since a Project-scoped or Service-scoped list already establishes
+ * Which Task list surface a row/header is rendering in — controls how much Project/Template/
+ * Activity context is shown, since a Project-scoped or Template-scoped list already establishes
  * part of that context on the page itself and shouldn't repeat it on every row:
  * - "global" (`/dashboard/tasks`): nothing is known ahead of time — full context cell (Project
- *   identity avatar + Project name, then Service · Activity).
+ *   identity avatar + Project name, then Template · Activity).
  * - "project" (a Project's own Tasks tab): Project is already known — context cell drops the
- *   avatar/Project name, keeps Service · Activity only.
- * - "service" (a Service/Activity's own Task list): Service AND Activity are both already known —
- *   no context column at all.
+ *   avatar/Project name, keeps Template · Activity only.
+ * - "service" (a Template/Activity's own Task list): Template AND Activity are both already known
+ *   — no context column at all. (Internal context key kept as "service" — see docs/decisions.md's
+ *   Phase 1 Template workspace entry on visible vs. internal terminology.)
  */
 export type TaskListContext = "global" | "project" | "service";
 
-/** One shared source for both `TaskListHeader` and `TaskListRow`'s desktop grid — guarantees the
- * header's columns can never drift out of alignment with the row's actual columns. `showAssignee`
- * (Phase 13B final polish, Part B) is a second, independent axis: when false the Assignee column is
- * dropped from the template entirely (not just visually hidden), for the audited case where it's
- * genuinely redundant for the current viewer/dataset — see
- * `isAssigneeColumnRedundantForViewer` (`task-display.ts`). */
-export function taskListGridCols(context: TaskListContext, showAssignee = true): string {
-  if (context === "service") return showAssignee ? "grid-cols-[1fr_88px_96px_88px]" : "grid-cols-[1fr_88px_96px]";
-  return showAssignee ? "grid-cols-[1fr_88px_140px_96px_88px]" : "grid-cols-[1fr_88px_140px_96px]";
+/**
+ * One shared source for both `TaskListHeader` and `TaskListRow`'s desktop grid — guarantees the
+ * header's columns can never drift out of alignment with the row's actual columns. Phase 1 Template
+ * workspace — the List's locked column set is now Task / Priority / Project-Template / Start Date /
+ * Due Date: the visible Assignee column was removed (Assignee stays fully available as Task detail,
+ * filter, and assignment data — just no longer its own List column) and Start Date was added,
+ * reusing the same `formatDueDateShort` already used for Due Date. `showAssignee` is kept as a
+ * parameter for source-compatibility with existing callers (Board/Dashboard/Planner surfaces that
+ * pass it for their own, unrelated grouping logic — untouched by this phase) but no longer affects
+ * this List's own column count.
+ */
+export function taskListGridCols(context: TaskListContext, _showAssignee = true): string {
+  if (context === "service") return "grid-cols-[1fr_88px_88px_88px]";
+  return "grid-cols-[1fr_88px_140px_88px_88px]";
 }
 
-export function taskListHeaderLabels(context: TaskListContext, showAssignee = true): string[] {
-  const labels: string[] =
-    context === "service" ? ["Task", "Priority", "Due"] : ["Task", "Priority", context === "global" ? "Project / Service" : "Service", "Due"];
-  return showAssignee ? [...labels, "Assignee"] : labels;
+export function taskListHeaderLabels(context: TaskListContext, _showAssignee = true): string[] {
+  return context === "service"
+    ? ["Task", "Priority", "Start Date", "Due Date"]
+    : ["Task", "Priority", context === "global" ? "Project / Template" : "Template", "Start Date", "Due Date"];
 }
 
 /**
@@ -181,18 +184,6 @@ function ContextCell({ task, context, projectIsInternal }: { task: TaskWithRelat
   );
 }
 
-function AssigneeAvatars({ task }: { task: TaskWithRelations }) {
-  if (task.assignees.length === 0) return <span className="text-xs text-muted-foreground">—</span>;
-  return (
-    <div className="flex -space-x-2">
-      {task.assignees.slice(0, 3).map((a) => (
-        <Avatar key={a.id} size="sm" className="ring-2 ring-card">
-          <AvatarFallback className="text-[0.65rem]">{initials(a.fullName)}</AvatarFallback>
-        </Avatar>
-      ))}
-    </div>
-  );
-}
 
 /**
  * Phase 12B — the dense List row (Reference 1): Task / Priority / Context / Due date / Assignee,
@@ -255,10 +246,12 @@ export function TaskListRow({
                 {context === "global" ? task.company.name : workstreamDisplayHeading(task.workstream.name, task.workstream.serviceLineName)}
               </span>
             )}
-            <span className={cn("ml-auto text-xs", overdue ? "font-medium text-warning" : "text-muted-foreground")}>
+            <span className="ml-auto text-xs text-muted-foreground">
+              {task.startDate ? formatDueDateShort(task.startDate) : "—"}
+            </span>
+            <span className={cn("text-xs", overdue ? "font-medium text-warning" : "text-muted-foreground")}>
               {task.dueDate ? formatDueDateShort(task.dueDate) : "—"}
             </span>
-            {showAssignee && <AssigneeAvatars task={task} />}
           </div>
         </div>
         {/* Desktop — true aligned grid row, template shared with TaskListHeader */}
@@ -268,10 +261,12 @@ export function TaskListRow({
             <TaskPriorityBadge priority={task.priority} />
           </div>
           {context !== "service" && <ContextCell task={task} context={context} projectIsInternal={projectIsInternal} />}
+          <div className="text-xs text-muted-foreground">
+            {task.startDate ? formatDueDateShort(task.startDate) : "—"}
+          </div>
           <div className={cn("text-xs", overdue ? "font-medium text-warning" : "text-muted-foreground")}>
             {task.dueDate ? formatDueDateShort(task.dueDate) : "—"}
           </div>
-          {showAssignee && <AssigneeAvatars task={task} />}
         </div>
       </div>
       {showActions && (

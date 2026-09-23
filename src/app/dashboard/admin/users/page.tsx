@@ -192,15 +192,15 @@ function AdminUsersPageContent() {
             </SelectContent>
           </Select>
           <Select
-            items={{ all: "All Services", ...Object.fromEntries(serviceLines.map((sl) => [sl.id, sl.name])) }}
+            items={{ all: "All Templates", ...Object.fromEntries(serviceLines.map((sl) => [sl.id, sl.name])) }}
             value={serviceFilter}
             onValueChange={(v) => setServiceFilter(v ?? "all")}
           >
-            <SelectTrigger aria-label="Filter by Service">
-              <SelectValue placeholder="Service" />
+            <SelectTrigger aria-label="Filter by Template">
+              <SelectValue placeholder="Template" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Services</SelectItem>
+              <SelectItem value="all">All Templates</SelectItem>
               {serviceLines.map((sl) => (
                 <SelectItem key={sl.id} value={sl.id}>
                   {sl.name}
@@ -230,7 +230,7 @@ function AdminUsersPageContent() {
               <TableHead className="font-mono text-xs tracking-wide text-muted-foreground uppercase">Name</TableHead>
               <TableHead className="font-mono text-xs tracking-wide text-muted-foreground uppercase">Email</TableHead>
               <TableHead className="font-mono text-xs tracking-wide text-muted-foreground uppercase">Role</TableHead>
-              <TableHead className="font-mono text-xs tracking-wide text-muted-foreground uppercase">Services</TableHead>
+              <TableHead className="font-mono text-xs tracking-wide text-muted-foreground uppercase">Templates</TableHead>
               <TableHead className="font-mono text-xs tracking-wide text-muted-foreground uppercase">Status</TableHead>
               <TableHead className="font-mono text-xs tracking-wide text-muted-foreground uppercase">Actions</TableHead>
             </TableRow>

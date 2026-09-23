@@ -27,15 +27,16 @@ Re-verify with `git rev-parse origin/main` — this file goes stale the moment a
 - **CD-190** — Merge Team Updates + Team Time into Team Activity, plus a local-calendar-date time-entry stabilization fix. PR #2, merged.
 - **CD-194** — Technical documentation and developer handover (this document set). PR #3, merged.
 - **CD-196** — Clarify Dashboard and My Day information architecture, plus a Product Owner-approved follow-up polish pass (Team Workload layout fix, Services-inspired Notifications redesign, notification safe-routing fix). PR #4, merged. Locks Dashboard = role-scoped overview/attention, My Day = personal execution/planning (personal by default for every role); see `decisions.md` for the full placement decisions.
-- **CD-205** — Retire the legacy "Project Template" bundle architecture at the schema/source level (`project_templates`/`project_template_services`/`project_template_activities`, their RPCs/triggers/RLS/grants, and dead provider/hook/type source). PR #5, merged. Hosted migration `20260921090000_retire_project_template_bundle.sql` applied and independently re-verified live. The separate, still-live Service-recipe system (`templates`/`template_tasks`/`template_checklist_items`, `apply_template`, Company-detail "Apply template") is explicitly preserved and confirmed unaffected. Phase 0 of the Template terminology redesign; Phase 1 (Service → Template rename) is not started. See `decisions.md` and `data-and-supabase.md`.
+- **CD-205** — Retire the legacy "Project Template" bundle architecture at the schema/source level (`project_templates`/`project_template_services`/`project_template_activities`, their RPCs/triggers/RLS/grants, and dead provider/hook/type source). PR #5, merged. Hosted migration `20260921090000_retire_project_template_bundle.sql` applied and independently re-verified live. The separate, still-live Service-recipe system (`templates`/`template_tasks`/`template_checklist_items`, `apply_template`, Company-detail "Apply template") is explicitly preserved and confirmed unaffected. Phase 0 of the Template terminology redesign. See `decisions.md` and `data-and-supabase.md`.
 
 ## 5. Open ticket(s)
 
 - **CD-193** — Normalize local-date handling across task and dashboard date surfaces. Status `New`, not started, no branch created. See `decisions.md` and `troubleshooting.md` for exactly what this covers and what it deliberately excludes (CD-190 already fixed the time-entry-specific instance of this bug class).
+- **CD-206** — Phase 1 Template workspace and terminology: the visible product term for the Service catalog becomes "Template" (Admin nav + new `/dashboard/admin/templates` list/detail routes, Project-facing "Templates" tab, Task List column changes — Assignee column removed, Start Date column added — staffing-terminology relabel, "Global Service Staffing" display block removed from Project-facing cards). `service_lines`/`workstreams` persistence and all authorization/RLS/RPCs are unchanged; no migration needed. Status `In Progress`, branch `feature/CD-206-template-workspace-terminology` — implementation, TypeScript/ESLint validation, all 4 provider builds, and isolated browser QA all complete; **Product Owner Try-It-Yourself review APPROVED (2026-09-23)**, being committed/pushed for Code review. See `decisions.md`'s "Phase 1 — Template workspace and terminology" entry.
 
 ## 6. Current Jira states
 
-CD-162, CD-190, CD-196, and CD-205: `pending deployment` (merged + validated, awaiting a hosting decision — see `current-state.md` for each ticket's exact status). CD-194: `Sign-off`. CD-193: `New`. Full workflow state list and the reasoning behind each transition: `current-state.md`.
+CD-162, CD-190, CD-196, and CD-205: `pending deployment` (merged + validated, awaiting a hosting decision — see `current-state.md` for each ticket's exact status). CD-194: `Sign-off`. CD-193: `New`. CD-206: `In Progress` (Product Owner approved, being committed/pushed for Code review). Full workflow state list and the reasoning behind each transition: `current-state.md`.
 
 ## 7. Current deployment state
 
@@ -166,10 +167,30 @@ validated, no hosting target exists yet to deploy to); CD-194 at "Sign-off".
 OPEN TICKETS:
 - CD-193 — Normalize local-date handling across task and dashboard date surfaces.
   Status "New," not started. Do not implement unless explicitly asked to.
+- CD-206 — Phase 1 Template workspace and terminology: visible product term for the
+  Service catalog becomes "Template" (Admin nav + new /dashboard/admin/templates
+  list/detail routes; Project-facing "Templates" tab; Task List columns become Task/
+  Priority/Project-Template/Start Date/Due Date, Assignee column removed; staffing
+  terminology Employees->Members/Services Led->Templates Led/Works In Services->Works
+  In Templates; "Global Service Staffing" display block removed from Project-facing
+  cards). service_lines/workstreams persistence and all authorization/RLS/RPCs are
+  unchanged; no migration needed. Status "In Progress," branch
+  feature/CD-206-template-workspace-terminology — implementation, TypeScript/ESLint
+  validation, all 4 provider builds, and isolated browser QA all complete; Product
+  Owner Try-It-Yourself review APPROVED (2026-09-23), being committed/pushed for Code
+  review. See decisions.md's "Phase 1 — Template workspace and
+  terminology" entry for full scope. A targeted continuation pass also closed the
+  remaining genuine user-facing terminology gaps on Company detail, Settings/Workspace,
+  Daily Updates, reports, dashboard summaries, and rare provider error paths; residual
+  "Service" strings are internal identifiers, the preserved Service-recipe flow, or
+  unrelated generic business prose.
 
-DOMAIN HIERARCHY (locked): Project → Service → Activity → Task → Checklist.
-No Subtask level exists — it was built, then deliberately fully removed. "Service" is
-the only user-facing term; "Workstream" is the internal/code name only (types, table
+DOMAIN HIERARCHY (locked): Project → Template → Activity → Task → Checklist. Visible
+term changed from "Service" to "Template" in Phase 1 (CD-206) — internal persistence
+(service_lines/workstreams) and every route/RPC/RLS name are unchanged; only what a
+user reads on screen changed. See domain-model.md.
+No Subtask level exists — it was built, then deliberately fully removed. "Template" is
+the only user-facing term; "Workstream"/"Service Line" are the internal/code names only (types, table
 names, routes) — never write "Workstream" in UI copy.
 
 ROLES: Employee / Team Lead (code: "supervisor") / Admin (code: "superadmin"). Pattern:
