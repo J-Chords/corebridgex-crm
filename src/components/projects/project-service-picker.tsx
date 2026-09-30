@@ -21,15 +21,14 @@ export interface ProjectServiceSelection {
 }
 
 interface ServiceActivityFieldsProps {
-  brandId: string;
   serviceLineId: string;
   activityIds: string[];
   onChange: (activityIds: string[]) => void;
 }
 
-/** Reused by `ProjectServicePicker` below — one Service's own Activity checkboxes, grouped by Department, exactly mirroring `WorkstreamFormDialog`'s existing Activities section so the two configuration surfaces read identically. */
-function ServiceActivityFields({ brandId, serviceLineId, activityIds, onChange }: ServiceActivityFieldsProps) {
-  const { departments } = useActivityCatalog(brandId, serviceLineId);
+/** Reused by `ProjectServicePicker` below — one Service's own Activity checkboxes, grouped by Department, exactly mirroring `WorkstreamFormDialog`'s existing Activities section so the two configuration surfaces read identically. Phase 3 (CD-208) — canonical Template Activities are Brand-independent, so this queries the catalog by Service Line only, never scoped/gated by any Brand. */
+function ServiceActivityFields({ serviceLineId, activityIds, onChange }: ServiceActivityFieldsProps) {
+  const { departments } = useActivityCatalog(undefined, serviceLineId);
 
   function toggle(id: string, checked: boolean) {
     onChange(checked ? [...activityIds, id] : activityIds.filter((a) => a !== id));
@@ -65,48 +64,28 @@ function ServiceActivityFields({ brandId, serviceLineId, activityIds, onChange }
 }
 
 interface ProjectServicePickerProps {
-  /** The underlying Company's Brand — Activities are organized per Brand, so a Brand-less client
-   * can't browse a catalog yet (Brand remains optional for the client/Project itself; this is the
-   * point where configuring a Service genuinely needs one). Null renders a guard message instead of
-   * the picker. */
-  brandId: string | null;
   value: ProjectServiceSelection[];
   onChange: (value: ProjectServiceSelection[]) => void;
   /** Service Lines to hide from "Add a service" — already attached to this Project. Adding more
    * Activities to one of those happens on that Service's own Edit, not here (Section 13). */
   excludeServiceLineIds?: string[];
-  /** Which surface this renders on — only changes the no-Brand guard's wording (Manual Acceptance
-   * Step 2 Correction, Section 3): "new-project" never names the underlying Company/client layer and
-   * offers to keep going without Services; "add-service" (an already-real Project) can say "this
-   * Project" directly. Defaults to the more common "new-project" phrasing. */
-  context?: "new-project" | "add-service";
 }
 
 /**
  * Shared "select an existing Service, then select its existing Activities" widget — reused by both
  * New Project creation's optional Services section and the Project Services tab's "Add Service"
  * flow (Section 27). Selects EXISTING global Service Lines/Activities only; never creates a new
- * catalog entry. Zero services selected is always valid.
+ * catalog entry. Zero services selected is always valid. Phase 3 (CD-208) — canonical Template
+ * Activities are Brand-independent (Partner Brand never gates which Templates/Activities are
+ * available), so this no longer takes or requires a Brand at all.
  */
 export function ProjectServicePicker({
-  brandId,
   value,
   onChange,
   excludeServiceLineIds = [],
-  context = "new-project",
 }: ProjectServicePickerProps) {
   const { serviceLines } = useCompanyLookups();
   const [pendingAdd, setPendingAdd] = useState("");
-
-  if (!brandId) {
-    return (
-      <p className="text-sm text-muted-foreground">
-        {context === "new-project"
-          ? "Choose a Partner Brand to configure Templates and Activities. You can also create the Project now and add Templates later."
-          : "This Project has no Partner Brand set yet — add one before configuring Templates."}
-      </p>
-    );
-  }
 
   const usedIds = new Set([...value.map((v) => v.serviceLineId), ...excludeServiceLineIds]);
   const available = serviceLines.filter((sl) => !usedIds.has(sl.id));
@@ -143,7 +122,6 @@ export function ProjectServicePicker({
               </button>
             </div>
             <ServiceActivityFields
-              brandId={brandId}
               serviceLineId={entry.serviceLineId}
               activityIds={entry.activityIds}
               onChange={(ids) => setActivities(entry.serviceLineId, ids)}

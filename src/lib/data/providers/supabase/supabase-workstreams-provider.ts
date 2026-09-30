@@ -13,14 +13,14 @@ import { resolveProfileDirectory } from "./profile-directory";
  * Companies provider, for the same reason (avoids fragile multi-relationship embed strings).
  */
 
-interface WorkstreamRow {
+export interface WorkstreamRow {
   id: string;
   name: string;
   description: string | null;
   company_id: string;
   project_id: string | null;
   service_line_id: string | null;
-  brand_id: string;
+  brand_id: string | null;
   lead_user_id: string;
   status: WorkstreamStatus;
   start_date: string | null;
@@ -111,12 +111,20 @@ function todayDateString(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+/** Phase 3 (CD-208) — exported for `supabase-projects-provider.ts`'s `applyProjectTemplates`,
+ * which needs to hydrate the raw `workstreams` rows `apply_project_templates` returns into full
+ * `WorkstreamWithRelations` the same way every other read path here does, without duplicating
+ * `toWorkstream`/`hydrate`. */
+export async function hydrateWorkstreamRows(rows: WorkstreamRow[]): Promise<WorkstreamWithRelations[]> {
+  return hydrate(rows.map(toWorkstream));
+}
+
 async function hydrate(workstreams: Workstream[]): Promise<WorkstreamWithRelations[]> {
   if (workstreams.length === 0) return [];
   const supabase = createClient();
   const ids = workstreams.map((w) => w.id);
   const companyIds = Array.from(new Set(workstreams.map((w) => w.companyId)));
-  const brandIds = Array.from(new Set(workstreams.map((w) => w.brandId)));
+  const brandIds = Array.from(new Set(workstreams.map((w) => w.brandId).filter((x): x is string => x != null)));
   const serviceLineIds = Array.from(new Set(workstreams.map((w) => w.serviceLineId).filter((x): x is string => x != null)));
   const leadIds = Array.from(new Set(workstreams.map((w) => w.leadUserId)));
   const createdByIds = Array.from(new Set(workstreams.map((w) => w.createdById)));
@@ -124,10 +132,16 @@ async function hydrate(workstreams: Workstream[]): Promise<WorkstreamWithRelatio
   const [companiesRes, brandsRes, serviceLinesRes, membersRes, activityLinksRes, tasksRes, timeEntriesRes, successorsRes] =
     await Promise.all([
       supabase.from("companies").select("*").in("id", companyIds),
-      supabase.from("brands").select("id, name").in("id", brandIds),
+      brandIds.length ? supabase.from("brands").select("id, name").in("id", brandIds) : Promise.resolve({ data: [] }),
       serviceLineIds.length ? supabase.from("service_lines").select("*").in("id", serviceLineIds) : Promise.resolve({ data: [] }),
       supabase.from("workstream_members").select("workstream_id, user_id").in("workstream_id", ids),
-      supabase.from("workstream_activities").select("workstream_id, activity_id").in("workstream_id", ids),
+      // Phase 3 (CD-208) — true snapshot: select this Workstream's own frozen Activity data
+      // directly, never a live join against the global `activities` table (that live join was
+      // exactly the bug this phase fixes).
+      supabase
+        .from("workstream_activities")
+        .select("workstream_id, activity_id, name, description, default_task_titles, position")
+        .in("workstream_id", ids),
       supabase.from("tasks").select("id, workstream_id, status, expected_minutes").in("workstream_id", ids),
       Promise.resolve({ data: [] as { task_id: string; duration_minutes: number | null; billable: boolean }[] }),
       supabase.from("workstreams").select("id, previous_occurrence_workstream_id").in("previous_occurrence_workstream_id", ids),
@@ -147,12 +161,15 @@ async function hydrate(workstreams: Workstream[]): Promise<WorkstreamWithRelatio
   // leads). See profile-directory.ts for the real access boundary.
   const users = await resolveProfileDirectory(allUserIds);
 
-  const activityLinks = (activityLinksRes.data ?? []) as { workstream_id: string; activity_id: string }[];
-  const activityIds = Array.from(new Set(activityLinks.map((l) => l.activity_id)));
-  const activitiesRes = activityIds.length
-    ? await supabase.from("activities").select("*").in("id", activityIds)
-    : { data: [] as ActivityRow[] };
-  const activities = ((activitiesRes.data ?? []) as ActivityRow[]).map(toActivity);
+  // Phase 3 (CD-208) — the frozen snapshot rows themselves, not a live-joined `activities` fetch.
+  const activityLinks = (activityLinksRes.data ?? []) as {
+    workstream_id: string;
+    activity_id: string | null;
+    name: string;
+    description: string | null;
+    default_task_titles: string[];
+    position: number;
+  }[];
 
   const tasks = (tasksRes.data ?? []) as { id: string; workstream_id: string; status: string; expected_minutes: number | null }[];
   const taskIds = tasks.map((t) => t.id);
@@ -178,8 +195,7 @@ async function hydrate(workstreams: Workstream[]): Promise<WorkstreamWithRelatio
       active: companyRow.active,
       createdAt: companyRow.created_at,
     };
-    const brand = brands.find((b) => b.id === workstream.brandId);
-    if (!brand) throw new Error(`Workstream ${workstream.id} references unknown brand ${workstream.brandId}`);
+    const brand = workstream.brandId ? (brands.find((b) => b.id === workstream.brandId) ?? null) : null;
     const serviceLine = workstream.serviceLineId ? (serviceLines.find((sl) => sl.id === workstream.serviceLineId) ?? null) : null;
     const lead = users.find((u) => u.id === workstream.leadUserId);
     if (!lead) throw new Error(`Workstream ${workstream.id} references unknown lead ${workstream.leadUserId}`);
@@ -187,8 +203,26 @@ async function hydrate(workstreams: Workstream[]): Promise<WorkstreamWithRelatio
     if (!createdBy) throw new Error(`Workstream ${workstream.id} references unknown creator ${workstream.createdById}`);
     const teamIds = members.filter((m) => m.workstream_id === workstream.id).map((m) => m.user_id);
     const team = users.filter((u) => teamIds.includes(u.id));
-    const enabledActivityIds = activityLinks.filter((l) => l.workstream_id === workstream.id).map((l) => l.activity_id);
-    const workstreamActivities = activities.filter((a) => enabledActivityIds.includes(a.id));
+    // Phase 3 (CD-208) — true snapshot: build each Activity display object straight from this
+    // Workstream's own frozen row. `id` stays the lineage `activity_id` so Task creation's "pick an
+    // already-enabled Activity" flow keeps writing the same stable global id it always has
+    // (tasks.activity_id is explicitly untouched by Phase 3) — falls back to a synthetic id only in
+    // the edge case where the source Activity was later deleted (activity_id null).
+    const workstreamActivities = activityLinks
+      .filter((l) => l.workstream_id === workstream.id)
+      .map((l) => ({
+        id: l.activity_id ?? `${l.workstream_id}:${l.name}`,
+        departmentId: "",
+        name: l.name,
+        description: l.description,
+        position: l.position,
+        defaultTaskTitles: l.default_task_titles,
+        isActive: true,
+        createdById: null,
+        createdAt: workstream.createdAt,
+        updatedAt: workstream.createdAt,
+      }))
+      .sort((a, b) => a.position - b.position);
 
     const workstreamTasks = tasks.filter((t) => t.workstream_id === workstream.id);
     const taskCount = workstreamTasks.length;
@@ -249,13 +283,33 @@ async function syncTeam(workstreamId: string, userIds: string[]) {
   }
 }
 
+/** Phase 3 (CD-208) — freezes each selected Activity's CURRENT name/description/defaultTaskTitles/
+ * position at the moment it's (re-)applied, instead of storing only the join key. A later catalog
+ * Activity edit never changes an already-applied snapshot; re-running this (e.g. via "Configure
+ * Activities") re-freezes to whatever is current at that later moment. */
 async function syncActivities(workstreamId: string, activityIds: string[]) {
   const supabase = createClient();
   await supabase.from("workstream_activities").delete().eq("workstream_id", workstreamId);
   if (activityIds.length > 0) {
-    const { error } = await supabase
-      .from("workstream_activities")
-      .insert(activityIds.map((activityId) => ({ workstream_id: workstreamId, activity_id: activityId })));
+    const { data: activityRows, error: activitiesError } = await supabase
+      .from("activities")
+      .select("id, name, description, default_task_titles, position")
+      .in("id", activityIds);
+    if (activitiesError) throw new Error(activitiesError.message);
+    const byId = new Map((activityRows ?? []).map((a) => [a.id as string, a]));
+    const { error } = await supabase.from("workstream_activities").insert(
+      activityIds.map((activityId) => {
+        const a = byId.get(activityId);
+        return {
+          workstream_id: workstreamId,
+          activity_id: activityId,
+          name: a?.name ?? "Unknown Activity",
+          description: a?.description ?? null,
+          default_task_titles: a?.default_task_titles ?? [],
+          position: a?.position ?? 0,
+        };
+      })
+    );
     if (error) throw new Error(error.message);
   }
 }

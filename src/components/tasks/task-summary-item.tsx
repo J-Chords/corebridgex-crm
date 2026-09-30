@@ -94,9 +94,9 @@ export function TaskSummaryItem({ task, onOpen, isRunning, variant = "row", show
           <CompanyProjectAvatar companyId={task.company.id} companyName={task.company.name} size="sm" isInternal={isLikelyInternalTask(task)} />
           <span
             className="truncate"
-            title={`${task.company.name} · ${workstreamDisplayHeading(task.workstream.name, task.workstream.serviceLineName)}${task.activity ? ` · ${task.activity.name}` : ""}`}
+            title={`${task.company.name} · ${workstreamDisplayHeading(task.workstream.name)}${task.activity ? ` · ${task.activity.name}` : ""}`}
           >
-            {task.company.name} · {workstreamDisplayHeading(task.workstream.name, task.workstream.serviceLineName)}
+            {task.company.name} · {workstreamDisplayHeading(task.workstream.name)}
             {task.activity && <> · {task.activity.name}</>}
           </span>
         </p>

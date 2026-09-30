@@ -48,6 +48,11 @@ export interface Project {
    * Reactivate, so "Previously Archived On" stays available after returning to Active. */
   archivedAt: string | null;
   projectGroupId: string | null;
+  /** Phase 3 (CD-208) — Project-specific Partner Brand, independent of `Company.brandId`. Two
+   * Projects under the same Company may carry different Partner Brands. Backfilled once from the
+   * owning Company's `brandId` at migration time; no ongoing sync in either direction afterward —
+   * editing one never touches the other. Null is valid (no Brand set). */
+  partnerBrandId: string | null;
   tags: string[];
   /** Present only while status is "on-hold"/"cancelled" (required at that transition) — cleared on
    * any other transition. */

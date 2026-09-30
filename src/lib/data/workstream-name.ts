@@ -31,12 +31,15 @@ export function splitWorkstreamQualifier(name: string, serviceLineName: string |
 }
 
 /**
- * What to actually show as the primary heading wherever a workstream's identity is displayed — the
- * service name takes priority; a workstream with no service line (e.g. Internal Operations) falls
- * back to its raw stored name, completely unaffected by this change.
+ * What to actually show as the primary heading wherever a workstream's identity is displayed.
+ * Phase 3 (CD-208) — true Template snapshot semantics: `name` is already frozen at write-time by
+ * `deriveWorkstreamName` (called with whatever the Service Line's name was AT THAT MOMENT), so this
+ * must never re-join the CURRENT/live Service Line name over it — that live join was exactly the
+ * bug this phase fixes (a later catalog rename would otherwise silently change what every existing
+ * Project displays). `name` is the single source of truth for display, full stop.
  */
-export function workstreamDisplayHeading(name: string, serviceLineName: string | null): string {
-  return serviceLineName ?? name;
+export function workstreamDisplayHeading(name: string): string {
+  return name;
 }
 
 /**

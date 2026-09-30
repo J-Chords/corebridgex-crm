@@ -156,9 +156,9 @@ export function TaskTimeline({ tasks, onEdit, onDeleted }: TaskTimelineProps) {
                     <span className="truncate font-medium" title={task.title}>{task.title}</span>
                     <span
                       className="truncate text-xs text-muted-foreground"
-                      title={`${workstreamDisplayHeading(task.workstream.name, task.workstream.serviceLineName)}${task.activity ? ` · ${task.activity.name}` : ""}`}
+                      title={`${workstreamDisplayHeading(task.workstream.name)}${task.activity ? ` · ${task.activity.name}` : ""}`}
                     >
-                      {workstreamDisplayHeading(task.workstream.name, task.workstream.serviceLineName)}
+                      {workstreamDisplayHeading(task.workstream.name)}
                       {task.activity && ` · ${task.activity.name}`}
                     </span>
                   </div>
@@ -332,7 +332,7 @@ export function TaskTimeline({ tasks, onEdit, onDeleted }: TaskTimelineProps) {
                     <div className="flex min-w-0 flex-col">
                       <span className="truncate font-medium" title={task.title}>{task.title}</span>
                       <span className="truncate text-xs text-muted-foreground">
-                        {workstreamDisplayHeading(task.workstream.name, task.workstream.serviceLineName)}
+                        {workstreamDisplayHeading(task.workstream.name)}
                         {task.activity && ` · ${task.activity.name}`}
                       </span>
                     </div>

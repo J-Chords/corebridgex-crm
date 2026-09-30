@@ -103,7 +103,20 @@ export async function applyServiceTemplateToProject(
       db.workstreamActivities.filter((wa) => wa.workstreamId === existing.id).map((wa) => wa.activityId)
     );
     const toAdd = activityIds.filter((aid) => !currentActivityIds.has(aid));
-    db.workstreamActivities = [...db.workstreamActivities, ...toAdd.map((activityId) => ({ workstreamId: existing.id, activityId }))];
+    db.workstreamActivities = [
+      ...db.workstreamActivities,
+      ...toAdd.map((activityId) => {
+        const activity = db.activities.find((a) => a.id === activityId);
+        return {
+          workstreamId: existing.id,
+          activityId,
+          name: activity?.name ?? "Unknown Activity",
+          description: activity?.description ?? null,
+          defaultTaskTitles: activity?.defaultTaskTitles ?? [],
+          position: activity?.position ?? 0,
+        };
+      }),
+    ];
     return { workstreamId: existing.id, status: "merged", serviceLineId: template.serviceLineId, activitiesMerged: toAdd.length };
   }
 

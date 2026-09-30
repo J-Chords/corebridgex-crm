@@ -179,10 +179,10 @@ function LoadedWorkstreamDetailPage({
             <div className="flex flex-wrap items-center gap-2.5">
               <ServiceAvatar
                 serviceKey={workstream.serviceLineId ?? workstream.id}
-                serviceName={workstreamDisplayHeading(workstream.name, workstream.serviceLine?.name ?? null)}
+                serviceName={workstreamDisplayHeading(workstream.name)}
               />
               <h1 className="font-heading text-2xl font-semibold">
-                {workstreamDisplayHeading(workstream.name, workstream.serviceLine?.name ?? null)}
+                {workstreamDisplayHeading(workstream.name)}
               </h1>
               <WorkstreamStatusBadge status={workstream.status} />
             </div>

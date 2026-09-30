@@ -102,7 +102,7 @@ export function WorkstreamFormDialog({
   // selected the Activities section below is hidden entirely, so an unscoped fetch here would never
   // be shown, just wasted.
   const { departments: activityDepartments } = useActivityCatalog(
-    selectedServiceLine ? company.brand?.id : undefined,
+    undefined,
     selectedServiceLine ? selectedServiceLine.id : undefined
   );
   // Global Team Leads for the selected Service — surfaced as preferred/contextual candidates when

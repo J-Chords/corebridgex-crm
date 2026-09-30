@@ -42,6 +42,23 @@ export function useProject(id: string) {
     setIsLoading(false);
   }, [user, id]);
 
+  // Phase 3 (CD-208) — found during QA: navigating from one Project straight to another (SPA
+  // navigation, no full reload) previously left the PREVIOUS Project's data in `project` state for
+  // the brief window between the route's `id` changing and this hook's own fetch resolving, because
+  // only `isLoading`/`notFound` reset synchronously — `project` itself didn't clear until the new
+  // `getProject` call finished. Any UI keyed off `project` (e.g. a role/ownership-gated button) could
+  // briefly render using the OLD Project's data even though the URL/breadcrumb already reflected the
+  // NEW one. The actual mutation RPCs/mock methods (`apply_project_templates`, `update_project_record`,
+  // etc.) independently re-validate ownership server-side regardless of this, so this was never an
+  // actual authorization bypass — but a stale-keyed value is never safe to render from, so `project`
+  // now resets to `null` immediately whenever `id` changes, same synchronous instant as `isLoading`
+  // flips to `true` — no cross-Project flash is possible even in principle.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setProject(null);
+    setNotFound(false);
+  }, [id]);
+
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     refresh();

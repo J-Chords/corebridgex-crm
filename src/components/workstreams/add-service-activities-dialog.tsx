@@ -38,7 +38,7 @@ interface AddServiceActivitiesDialogProps {
  */
 export function AddServiceActivitiesDialog({ open, onOpenChange, workstream, onSaved }: AddServiceActivitiesDialogProps) {
   const { user } = useAuth();
-  const { departments: fullCatalog } = useActivityCatalog(workstream.brand.id, workstream.serviceLineId ?? undefined);
+  const { departments: fullCatalog } = useActivityCatalog(undefined, workstream.serviceLineId ?? undefined);
   const enabledIds = new Set(workstream.activities.map((a) => a.id));
   const unconfigured = fullCatalog.flatMap((d) =>
     d.activities.filter((a) => !enabledIds.has(a.id) && a.isActive).map((a) => ({ ...a, departmentName: d.name }))

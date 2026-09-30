@@ -42,7 +42,15 @@ export const supabaseActivityCatalogProvider: ActivityCatalogProvider = {
   async listDepartments(brandId, serviceLineId) {
     const supabase = createClient();
     let departmentsQuery = supabase.from("departments").select("*").order("position");
-    if (brandId) departmentsQuery = departmentsQuery.eq("brand_id", brandId);
+    if (brandId) {
+      departmentsQuery = departmentsQuery.eq("brand_id", brandId);
+    } else if (serviceLineId) {
+      // Phase 3 (CD-208) — canonical Template Activities are Brand-independent: a caller asking for
+      // one Service Line's catalog without naming a Brand means "the canonical (Brand-independent)
+      // Department," never the legacy per-Brand ones. Omitting BOTH (the Admin cross-brand catalog
+      // view) is unaffected and still returns every Department regardless of brand_id.
+      departmentsQuery = departmentsQuery.is("brand_id", null);
+    }
     if (serviceLineId) departmentsQuery = departmentsQuery.eq("service_line_id", serviceLineId);
     const { data: departmentRows, error: departmentsError } = await departmentsQuery;
     if (departmentsError) throw new Error(departmentsError.message);

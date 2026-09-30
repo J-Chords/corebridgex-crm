@@ -51,6 +51,10 @@ export const seedProjects: Project[] = seedCompanies.map((company) => {
     startDate: null,
     endDate: null,
     projectGroupId: null,
+    // Phase 3 (CD-208) one-time backfill, mirroring the real hosted migration exactly
+    // (20260924090000_phase3_project_partner_brand.sql): seeded from the owning Company's current
+    // brandId — no ongoing sync after this either in the mock or in Supabase.
+    partnerBrandId: company.brandId,
     tags: [],
     statusReason: null,
     statusChangedAt: null,

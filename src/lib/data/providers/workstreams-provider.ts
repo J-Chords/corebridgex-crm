@@ -6,7 +6,9 @@ import type { WorkstreamRecurrenceInfo } from "../recurrence";
 export interface WorkstreamWithRelations extends Workstream {
   company: Company;
   serviceLine: ServiceLine | null;
-  brand: Brand;
+  /** Null when this Workstream has no Brand reference at all (Phase 3, CD-208 — canonical Template
+   * Activities no longer require one). Purely a denormalized reference, not authorization-bearing. */
+  brand: Brand | null;
   /** The Project Service Lead — one explicit operational lead for THIS Service within THIS Project.
    * Distinct from `createdBy` (historical creator) and from a Service Line's Global Team Leads
    * (org-wide responsibility for the catalog definition, resolved separately via

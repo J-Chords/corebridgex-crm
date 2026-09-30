@@ -57,8 +57,10 @@ Every exported function in `permissions.ts`, grouped by domain. Logic is paraphr
 | Function | Gates |
 |---|---|
 | `canAccessProject` | Admin → all; Internal-company projects → all; Team Lead → owner or any member is a direct report; else → viewer is owner or member |
-| `canManageProjects` | Project record create/edit/renew — **Admin (superadmin) only**, deliberately narrower than `canManageCompanies` |
-| `canCreateWorkstreamInProject` | "+ Add Service" inside a Project — Team Lead or Admin |
+| `canManageProjects` | Legacy Admin-only Project gate — kept for historical/global-list purposes, **do not use for per-Project checks** (superseded by `canManageProjectRecord` below for anything Project-specific, since Phase 3/CD-208) |
+| `canCreateProject` | Phase 3 (CD-208) — who may create a Project at all: **Admin or Team Lead**, never Employee. A Team Lead creator always becomes the new Project's `ownerId` (server-enforced, never client-chosen) — this is the Phase-3 bridge to Phase 4's staffing model, not a new "Primary Team Lead" concept. |
+| `canManageProjectRecord(viewer, project)` | Phase 3 (CD-208) — the real per-Project write boundary: `isSuperadmin(viewer) \|\| (isSupervisor(viewer) && project.ownerId === viewer.id)`. Deliberately narrower than `canAccessProject` (read) — direct-report visibility, `project_members`/`projectRole` (data-only), global Template staffing ("Works In Templates"), and `workstream.leadUserId` ("Project Template Lead") all grant **zero** Project-management authority here. Mirrored server-side by the hosted `can_manage_project(uuid)` SQL function — gates the Project Edit button/dialog, Add Template, and Administrative Details' edit affordances. Name/Partner Brand/Owner stay Admin-only to change even for the owning Team Lead (enforced by `update_project_record`, not just a disabled input). |
+| `canCreateWorkstreamInProject` | "+ Add Service" inside a Project — Team Lead or Admin (general, not owner-scoped — this is the older, broader "add a Service to any Project I have access to" rule; Phase 3's "Add Template" button on the Project detail page uses the narrower `canManageProjectRecord` instead, so Team Lead can only add a Template to a Project they own even though this function itself would allow more) |
 | `canProgressProjectIssue` / `canEditProjectIssueDetails` | Admin, or the issue's creator/assignee |
 | `canEditProjectComment` / `canDeleteProjectComment` | Own comment, or Admin for delete |
 
@@ -123,3 +125,5 @@ Two coexisting patterns, not one uniform rule:
 2. **Complex or invariant-sensitive mutations** — no direct grant at all; funneled through `SECURITY DEFINER` RPCs (`create_workstream`, `create_task`, `start_timer`/`stop_timer`, `set_project_status`, `delete_task`, `correct_time_entry`, etc.), which re-validate authorization themselves before mutating.
 
 Do not assume "everything goes through an RPC" — verify per-table. See `data-and-supabase.md` for the migration-by-migration detail.
+
+**Phase 3 (CD-208) followed pattern 2 deliberately, not pattern 1**: rather than widen `projects_update`/`project_groups_write_admin` RLS to admit Supervisor directly (which can't safely protect individual fields like Name/Partner Brand/Owner), a Team Lead's Project edits now route through new `SECURITY DEFINER` RPCs — `update_project_record` (field-level protection enforced in the function body), `apply_project_templates` (atomic multi-Template application, `can_manage_project`-gated), `create_project_group` (Admin-or-Supervisor). The underlying `projects_update`/`project_groups_write_admin` RLS policies themselves stay exactly Superadmin-only, unchanged — a raw client call bypassing these RPCs still can't touch either table as a Supervisor.

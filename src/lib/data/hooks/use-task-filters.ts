@@ -113,7 +113,7 @@ export function useCompanyOptionsFromTasks(tasks: TaskWithRelations[]) {
 export function useWorkstreamOptionsFromTasks(tasks: TaskWithRelations[]) {
   return useMemo(() => {
     const byId = new Map<string, string>();
-    for (const task of tasks) byId.set(task.workstream.id, workstreamDisplayHeading(task.workstream.name, task.workstream.serviceLineName));
+    for (const task of tasks) byId.set(task.workstream.id, workstreamDisplayHeading(task.workstream.name));
     return Array.from(byId, ([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
   }, [tasks]);
 }
@@ -178,7 +178,7 @@ export function groupTasksBy(tasks: TaskWithRelations[], groupBy: TaskGroupBy): 
         addTo(task.company.id, task.company.name, task);
         break;
       case "workstream":
-        addTo(task.workstream.id, workstreamDisplayHeading(task.workstream.name, task.workstream.serviceLineName), task);
+        addTo(task.workstream.id, workstreamDisplayHeading(task.workstream.name), task);
         break;
       case "activity":
         if (task.activity) addTo(task.activity.id, `${task.activity.departmentName}: ${task.activity.name}`, task);

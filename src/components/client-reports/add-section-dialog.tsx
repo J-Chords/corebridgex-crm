@@ -15,8 +15,10 @@ interface AddSectionDialogProps {
 }
 
 /** Picks an activity from the brand's full catalog to add as an empty section — "+ Add section" from the request. Already-included activities are filtered out; picking one appends a section with zero line items the generator fills in by hand via "Add line." */
-export function AddSectionDialog({ open, onOpenChange, brandId, departments, onAdd }: AddSectionDialogProps) {
-  const { departments: catalog } = useActivityCatalog(brandId);
+export function AddSectionDialog({ open, onOpenChange, departments, onAdd }: AddSectionDialogProps) {
+  // Phase 3 (CD-208) — canonical Template Activities are Brand-independent; brandId (still accepted
+  // in the props contract for caller compatibility) is no longer used to scope this catalog fetch.
+  const { departments: catalog } = useActivityCatalog(undefined);
   const [search, setSearch] = useState("");
 
   const includedActivityIds = useMemo(() => {

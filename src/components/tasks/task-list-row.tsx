@@ -174,9 +174,9 @@ function ContextCell({ task, context, projectIsInternal }: { task: TaskWithRelat
         )}
         <span
           className="block truncate"
-          title={`${workstreamDisplayHeading(task.workstream.name, task.workstream.serviceLineName)}${task.activity ? ` · ${task.activity.name}` : ""}`}
+          title={`${workstreamDisplayHeading(task.workstream.name)}${task.activity ? ` · ${task.activity.name}` : ""}`}
         >
-          {workstreamDisplayHeading(task.workstream.name, task.workstream.serviceLineName)}
+          {workstreamDisplayHeading(task.workstream.name)}
           {task.activity && ` · ${task.activity.name}`}
         </span>
       </div>
@@ -243,7 +243,7 @@ export function TaskListRow({
             <TaskPriorityBadge priority={task.priority} />
             {context !== "service" && (
               <span className="truncate text-xs text-muted-foreground">
-                {context === "global" ? task.company.name : workstreamDisplayHeading(task.workstream.name, task.workstream.serviceLineName)}
+                {context === "global" ? task.company.name : workstreamDisplayHeading(task.workstream.name)}
               </span>
             )}
             <span className="ml-auto text-xs text-muted-foreground">

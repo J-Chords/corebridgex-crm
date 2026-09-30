@@ -17,8 +17,11 @@ export interface Workstream {
   projectId: string | null;
   /** Null for workstreams with no real client service line (e.g. Internal Operations). */
   serviceLineId: string | null;
-  /** Denormalized copy of the owning company's brandId — companies don't yet support multi-brand association. */
-  brandId: string;
+  /** Denormalized reference only (Phase 3, CD-208) — sourced from the owning Project's own
+   * `partnerBrandId` at creation time, falling back to the Company's `brandId`, then null. No
+   * longer required: canonical Template Activities are Brand-independent, so a Project/Company
+   * with no Brand set can still receive Templates. */
+  brandId: string | null;
   leadUserId: string;
   status: WorkstreamStatus;
   startDate: string | null;
@@ -49,7 +52,17 @@ export interface WorkstreamMember {
  * persisted associations yet (legacy data, or a brand-new workstream whose service has no catalog) —
  * see `useWorkstreamActivities` for the read-side fallback that covers that case.
  */
+/** Phase 3 (CD-208) — a Workstream's own frozen Activity snapshot, applied at Template-application
+ * time and never live-joined again. `activityId` is lineage only (nullable — survives a source
+ * Activity later being deleted); `name`/`description`/`defaultTaskTitles`/`position` are the
+ * Project-facing display data, frozen as of the moment this Activity was applied. Editing the
+ * global catalog Activity afterward never changes an already-applied snapshot; editing this
+ * snapshot (e.g. removing/re-adding it) never changes the global catalog Activity. */
 export interface WorkstreamActivity {
   workstreamId: string;
-  activityId: string;
+  activityId: string | null;
+  name: string;
+  description: string | null;
+  defaultTaskTitles: string[];
+  position: number;
 }

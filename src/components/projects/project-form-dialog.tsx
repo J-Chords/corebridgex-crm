@@ -4,10 +4,10 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useAuth } from "@/lib/auth/auth-context";
 import { useCompanies, useCompanyLookups } from "@/lib/data/hooks/use-companies";
 import { useProjectGroups } from "@/lib/data/hooks/use-projects";
-import { projectsProvider, workstreamsProvider } from "@/lib/data/providers";
+import { projectsProvider } from "@/lib/data/providers";
 import type { ProjectWithRelations } from "@/lib/data/providers/projects-provider";
 import { ProjectServicePicker, type ProjectServiceSelection } from "@/components/projects/project-service-picker";
-import { deriveWorkstreamName } from "@/lib/data/workstream-name";
+import { isSuperadmin } from "@/lib/data/permissions";
 import { MultiSelect } from "@/components/ui/multi-select";
 import { Sheet, SheetContent, SheetFooter, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
@@ -70,11 +70,15 @@ function emptyForm() {
     memberUserIds: [] as string[],
     services: [] as ProjectServiceSelection[],
     // Normal-global-flow-only fields ("Administrative details") — never sent when attaching to an
-    // already-existing Company.
+    // already-existing Company. `brandId` here is the brand-new Company's own master-data Brand —
+    // genuinely distinct from `partnerBrandId` below (Phase 3, CD-208).
     brandId: "",
     contactName: "",
     contactEmail: "",
     contactPhone: "",
+    // Phase 3 (CD-208) — the Project's own Partner Brand, independent of any Company Brand above.
+    // Settable at CREATE by Admin or Team Lead; protected (Admin-only) after that.
+    partnerBrandId: "",
   };
 }
 
@@ -146,8 +150,14 @@ function CollapsibleSection({
 export function ProjectFormDialog({ open, onOpenChange, mode, project, onSaved, defaultCompanyId }: ProjectFormDialogProps) {
   const { user } = useAuth();
   const { companies } = useCompanies();
-  const { assignableStaff, brands, serviceLines } = useCompanyLookups();
+  const { assignableStaff, brands } = useCompanyLookups();
   const { groups, refresh: refreshGroups } = useProjectGroups();
+  const isAdmin = !!user && isSuperadmin(user);
+  // Phase 3 (CD-208) — protected identity fields (Project/Client Name, Partner Brand, Owner) are
+  // settable by a Team Lead only at CREATE time; only Admin may change them afterward. Enforced
+  // here for UX (disabled inputs) AND independently at the backend (update_project_record), which
+  // is the real boundary — never trust this alone.
+  const canEditProtectedFields = mode === "create" || isAdmin;
 
   const [form, setForm] = useState(emptyForm);
   const [tagDraft, setTagDraft] = useState("");
@@ -200,6 +210,7 @@ export function ProjectFormDialog({ open, onOpenChange, mode, project, onSaved, 
         projectGroupId: project.projectGroupId ?? "",
         tags: project.tags,
         memberUserIds: project.members.map((m) => m.id),
+        partnerBrandId: project.partnerBrandId ?? "",
       });
       setNameTouched(true);
     } else {
@@ -289,74 +300,44 @@ export function ProjectFormDialog({ open, onOpenChange, mode, project, onSaved, 
     }
   }
 
-  /** Best-effort, post-creation: the Project itself is already real by the time this runs, so a
-   * Service failure never rolls it back — it's reported honestly instead rather than silently
-   * swallowed or falsely reported as full success. */
-  async function attachServices(companyId: string, projectId: string, ownerId: string) {
-    const failures: string[] = [];
-    for (const svc of form.services) {
-      const serviceLineName = serviceLines.find((sl) => sl.id === svc.serviceLineId)?.name ?? null;
-      const name = deriveWorkstreamName(serviceLineName, "");
-      try {
-        await workstreamsProvider.createWorkstream(user!, {
-          name,
-          description: null,
-          companyId,
-          projectId,
-          serviceLineId: svc.serviceLineId,
-          leadUserId: ownerId,
-          teamUserIds: [],
-          status: "active",
-          startDate: null,
-          endDate: null,
-          recurrenceFrequency: null,
-          recurrenceAnchorDate: null,
-          recurrenceCustomIntervalDays: null,
-          activityIds: svc.activityIds,
-        });
-      } catch (err) {
-        failures.push(`${name}: ${err instanceof Error ? err.message : "failed"}`);
-      }
-    }
-    return failures;
-  }
-
   async function submitForm() {
     if (!user) return;
     setError(null);
     setIsSubmitting(true);
     try {
-      let companyId: string;
-      let projectId: string;
-      let ownerId: string;
+      // Phase 3 (CD-208) — atomic: Template selections are sent as part of the same create call
+      // (create_project/create_client_project apply them inside their own transaction) instead of
+      // a separate best-effort post-creation loop. A failed Template application now rolls back
+      // the whole Project creation, never leaving a partially-created Project.
+      const templates = form.services.map((svc) => ({ serviceLineId: svc.serviceLineId, activityIds: svc.activityIds }));
+
       if (isGlobalCreate) {
         // ONE atomic call — the RPC/mock creates the Company (+ optional primary contact) and the
         // Project together; Title doubles as the new Company's name, never a second name field.
-        const created = await projectsProvider.createClientProject(user, {
+        await projectsProvider.createClientProject(user, {
           name: form.name.trim(),
           brandId: form.brandId || null,
+          partnerBrandId: form.partnerBrandId || form.brandId || null,
           contractStartDate: form.contractStartDate || null,
           renewalDate: form.contractEndDate || null,
           contactName: form.contactName.trim() || null,
           contactEmail: form.contactEmail.trim() || null,
           contactPhone: form.contactPhone.trim() || null,
-          ownerId: form.ownerId || null,
+          ownerId: isAdmin ? form.ownerId || null : null,
           completionDate: form.completionDate || null,
           startDate: form.startDate || null,
           endDate: form.endDate || null,
           description: form.description.trim() || null,
           projectGroupId: form.projectGroupId || null,
           tags: form.tags,
-          memberUserIds: form.memberUserIds,
+          memberUserIds: isAdmin ? form.memberUserIds : [],
+          templates,
         });
-        companyId = created.companyId;
-        projectId = created.id;
-        ownerId = created.owner.id;
       } else {
         const input = {
           companyId: form.companyId,
           name: form.name.trim(),
-          ownerId: form.ownerId || null,
+          ownerId: isAdmin ? form.ownerId || null : null,
           contractStartDate: form.contractStartDate || null,
           contractMonths: Number(form.contractMonths) || 12,
           contractEndDate: form.contractEndDate || null,
@@ -365,32 +346,19 @@ export function ProjectFormDialog({ open, onOpenChange, mode, project, onSaved, 
           endDate: form.endDate || null,
           description: form.description.trim() || null,
           projectGroupId: form.projectGroupId || null,
+          partnerBrandId: form.partnerBrandId || null,
           tags: form.tags,
-          memberUserIds: form.memberUserIds,
+          memberUserIds: isAdmin ? form.memberUserIds : [],
+          templates,
         };
         if (mode === "edit" && project) {
-          const saved = await projectsProvider.updateProject(user, project.id, input);
-          companyId = saved.companyId;
-          projectId = saved.id;
-          ownerId = saved.owner.id;
+          await projectsProvider.updateProject(user, project.id, input);
         } else {
-          const created = await projectsProvider.createProject(user, input);
-          companyId = created.companyId;
-          projectId = created.id;
-          ownerId = created.owner.id;
+          await projectsProvider.createProject(user, input);
         }
       }
 
-      const failures = mode === "create" && form.services.length > 0 ? await attachServices(companyId, projectId, ownerId) : [];
-
       onSaved();
-      if (failures.length > 0) {
-        setError(
-          `Project created, but ${failures.length} of ${form.services.length} template(s) couldn't be attached (${failures.join("; ")}). Add them from the Project's Templates tab.`
-        );
-        setIsSubmitting(false);
-        return;
-      }
       onOpenChange(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to save project.");
@@ -424,16 +392,22 @@ export function ProjectFormDialog({ open, onOpenChange, mode, project, onSaved, 
                 {mode === "create" ? "Create a new Project." : `Editing "${project?.name ?? "this project"}".`}
               </SheetDescription>
               <Input
-                autoFocus
+                autoFocus={canEditProtectedFields}
                 value={form.name}
+                disabled={!canEditProtectedFields}
                 onChange={(e) => {
                   setNameTouched(true);
                   setForm((p) => ({ ...p, name: e.target.value }));
                 }}
                 placeholder="Title"
                 aria-label="Title"
-                className="h-auto rounded-none border-0 bg-transparent p-0 font-heading text-2xl font-semibold tracking-tight shadow-none focus-visible:ring-0"
+                className="h-auto rounded-none border-0 bg-transparent p-0 font-heading text-2xl font-semibold tracking-tight shadow-none focus-visible:ring-0 disabled:cursor-not-allowed disabled:opacity-100"
               />
+              {!canEditProtectedFields && (
+                <p className="text-xs text-muted-foreground">
+                  Project/Client Name can only be changed by an Admin.
+                </p>
+              )}
             </div>
 
             <div className="flex flex-col gap-4 px-6 py-4">
@@ -465,11 +439,19 @@ export function ProjectFormDialog({ open, onOpenChange, mode, project, onSaved, 
                   <>
                     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                       <div className="flex flex-col gap-1.5">
-                        <Label htmlFor="project-client-brand">Partner Brand</Label>
+                        <Label htmlFor="project-client-brand">Company Brand</Label>
                         <Select
                           items={{ "": "No brand yet", ...Object.fromEntries(brands.map((b) => [b.id, b.name])) }}
                           value={form.brandId}
-                          onValueChange={(v) => setForm((p) => ({ ...p, brandId: v ?? "" }))}
+                          onValueChange={(v) =>
+                            setForm((p) => ({
+                              ...p,
+                              brandId: v ?? "",
+                              // Convenience default only — Partner Brand stays independently
+                              // user-changeable, never a live sync (CD-208 section 16).
+                              partnerBrandId: p.partnerBrandId || v || "",
+                            }))
+                          }
                         >
                           <SelectTrigger id="project-client-brand" className="w-full">
                             <SelectValue placeholder="No brand yet" />
@@ -548,23 +530,57 @@ export function ProjectFormDialog({ open, onOpenChange, mode, project, onSaved, 
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div className="flex flex-col gap-1.5">
                     <Label htmlFor="project-owner">Owner</Label>
+                    {isAdmin ? (
+                      <Select
+                        items={{ "": "Defaults to you", ...Object.fromEntries(assignableStaff.map((s) => [s.id, s.fullName])) }}
+                        value={form.ownerId}
+                        onValueChange={(v) => setForm((p) => ({ ...p, ownerId: v ?? "" }))}
+                      >
+                        <SelectTrigger id="project-owner" className="w-full">
+                          <SelectValue placeholder="Defaults to you" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="">Defaults to you</SelectItem>
+                          {assignableStaff.map((staff) => (
+                            <SelectItem key={staff.id} value={staff.id}>
+                              {staff.fullName}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      // Phase 3 (CD-208) — a Team Lead always becomes the owner of their own
+                      // Project; they can neither pick another owner at creation nor reassign it
+                      // afterward. Enforced server-side (create_project/update_project_record),
+                      // this is read-only display only.
+                      <div className="flex h-9 items-center text-sm text-muted-foreground">
+                        {mode === "edit" && project ? project.owner.fullName : `${user.fullName} (you)`}
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="project-partner-brand">Partner Brand</Label>
                     <Select
-                      items={{ "": "Defaults to you", ...Object.fromEntries(assignableStaff.map((s) => [s.id, s.fullName])) }}
-                      value={form.ownerId}
-                      onValueChange={(v) => setForm((p) => ({ ...p, ownerId: v ?? "" }))}
+                      items={{ "": "No brand set", ...Object.fromEntries(brands.map((b) => [b.id, b.name])) }}
+                      value={form.partnerBrandId}
+                      disabled={!canEditProtectedFields}
+                      onValueChange={(v) => setForm((p) => ({ ...p, partnerBrandId: v ?? "" }))}
                     >
-                      <SelectTrigger id="project-owner" className="w-full">
-                        <SelectValue placeholder="Defaults to you" />
+                      <SelectTrigger id="project-partner-brand" className="w-full" disabled={!canEditProtectedFields}>
+                        <SelectValue placeholder="No brand set" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">Defaults to you</SelectItem>
-                        {assignableStaff.map((staff) => (
-                          <SelectItem key={staff.id} value={staff.id}>
-                            {staff.fullName}
+                        <SelectItem value="">No brand set</SelectItem>
+                        {brands.map((b) => (
+                          <SelectItem key={b.id} value={b.id}>
+                            {b.name}
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
+                    {!canEditProtectedFields && (
+                      <p className="text-xs text-muted-foreground">Only an Admin can change Partner Brand.</p>
+                    )}
                   </div>
                   {mode === "create" && (
                     <div className="flex flex-col gap-1.5">
@@ -715,7 +731,6 @@ export function ProjectFormDialog({ open, onOpenChange, mode, project, onSaved, 
                     <p className="text-sm text-muted-foreground">Loading company…</p>
                   ) : (
                     <ProjectServicePicker
-                      brandId={isGlobalCreate ? form.brandId || null : (selectedCompany?.brand?.id ?? null)}
                       value={form.services}
                       onChange={(services) => setForm((p) => ({ ...p, services }))}
                     />
@@ -723,21 +738,25 @@ export function ProjectFormDialog({ open, onOpenChange, mode, project, onSaved, 
                 </CollapsibleSection>
               )}
 
-              <CollapsibleSection
-                label="Members (optional)"
-                description="Who's on this Project."
-                expanded={expandedSections.has("members")}
-                onToggle={() => toggleSection("members")}
-              >
-                <MultiSelect
-                  options={assignableStaff.map((s) => ({ id: s.id, label: s.fullName, sublabel: s.email }))}
-                  value={form.memberUserIds}
-                  onChange={(ids) => setForm((p) => ({ ...p, memberUserIds: ids }))}
-                  placeholder="No members"
-                  searchPlaceholder="Search people…"
-                  aria-label="Project members"
-                />
-              </CollapsibleSection>
+              {/* Phase 3 (CD-208) section 29 — Team Lead gains no new Member-staffing rights in
+                  Phase 3; this control stays Admin-only (Phase 4 owns the broader staffing model). */}
+              {isAdmin && (
+                <CollapsibleSection
+                  label="Members (optional)"
+                  description="Who's on this Project."
+                  expanded={expandedSections.has("members")}
+                  onToggle={() => toggleSection("members")}
+                >
+                  <MultiSelect
+                    options={assignableStaff.map((s) => ({ id: s.id, label: s.fullName, sublabel: s.email }))}
+                    value={form.memberUserIds}
+                    onChange={(ids) => setForm((p) => ({ ...p, memberUserIds: ids }))}
+                    placeholder="No members"
+                    searchPlaceholder="Search people…"
+                    aria-label="Project members"
+                  />
+                </CollapsibleSection>
+              )}
 
               {error && (
                 <Alert variant="destructive">
