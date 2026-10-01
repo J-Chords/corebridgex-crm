@@ -11,7 +11,7 @@ import { useServiceLineStaffing } from "@/lib/data/hooks/use-service-membership"
 import { projectsProvider } from "@/lib/data/providers";
 import type { ProjectWithRelations } from "@/lib/data/providers/projects-provider";
 import type { TaskWithRelations } from "@/lib/data/providers/tasks-provider";
-import { isSuperadmin } from "@/lib/data/permissions";
+import { isSuperadmin, canCreateProject } from "@/lib/data/permissions";
 import { isTaskClosed } from "@/lib/data/task-display";
 import type { ProjectStatus } from "@/lib/data/types";
 import { Input } from "@/components/ui/input";
@@ -97,7 +97,10 @@ export default function ProjectsPage() {
   const [tagFilter, setTagFilter] = useState<string>("all");
 
   const superadmin = !!user && isSuperadmin(user);
-  const canCreate = superadmin;
+  // Phase 3 (CD-208) — Project creation widened to Admin or Team Lead. Trash view/Restore stay
+  // Admin-only (`superadmin` directly, below) — creation eligibility and Trash administration are
+  // deliberately separate concerns.
+  const canCreate = !!user && canCreateProject(user);
 
   // Employee/Supervisor never see the Internal/Non-billable Project as an ordinary row here — it
   // isn't real client delivery work. Superadmin keeps it visible (still distinguished, see the row
@@ -107,8 +110,8 @@ export default function ProjectsPage() {
   // All five normal statuses are always visible to every role with legitimate Project access —
   // never dynamically hidden at zero count. Trash stays Admin-only.
   const visibleStatuses = useMemo(
-    () => [...NORMAL_PROJECT_STATUSES, ...(canCreate ? (["trash"] as ProjectStatus[]) : [])],
-    [canCreate]
+    () => [...NORMAL_PROJECT_STATUSES, ...(superadmin ? (["trash"] as ProjectStatus[]) : [])],
+    [superadmin]
   );
 
   const browsableProjects = useMemo(
@@ -448,7 +451,7 @@ export default function ProjectsPage() {
             serviceLines={serviceLines}
             isCollapsed={collapsedGroups.has(group.status)}
             onToggleCollapse={() => toggleGroup(group.status)}
-            onRestore={group.status === "trash" && canCreate ? handleRestore : undefined}
+            onRestore={group.status === "trash" && superadmin ? handleRestore : undefined}
           />
         ))}
       </div>

@@ -1,14 +1,83 @@
-import type { ProjectsProvider, ProjectWithRelations, ProjectTaskSummary, ProjectInput, ClientProjectInput } from "../projects-provider";
+import type {
+  ProjectsProvider,
+  ProjectWithRelations,
+  ProjectTaskSummary,
+  ProjectInput,
+  ClientProjectInput,
+  ProjectTemplateSelection,
+} from "../projects-provider";
+import type { WorkstreamWithRelations } from "../workstreams-provider";
 import type { Project, ProjectGroup, ProjectStatus, ProjectTrashSettings, User } from "../../types";
-import { canAccessProject, canManageProjects } from "../../permissions";
+import { canAccessProject, canManageProjects, canManageProjectRecord, canCreateProject, isSuperadmin, isSupervisor } from "../../permissions";
 import { INTERNAL_COMPANY_ID } from "../../constants";
 import { isTaskClosed } from "../../task-display";
 import { db } from "./mock-db";
 import { mockCompaniesProvider } from "./mock-companies-provider";
+import { mockWorkstreamsProvider } from "./mock-workstreams-provider";
 
 function requireAdmin(viewer: User) {
   if (!canManageProjects(viewer)) {
     throw new Error("Only an admin can perform this action.");
+  }
+}
+
+function requireManageRecord(viewer: User, project: { ownerId: string }) {
+  if (!canManageProjectRecord(viewer, project)) {
+    throw new Error("You don't have permission to edit this project.");
+  }
+}
+
+/** Phase 3 (CD-208) — atomic-in-spirit for the mock: applies every selection, best-effort rolling
+ * back any Workstream already created in this same call if a later one fails, mirroring the real
+ * RPC's true transactional guarantee (a plpgsql function body is one transaction) as closely as a
+ * non-transactional in-memory store can. Never copies global Template staffing (Team Leads/Members)
+ * — createWorkstream never reads service_team_leads/service_employees, so neither does this. */
+async function applyTemplatesInternal(
+  viewer: User,
+  projectId: string,
+  templates: ProjectTemplateSelection[]
+): Promise<WorkstreamWithRelations[]> {
+  const created: WorkstreamWithRelations[] = [];
+  try {
+    for (const template of templates) {
+      const serviceLine = db.serviceLines.find((sl) => sl.id === template.serviceLineId && sl.isActive);
+      if (!serviceLine) throw new Error("Template is not active or not found.");
+      const activityIds =
+        template.activityIds ??
+        db.activities
+          .filter((a) => a.isActive)
+          .filter((a) => {
+            const department = db.departments.find((d) => d.id === a.departmentId);
+            return department?.serviceLineId === template.serviceLineId && department.brandId === null;
+          })
+          .map((a) => a.id);
+      const ws = await mockWorkstreamsProvider.createWorkstream(viewer, {
+        name: serviceLine.name,
+        description: null,
+        companyId: "",
+        projectId,
+        serviceLineId: template.serviceLineId,
+        leadUserId: template.leadUserId ?? viewer.id,
+        teamUserIds: [],
+        activityIds,
+        status: "active",
+        startDate: null,
+        endDate: null,
+        recurrenceFrequency: null,
+        recurrenceAnchorDate: null,
+        recurrenceCustomIntervalDays: null,
+        previousOccurrenceWorkstreamId: null,
+      });
+      created.push(ws);
+    }
+    return created;
+  } catch (err) {
+    // Best-effort compensating rollback — real Supabase gets this for free from the RPC's own
+    // transaction; the mock has no transactions, so it undoes what it already created instead.
+    db.workstreams = db.workstreams.filter((w) => !created.some((c) => c.id === w.id));
+    db.workstreamActivities = db.workstreamActivities.filter((wa) => !created.some((c) => c.id === wa.workstreamId));
+    db.workstreamMembers = db.workstreamMembers.filter((wm) => !created.some((c) => c.id === wm.workstreamId));
+    throw err;
   }
 }
 
@@ -58,11 +127,14 @@ function toProjectWithRelations(project: Project): ProjectWithRelations | null {
     })
     .filter((u): u is User & { projectRole: string | null } => u !== null);
 
+  const partnerBrand = project.partnerBrandId ? (db.brands.find((b) => b.id === project.partnerBrandId) ?? null) : null;
+
   return {
     ...project,
     companyName: company.name,
     isInternal: company.id === INTERNAL_COMPANY_ID,
     owner,
+    partnerBrand,
     createdBy,
     members,
     memberCount: members.length,
@@ -71,12 +143,6 @@ function toProjectWithRelations(project: Project): ProjectWithRelations | null {
     tasks,
     progressPercent,
   };
-}
-
-function requireManageProjects(viewer: User) {
-  if (!canManageProjects(viewer)) {
-    throw new Error("Only a superadmin may create, edit, or renew a project.");
-  }
 }
 
 function requireCompanyFound(companyId: string) {
@@ -126,10 +192,14 @@ export const mockProjectsProvider: ProjectsProvider = {
   },
 
   async createProject(viewer, input: ProjectInput) {
-    requireManageProjects(viewer);
+    if (!canCreateProject(viewer)) {
+      throw new Error("Only an admin or a team lead may create a project.");
+    }
     requireCompanyFound(input.companyId);
     if (!input.name.trim()) throw new Error("Title can't be empty.");
-    const effectiveOwnerId = input.ownerId ?? viewer.id;
+    // Phase 3 (CD-208) — a Team Lead always becomes the owner of their own Project, never
+    // client-chosen; only Admin may pick a different owner (defaulting to themselves).
+    const effectiveOwnerId = isSupervisor(viewer) && !isSuperadmin(viewer) ? viewer.id : (input.ownerId ?? viewer.id);
     requireActiveOwner(effectiveOwnerId);
     if (input.projectGroupId && !db.projectGroups.some((g) => g.id === input.projectGroupId)) {
       throw new Error("Project Group not found.");
@@ -152,6 +222,7 @@ export const mockProjectsProvider: ProjectsProvider = {
       startDate: input.startDate,
       endDate: input.endDate,
       projectGroupId: input.projectGroupId,
+      partnerBrandId: input.partnerBrandId,
       tags: input.tags,
       statusReason: null,
       statusChangedAt: null,
@@ -165,6 +236,17 @@ export const mockProjectsProvider: ProjectsProvider = {
     db.projects = [...db.projects, project];
     syncMembers(id, input.memberUserIds);
 
+    if (input.templates && input.templates.length > 0) {
+      try {
+        await applyTemplatesInternal(viewer, id, input.templates);
+      } catch (err) {
+        // Atomic-in-spirit: a failed Template application rolls back the whole Project creation too.
+        db.projects = db.projects.filter((p) => p.id !== id);
+        db.projectMembers = db.projectMembers.filter((m) => m.projectId !== id);
+        throw err;
+      }
+    }
+
     return toProjectWithRelations(project)!;
   },
 
@@ -174,7 +256,9 @@ export const mockProjectsProvider: ProjectsProvider = {
   // so failure after the Company is created triggers a best-effort compensating delete (mirroring
   // the real hosted RPC's genuine transactional rollback).
   async createClientProject(viewer, input: ClientProjectInput): Promise<ProjectWithRelations> {
-    requireManageProjects(viewer);
+    if (!canCreateProject(viewer)) {
+      throw new Error("Only an admin or a team lead may create a project.");
+    }
     if (!input.name.trim()) throw new Error("Title can't be empty.");
     if (input.brandId && !db.brands.some((b) => b.id === input.brandId)) {
       throw new Error("Brand not found.");
@@ -214,8 +298,10 @@ export const mockProjectsProvider: ProjectsProvider = {
         endDate: input.endDate,
         description: input.description,
         projectGroupId: input.projectGroupId,
+        partnerBrandId: input.partnerBrandId ?? input.brandId,
         tags: input.tags,
         memberUserIds: input.memberUserIds,
+        templates: input.templates,
       });
     } catch (err) {
       db.companies = db.companies.filter((c) => c.id !== company.id);
@@ -225,22 +311,28 @@ export const mockProjectsProvider: ProjectsProvider = {
   },
 
   // Ordinary metadata edit only — status lifecycle never goes through here, see
-  // setProjectStatus/trashProject/restoreProject below.
+  // setProjectStatus/trashProject/restoreProject below. Phase 3 (CD-208) — gated by
+  // canManageProjectRecord (Admin, or the Supervisor who is literally this Project's owner), not
+  // the old blanket canManageProjects. Protected fields (name, owner, Partner Brand) are silently
+  // kept at their current value for a non-Admin caller, enforced here in the "backend" — never
+  // trusting the client, matching the real Supabase update_project_record RPC's own behavior.
   async updateProject(viewer, id, input: ProjectInput) {
-    requireManageProjects(viewer);
     const existing = db.projects.find((p) => p.id === id);
     if (!existing) throw new Error("Project not found.");
-    if (!input.name.trim()) throw new Error("Title can't be empty.");
-    const effectiveOwnerId = input.ownerId ?? existing.ownerId;
-    requireActiveOwner(effectiveOwnerId);
+    requireManageRecord(viewer, existing);
+    const admin = isSuperadmin(viewer);
+    if (admin && !input.name.trim()) throw new Error("Title can't be empty.");
+    const effectiveOwnerId = admin ? (input.ownerId ?? existing.ownerId) : existing.ownerId;
+    if (admin) requireActiveOwner(effectiveOwnerId);
     if (input.projectGroupId && !db.projectGroups.some((g) => g.id === input.projectGroupId)) {
       throw new Error("Project Group not found.");
     }
 
     const updated: Project = {
       ...existing,
-      name: input.name.trim(),
+      name: admin ? input.name.trim() : existing.name,
       ownerId: effectiveOwnerId,
+      partnerBrandId: admin ? input.partnerBrandId : existing.partnerBrandId,
       contractStartDate: input.contractStartDate,
       contractMonths: input.contractMonths,
       contractEndDate: input.contractEndDate,
@@ -253,9 +345,18 @@ export const mockProjectsProvider: ProjectsProvider = {
       updatedAt: new Date().toISOString(),
     };
     db.projects = db.projects.map((p) => (p.id === id ? updated : p));
-    syncMembers(id, input.memberUserIds);
+    // Phase 3 (CD-208) section 29 — Team Lead must not gain new Member-staffing rights; member sync
+    // stays Admin-only (unchanged from before).
+    if (admin) syncMembers(id, input.memberUserIds);
 
     return toProjectWithRelations(updated)!;
+  },
+
+  async applyProjectTemplates(viewer, projectId, templates) {
+    const project = db.projects.find((p) => p.id === projectId);
+    if (!project) throw new Error("Project not found.");
+    requireManageRecord(viewer, project);
+    return applyTemplatesInternal(viewer, projectId, templates);
   },
 
   async setProjectMemberRole(viewer, projectId, userId, projectRole) {
@@ -357,7 +458,10 @@ export const mockProjectsProvider: ProjectsProvider = {
   },
 
   async createProjectGroup(viewer, name) {
-    requireAdmin(viewer);
+    // Phase 3 (CD-208) section 30 — widened from Admin-only to Admin-or-Supervisor.
+    if (!isSuperadmin(viewer) && !isSupervisor(viewer)) {
+      throw new Error("Only an admin or a team lead may create a Project Group.");
+    }
     const trimmed = name.trim();
     if (!trimmed) throw new Error("Project Group name can't be empty.");
     if (db.projectGroups.some((g) => g.name.toLowerCase() === trimmed.toLowerCase())) {

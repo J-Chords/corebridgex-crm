@@ -39,7 +39,7 @@ export function RecurringWorkDueCard({ workstreams }: RecurringWorkDueCardProps)
       >
         <div className="flex min-w-0 flex-col gap-0.5">
           <span className="truncate text-sm font-medium group-hover/row:underline">
-            {workstreamDisplayHeading(workstream.name, workstream.serviceLine?.name ?? null)}
+            {workstreamDisplayHeading(workstream.name)}
           </span>
           <span className="truncate text-xs text-muted-foreground">
             {workstream.company.name} · {formatRecurrenceSummary(workstream.recurrence!.frequency, workstream.recurrence!.customIntervalDays)}

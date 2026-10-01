@@ -132,7 +132,17 @@ function resolveActivityForTaskCreation(viewer: User, workstream: Workstream, ac
   if (!department || department.serviceLineId !== workstream.serviceLineId) {
     throw new Error("That activity doesn't belong to this Template.");
   }
-  db.workstreamActivities = [...db.workstreamActivities, { workstreamId: workstream.id, activityId }];
+  db.workstreamActivities = [
+    ...db.workstreamActivities,
+    {
+      workstreamId: workstream.id,
+      activityId,
+      name: activity!.name,
+      description: activity!.description,
+      defaultTaskTitles: activity!.defaultTaskTitles,
+      position: activity!.position,
+    },
+  ];
 }
 
 /**

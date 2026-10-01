@@ -1,12 +1,12 @@
 /**
- * Each brand owns its own catalog independently — a Department always belongs
- * to exactly one brand, never shared/inherited across brands. Only Sparing
- * Consulting is seeded today; the other partner brands start with zero rows
- * but the structure already supports them.
+ * Phase 3 (CD-208) — `brandId` is null for the canonical, Brand-independent Department that scopes
+ * a Service Line's Activity structure going forward (canonical Template Activities no longer
+ * depend on Brand at all). A non-null `brandId` marks a legacy, historical per-Brand Department,
+ * preserved but no longer the source canonical flows read from.
  */
 export interface Department {
   id: string;
-  brandId: string;
+  brandId: string | null;
   name: string;
   /** Display order within the brand. */
   position: number;

@@ -1,4 +1,5 @@
 import type {
+  Brand,
   Project,
   ProjectComment,
   ProjectGroup,
@@ -7,6 +8,18 @@ import type {
   ProjectTrashSettings,
   User,
 } from "../types";
+import type { WorkstreamWithRelations } from "./workstreams-provider";
+
+/** One canonical Template selection for atomic Project creation/"Add Template" application (Phase
+ * 3, CD-208) — never the retired System A's `p_template_id`. `activityIds` omitted/undefined means
+ * "every currently-active Activity for this Service Line," matching canonical Template
+ * application's own default (see `apply_project_templates`). `leadUserId` omitted defaults to the
+ * caller. */
+export interface ProjectTemplateSelection {
+  serviceLineId: string;
+  activityIds?: string[];
+  leadUserId?: string;
+}
 
 /** Task-completion rollup for a Project's own Tasks (Project -> Workstreams -> Tasks) — computed
  * on read from the current Task status model, never a second, separately-tracked progress engine. */
@@ -37,6 +50,9 @@ export interface ProjectWithRelations extends Project {
    * Employee/Supervisor, without touching the underlying data, RLS, or its own fallback behavior. */
   isInternal: boolean;
   owner: User;
+  /** Resolved from `partnerBrandId` (Phase 3, CD-208) — null when no Brand is set. Independent of
+   * the owning Company's own `brand` (`Company.brandId`); do not confuse the two. */
+  partnerBrand: Brand | null;
   /** The real, actual user who created this Project — distinct from `owner` (see `createdById` on
    * `Project` itself). Resolved through the same safe profile-directory as `owner`/`members`. */
   createdBy: User;
@@ -76,8 +92,16 @@ export interface ProjectInput {
   endDate: string | null;
   description: string | null;
   projectGroupId: string | null;
+  /** Phase 3 (CD-208) — see `Project.partnerBrandId`'s own doc comment. Protected after creation
+   * for a Team Lead (enforced server-side by `update_project_record`, not just a disabled input) —
+   * only Admin may change it post-creation. */
+  partnerBrandId: string | null;
   tags: string[];
   memberUserIds: string[];
+  /** Phase 3 (CD-208) — canonical Templates to apply atomically alongside creation, or via
+   * `applyProjectTemplates` after the fact. Ignored by `updateProject` (Template application has
+   * its own dedicated method, never folded into a generic metadata edit). */
+  templates?: ProjectTemplateSelection[];
 }
 
 /**
@@ -91,6 +115,11 @@ export interface ClientProjectInput {
   /** Reused as both the Project's Title and the new Company's name. */
   name: string;
   brandId: string | null;
+  /** Phase 3 (CD-208) — the new Project's own Partner Brand, independent of the new Company's
+   * `brandId` above (which may still be set, or may differ — no forced inheritance). Omitted/null
+   * defaults to `brandId` at the call site's own discretion (the UI may offer it as a convenience
+   * default, never an ongoing sync). */
+  partnerBrandId: string | null;
   /** Company master contract/renewal fields — distinct from the Project's own `startDate`/
    * `endDate`/`completionDate` below, never conflated (see docs/project-level-product-
    * architecture.md's "Contract/renewal information" section). */
@@ -110,6 +139,8 @@ export interface ClientProjectInput {
   projectGroupId: string | null;
   tags: string[];
   memberUserIds: string[];
+  /** Phase 3 (CD-208) — see `ProjectInput.templates`. */
+  templates?: ProjectTemplateSelection[];
 }
 
 /**
@@ -156,6 +187,16 @@ export interface ProjectsProvider {
 
   listProjectGroups(): Promise<ProjectGroup[]>;
   createProjectGroup(viewer: User, name: string): Promise<ProjectGroup>;
+
+  /** Phase 3 (CD-208) — "Add Template" after creation, atomic across every selection in one call
+   * (a partial failure never leaves some Templates applied and others not). Gated by
+   * `canManageProjectRecord`, enforced identically server-side (`can_manage_project`/
+   * `apply_project_templates`) — never trust the client. Never copies global Template staffing. */
+  applyProjectTemplates(
+    viewer: User,
+    projectId: string,
+    templates: ProjectTemplateSelection[]
+  ): Promise<WorkstreamWithRelations[]>;
 
   /** Part 11 — data-only, Project-scoped label; never a global role, never an authorization input. */
   setProjectMemberRole(viewer: User, projectId: string, userId: string, projectRole: string | null): Promise<void>;

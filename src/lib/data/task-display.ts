@@ -48,7 +48,7 @@ export function formatDueDateShort(value: string): string {
 /** Task Level Phase 2, Section 19 — the global Service name is always primary; falls back to the
  * Workstream's own stored name only for the rare Workstream with no Service Line set. */
 export function taskServiceLabel(task: Pick<TaskWithRelations, "workstream">): string {
-  return workstreamDisplayHeading(task.workstream.name, task.workstream.serviceLineName);
+  return workstreamDisplayHeading(task.workstream.name);
 }
 
 /** Compact "Client · Activity"-style secondary line, omitting whichever part is unavailable. */

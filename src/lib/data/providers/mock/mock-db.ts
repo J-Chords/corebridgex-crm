@@ -37,6 +37,69 @@ import type {
 } from "../../types";
 
 /**
+ * Phase 3 (CD-208) — canonical Template/Activity brand decoupling, mirrored from the hosted
+ * migration's own data migration (`20260924100000_phase3_canonical_template_brand_decoupling.sql`):
+ * one canonical (brandId = null) Department per Service Line that has any seeded Department, with
+ * every one of that Service Line's Activities re-pointed onto it. Only one seed Brand ("Sparing
+ * Consulting") has any Departments at all, so there is no cross-Brand name-collision risk to guard
+ * against here (unlike the hosted migration, which defensively checks for one).
+ */
+const serviceLineIdsWithDepartments = Array.from(
+  new Set(seedDepartments.filter((d) => d.serviceLineId).map((d) => d.serviceLineId as string))
+);
+const canonicalDepartmentIdByServiceLineId = new Map(
+  serviceLineIdsWithDepartments.map((serviceLineId) => [serviceLineId, `dept-canonical-${serviceLineId}`])
+);
+const canonicalDepartments = serviceLineIdsWithDepartments.map((serviceLineId, index) => ({
+  id: canonicalDepartmentIdByServiceLineId.get(serviceLineId)!,
+  brandId: null,
+  name: seedServiceLines.find((sl) => sl.id === serviceLineId)?.name ?? "General",
+  position: index,
+  serviceLineId,
+}));
+const legacyDepartmentIdsByServiceLineId = new Map(
+  serviceLineIdsWithDepartments.map((serviceLineId) => [
+    serviceLineId,
+    new Set(seedDepartments.filter((d) => d.serviceLineId === serviceLineId).map((d) => d.id)),
+  ])
+);
+const activitiesWithCanonicalDepartment = seedActivities.map((a) => {
+  for (const [serviceLineId, legacyIds] of legacyDepartmentIdsByServiceLineId) {
+    if (legacyIds.has(a.departmentId)) {
+      return { ...a, departmentId: canonicalDepartmentIdByServiceLineId.get(serviceLineId)! };
+    }
+  }
+  return a;
+});
+const departmentsWithCanonical = [...seedDepartments, ...canonicalDepartments];
+
+/**
+ * Phase 3 (CD-208) — true Template/Activity snapshot semantics, mirrored from the hosted
+ * migration's own one-time backfill (`20260924110000_phase3_template_snapshot_schema.sql`): every
+ * seeded Workstream-Activity association is frozen with its CURRENT (seed-time) name/description/
+ * defaultTaskTitles/position, and every seeded Workstream's `name` is frozen to its current Service
+ * Line name, so switching `workstreamDisplayHeading` away from a live join is invisible for
+ * existing seed data — exactly the same "capture current state at migration time" step the real
+ * migration performs, just done here at mock-module-load time instead of via SQL.
+ */
+const workstreamActivitiesWithSnapshot = seedWorkstreamActivities.map((wa) => {
+  const activity = seedActivities.find((a) => a.id === wa.activityId);
+  return {
+    ...wa,
+    name: activity?.name ?? "Unknown Activity",
+    description: activity?.description ?? null,
+    defaultTaskTitles: activity?.defaultTaskTitles ?? [],
+    position: activity?.position ?? 0,
+  };
+});
+
+const workstreamsWithFrozenNames = seedWorkstreams.map((w) => {
+  if (!w.serviceLineId) return w;
+  const serviceLine = seedServiceLines.find((sl) => sl.id === w.serviceLineId);
+  return serviceLine ? { ...w, name: serviceLine.name } : w;
+});
+
+/**
  * Single in-memory mock "database", shared by every mock provider so a
  * mutation made through one provider (e.g. assigning staff to a company)
  * is immediately visible to the others (e.g. the auth session's user
@@ -50,9 +113,9 @@ export const db = {
   companies: [...seedCompanies],
   companyServiceLines: [...seedCompanyServiceLines],
   contacts: [...seedClientContacts],
-  workstreams: [...seedWorkstreams],
+  workstreams: [...workstreamsWithFrozenNames],
   workstreamMembers: [...seedWorkstreamMembers],
-  workstreamActivities: [...seedWorkstreamActivities],
+  workstreamActivities: [...workstreamActivitiesWithSnapshot],
   tasks: [...seedTasks],
   taskAssignees: [...seedTaskAssignees],
   checklistItems: [...seedChecklistItems],
@@ -65,8 +128,8 @@ export const db = {
   templateTasks: [...seedTemplateTasks],
   templateChecklistItems: [...seedTemplateChecklistItems],
   taskHandoffs: [...seedTaskHandoffs],
-  departments: [...seedDepartments],
-  activities: [...seedActivities],
+  departments: [...departmentsWithCanonical],
+  activities: [...activitiesWithCanonicalDepartment],
   accomplishmentsReports: [...seedAccomplishmentsReports],
   savedViews: [...seedSavedViews],
   projects: [...seedProjects],

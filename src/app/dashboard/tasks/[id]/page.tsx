@@ -152,7 +152,7 @@ function LoadedTaskDetailPage({ task, user, refresh }: { task: TaskWithRelations
                 only invited "what does this year-based reference mean?" confusion. Data is never
                 removed — it's still a genuine, editable field on Edit Service itself. */}
             <Link href={`/dashboard/workstreams/${task.workstream.id}`} className="hover:underline">
-              {workstreamDisplayHeading(task.workstream.name, task.workstream.serviceLineName)}
+              {workstreamDisplayHeading(task.workstream.name)}
             </Link>
             {task.activity && (
               <>

@@ -132,7 +132,7 @@ function LoadedTaskQuickView({
           }
           secondaryContext={
             <>
-              {workstreamDisplayHeading(task.workstream.name, task.workstream.serviceLineName)}
+              {workstreamDisplayHeading(task.workstream.name)}
               {task.activity && ` · ${task.activity.name}`}
             </>
           }

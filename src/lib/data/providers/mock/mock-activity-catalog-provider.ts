@@ -18,8 +18,12 @@ function requireAdmin(viewer: { role: string; active: boolean }) {
 
 export const mockActivityCatalogProvider: ActivityCatalogProvider = {
   async listDepartments(brandId, serviceLineId) {
+    // Phase 3 (CD-208) — canonical Template Activities are Brand-independent: a caller asking for
+    // one Service Line's catalog without naming a Brand means "the canonical (Brand-independent)
+    // Department," never the legacy per-Brand ones. Omitting BOTH (the Admin cross-brand catalog
+    // view) is unaffected and still returns every Department regardless of brandId.
     const departments = db.departments
-      .filter((d) => !brandId || d.brandId === brandId)
+      .filter((d) => (brandId ? d.brandId === brandId : serviceLineId ? d.brandId === null : true))
       .filter((d) => !serviceLineId || d.serviceLineId === serviceLineId)
       .sort((a, b) => a.position - b.position);
     return departments.map(toDepartmentWithActivities);

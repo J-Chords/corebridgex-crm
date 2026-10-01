@@ -29,7 +29,7 @@ import {
   isProjectActiveForNewWork,
   projectNotActiveMessage,
 } from "@/lib/data/project-display";
-import { canConfigureWorkstreamActivities, canCreateWorkstreamInProject, canManageProjects, isEmployee } from "@/lib/data/permissions";
+import { canConfigureWorkstreamActivities, canManageProjects, canManageProjectRecord, isEmployee } from "@/lib/data/permissions";
 import { AddServiceActivitiesDialog } from "@/components/workstreams/add-service-activities-dialog";
 import type { WorkstreamWithRelations } from "@/lib/data/providers/workstreams-provider";
 import type { ProjectWithRelations } from "@/lib/data/providers/projects-provider";
@@ -210,7 +210,7 @@ function ServiceRow({
       { companyId: project.companyId, ownerId: project.ownerId, memberUserIds: project.members.map((m) => m.id) }
     );
 
-  const serviceName = workstreamDisplayHeading(workstream.name, workstream.serviceLine?.name ?? null);
+  const serviceName = workstreamDisplayHeading(workstream.name);
 
   return (
     <div className="group rounded-lg bg-card ring-1 ring-foreground/10 transition-colors hover:bg-muted/40 focus-within:bg-muted/40">
@@ -365,7 +365,8 @@ function AdministrativeDetailsCard({
               </div>
               <div className="flex flex-col gap-0.5">
                 <span className="font-mono text-[10px] tracking-wide text-muted-foreground uppercase">Partner Brand</span>
-                <span className="text-sm">{company.brand?.name ?? "No brand yet"}</span>
+                {/* Phase 3 (CD-208) — Project-specific, independent of the Company's own Brand. */}
+                <span className="text-sm">{project.partnerBrand?.name ?? "No brand set"}</span>
               </div>
               <div className="flex flex-col gap-0.5">
                 <span className="font-mono text-[10px] tracking-wide text-muted-foreground uppercase">Contract Start</span>
@@ -690,6 +691,7 @@ function LoadedProjectDetailPage({
         endDate: project.endDate,
         description: project.description,
         projectGroupId: project.projectGroupId,
+        partnerBrandId: project.partnerBrandId,
         tags: project.tags,
         memberUserIds: memberIds,
       });
@@ -729,7 +731,9 @@ function LoadedProjectDetailPage({
     });
   }
 
-  const canAddService = canCreateWorkstreamInProject(user);
+  // Phase 3 (CD-208) section 32/39 — Admin always; a Team Lead only when they are literally this
+  // Project's owner (canManageProjectRecord already covers both branches).
+  const canAddService = canManageProjectRecord(user, project);
 
   return (
     <div className="flex flex-col gap-5">
@@ -775,7 +779,7 @@ function LoadedProjectDetailPage({
               </Button>
             )
           )}
-          {canManageProjects(user) && (
+          {canManageProjectRecord(user, project) && (
             <Button size="sm" variant="outline" onClick={() => setEditOpen(true)}>
               <Pencil /> Edit
             </Button>
@@ -829,7 +833,7 @@ function LoadedProjectDetailPage({
             projectGroups={projectGroups}
             company={company}
             clientContacts={clientContacts}
-            canEdit={canManageProjects(user)}
+            canEdit={canManageProjectRecord(user, project)}
             onEditCompany={() => setEditCompanyOpen(true)}
             onAddContact={() => setEditContact("new")}
             onEditContact={(contact) => setEditContact(contact)}
@@ -1161,7 +1165,7 @@ function LoadedProjectDetailPage({
         />
       )}
 
-      {company && canManageProjects(user) && (
+      {company && canManageProjectRecord(user, project) && (
         <CompanyFormDialog
           open={editCompanyOpen}
           onOpenChange={setEditCompanyOpen}
@@ -1171,7 +1175,7 @@ function LoadedProjectDetailPage({
         />
       )}
 
-      {company && canManageProjects(user) && editContact !== null && (
+      {company && canManageProjectRecord(user, project) && editContact !== null && (
         <ContactFormDialog
           open
           onOpenChange={(next) => !next && setEditContact(null)}
@@ -1209,7 +1213,7 @@ function LoadedProjectDetailPage({
         />
       )}
 
-      {canManageProjects(user) && (
+      {canManageProjectRecord(user, project) && (
         <ProjectFormDialog open={editOpen} onOpenChange={setEditOpen} mode="edit" project={project} onSaved={refreshProject} />
       )}
     </div>

@@ -54,17 +54,41 @@ export function managesUser(manager: User, target: User): boolean {
  * Superadmin -> everything, represented as the "all" sentinel so callers
  * don't need to enumerate every company id just to mean "no filter".
  */
-export function visibleCompanyIds(viewer: User, allUsers: User[]): "all" | string[] {
+/** Phase 8B parity note — the hosted `can_access_company` SQL function (see
+ * `supabase/migrations/20260815110000_company_access_via_project.sql`) ALSO grants access via
+ * Project ownership/membership, not just `user_companies` assignment — so someone whose only
+ * relationship to a Company is a Project they own/belong to isn't blocked from reading even that
+ * Company's own name. This app-layer/mock function is the parity mirror of that; `projects` is
+ * optional only for callers that genuinely have no Project context available (defaults to none,
+ * matching the pre-Phase-8B behavior for those) — every real caller should pass it. */
+export function visibleCompanyIds(
+  viewer: User,
+  allUsers: User[],
+  projects: { companyId: string; ownerId: string; memberUserIds: string[] }[] = []
+): "all" | string[] {
   if (isSuperadmin(viewer)) return "all";
+  const viaProjects = projects
+    .filter((p) => p.ownerId === viewer.id || p.memberUserIds.includes(viewer.id))
+    .map((p) => p.companyId);
   if (isSupervisor(viewer)) {
     const team = allUsers.filter((u) => managesUser(viewer, u));
-    return Array.from(new Set([...team.flatMap((u) => u.assignedCompanyIds), INTERNAL_COMPANY_ID]));
+    const viaReportsProjects = projects
+      .filter((p) => team.some((u) => u.id === p.ownerId) || p.memberUserIds.some((id) => team.some((u) => u.id === id)))
+      .map((p) => p.companyId);
+    return Array.from(
+      new Set([...team.flatMap((u) => u.assignedCompanyIds), ...viaProjects, ...viaReportsProjects, INTERNAL_COMPANY_ID])
+    );
   }
-  return Array.from(new Set([...viewer.assignedCompanyIds, INTERNAL_COMPANY_ID]));
+  return Array.from(new Set([...viewer.assignedCompanyIds, ...viaProjects, INTERNAL_COMPANY_ID]));
 }
 
-export function canAccessCompany(viewer: User, companyId: string, allUsers: User[]): boolean {
-  const visible = visibleCompanyIds(viewer, allUsers);
+export function canAccessCompany(
+  viewer: User,
+  companyId: string,
+  allUsers: User[],
+  projects?: { companyId: string; ownerId: string; memberUserIds: string[] }[]
+): boolean {
+  const visible = visibleCompanyIds(viewer, allUsers, projects);
   return visible === "all" || visible.includes(companyId);
 }
 
@@ -779,6 +803,35 @@ export function canAccessProject(
  */
 export function canManageProjects(user: User): boolean {
   return isSuperadmin(user);
+}
+
+/**
+ * Phase 3 (CD-208) — who may CREATE a new Project at all. Admin always; a Team Lead may now create
+ * their own Project too (they always become its `ownerId`, enforced server-side in `create_project`
+ * — never client-chosen). Employee never. This is deliberately a *narrower* question than "who may
+ * manage an existing Project record" (`canManageProjectRecord`, below) — creation eligibility isn't
+ * Project-specific, editing eligibility is.
+ */
+export function canCreateProject(user: User): boolean {
+  return isSuperadmin(user) || isSupervisor(user);
+}
+
+/**
+ * Phase 3 (CD-208) — the Project-management (write) boundary, mirroring the hosted
+ * `can_manage_project(target_project_id)` SQL function exactly. Deliberately narrower than
+ * `canAccessProject` (read) — read visibility via direct-report ownership/membership does NOT
+ * imply write authority. A Supervisor may manage a Project only when they are *literally* its
+ * `ownerId` — never via `managesUser`/direct-report scope, never via `project_members`/
+ * `projectRole` (data-only, never consulted), never via global Template staffing
+ * (`service_team_leads`/`service_employees`, "Works In Templates"), and never via
+ * `workstream.leadUserId` ("Project Template Lead" — Template-instance-scoped, not Project-scoped).
+ * Those are all deliberately separate authorization axes — see `docs/domain-model.md`. Used for:
+ * the Project Edit button/dialog, Add Template, Project Group/Tag edits reached through Project
+ * editing, and every other Phase-3 Project-record mutation. Global list/create permissions
+ * (`canManageProjects`, `canCreateProject`) stay separate on purpose.
+ */
+export function canManageProjectRecord(viewer: User, project: { ownerId: string }): boolean {
+  return isSuperadmin(viewer) || (isSupervisor(viewer) && project.ownerId === viewer.id);
 }
 
 /**

@@ -1,7 +1,26 @@
-import type { ProjectsProvider, ProjectWithRelations, ProjectTaskSummary, ProjectInput, ClientProjectInput } from "../projects-provider";
+import type {
+  ProjectsProvider,
+  ProjectWithRelations,
+  ProjectTaskSummary,
+  ProjectInput,
+  ClientProjectInput,
+  ProjectTemplateSelection,
+} from "../projects-provider";
 import type { Project, ProjectGroup, ProjectStatus, ProjectTrashSettings } from "../../types";
 import { createClient } from "@/lib/supabase/client";
 import { resolveProfileDirectory } from "./profile-directory";
+import { hydrateWorkstreamRows, type WorkstreamRow } from "./supabase-workstreams-provider";
+import { isSuperadmin } from "../../permissions";
+
+/** Phase 3 (CD-208) — the shape `create_project`/`create_client_project`/`apply_project_templates`
+ * expect for their `p_templates jsonb` parameter. See `ProjectTemplateSelection`. */
+function toTemplatesJson(templates: ProjectTemplateSelection[] | undefined) {
+  return (templates ?? []).map((t) => ({
+    serviceLineId: t.serviceLineId,
+    activityIds: t.activityIds,
+    leadUserId: t.leadUserId,
+  }));
+}
 
 /**
  * Real Supabase Projects provider (Phase 8A). Read-only — no create/update method exists on the
@@ -27,6 +46,7 @@ interface ProjectRow {
   start_date: string | null;
   end_date: string | null;
   project_group_id: string | null;
+  partner_brand_id: string | null;
   tags: string[];
   status_reason: string | null;
   status_changed_at: string | null;
@@ -54,6 +74,7 @@ function toProject(row: ProjectRow): Project {
     startDate: row.start_date,
     endDate: row.end_date,
     projectGroupId: row.project_group_id,
+    partnerBrandId: row.partner_brand_id,
     tags: row.tags ?? [],
     statusReason: row.status_reason,
     statusChangedAt: row.status_changed_at,
@@ -74,18 +95,23 @@ async function hydrate(projects: Project[]): Promise<ProjectWithRelations[]> {
   const ownerIds = Array.from(new Set(projects.map((p) => p.ownerId)));
   const creatorIds = Array.from(new Set(projects.map((p) => p.createdById)));
 
-  const [companiesRes, memberLinksRes, workstreamsRes] = await Promise.all([
+  const partnerBrandIds = Array.from(new Set(projects.map((p) => p.partnerBrandId).filter((x): x is string => x != null)));
+
+  const [companiesRes, memberLinksRes, workstreamsRes, brandsRes] = await Promise.all([
     supabase.from("companies").select("id, name, is_internal").in("id", companyIds),
     supabase.from("project_members").select("project_id, user_id, project_role").in("project_id", projectIds),
     supabase.from("workstreams").select("id, name, project_id, service_line_id").in("project_id", projectIds),
+    partnerBrandIds.length ? supabase.from("brands").select("id, name").in("id", partnerBrandIds) : Promise.resolve({ data: [], error: null }),
   ]);
   if (companiesRes.error) throw new Error(companiesRes.error.message);
   if (memberLinksRes.error) throw new Error(memberLinksRes.error.message);
   if (workstreamsRes.error) throw new Error(workstreamsRes.error.message);
+  if (brandsRes.error) throw new Error(brandsRes.error.message);
 
   const companies = (companiesRes.data ?? []) as { id: string; name: string; is_internal: boolean }[];
   const memberLinks = (memberLinksRes.data ?? []) as { project_id: string; user_id: string; project_role: string | null }[];
   const workstreams = (workstreamsRes.data ?? []) as { id: string; name: string; project_id: string | null; service_line_id: string | null }[];
+  const partnerBrands = (brandsRes.data ?? []) as { id: string; name: string }[];
   const allProfileIds = Array.from(new Set([...ownerIds, ...creatorIds, ...memberLinks.map((m) => m.user_id)]));
   const profiles = await resolveProfileDirectory(allProfileIds);
 
@@ -140,12 +166,14 @@ async function hydrate(projects: Project[]): Promise<ProjectWithRelations[]> {
       overdueCount,
     };
     const progressPercent = taskSummary.totalCount === 0 ? 0 : Math.round((doneCount / taskSummary.totalCount) * 100);
+    const partnerBrand = project.partnerBrandId ? (partnerBrands.find((b) => b.id === project.partnerBrandId) ?? null) : null;
 
     return {
       ...project,
       companyName: companyRow.name,
       isInternal: companyRow.is_internal,
       owner,
+      partnerBrand,
       createdBy,
       members,
       memberCount: members.length,
@@ -199,6 +227,8 @@ export const supabaseProjectsProvider: ProjectsProvider = {
       p_project_group_id: input.projectGroupId,
       p_tags: input.tags,
       p_member_user_ids: input.memberUserIds,
+      p_partner_brand_id: input.partnerBrandId,
+      p_templates: toTemplatesJson(input.templates),
     });
     if (error) throw new Error(error.message);
     const [hydrated] = await hydrate([toProject(data)]);
@@ -228,51 +258,54 @@ export const supabaseProjectsProvider: ProjectsProvider = {
       p_project_group_id: input.projectGroupId,
       p_tags: input.tags,
       p_member_user_ids: input.memberUserIds,
+      p_partner_brand_id: input.partnerBrandId ?? input.brandId,
+      p_templates: toTemplatesJson(input.templates),
     });
     if (error) throw new Error(error.message);
     const [hydrated] = await hydrate([toProject(data)]);
     return hydrated;
   },
 
-  // Ordinary editing (no new Services, no status change) is a plain update + members resync — RLS
-  // (`projects_update`/`project_members_write`) is already Superadmin-only, and a superadmin's own
-  // `is_superadmin()` short-circuit never re-queries the row being written, so this doesn't hit the
-  // RETURNING-time RLS-visibility bug class create_workstream/create_task's own RPCs were built to
-  // avoid — an RPC here would be pure ceremony for a case that's already safe. Status lifecycle
-  // never goes through this path — see setProjectStatus/trashProject/restoreProject below.
-  async updateProject(_viewer, id, input: ProjectInput) {
+  // Phase 3 (CD-208) — routed through the secure `update_project_record` RPC instead of a direct
+  // table `.update()`. `projects_update` RLS stays Superadmin-only (never widened to Supervisor —
+  // see CD-208 section 25); a Supervisor-owner's edit now goes through this SECURITY DEFINER
+  // function instead, which enforces field-level protection (name/owner/Partner Brand) itself,
+  // never trusting whatever the client sends. Member sync stays Admin-only and unchanged (CD-208
+  // section 29 — Team Lead gains no new Member-staffing rights in Phase 3) — the RPC never touches
+  // `project_members`, so a Supervisor caller simply can't reach `syncProjectMembers` below. Status
+  // lifecycle never goes through this path — see setProjectStatus/trashProject/restoreProject.
+  async updateProject(viewer, id, input: ProjectInput) {
     const supabase = createClient();
-    const { data: current, error: currentError } = await supabase
-      .from("projects")
-      .select("owner_id")
-      .eq("id", id)
-      .single();
-    if (currentError) throw new Error(currentError.message);
-
-    const { data, error } = await supabase
-      .from("projects")
-      .update({
-        name: input.name,
-        owner_id: input.ownerId ?? current.owner_id,
-        contract_start_date: input.contractStartDate,
-        contract_months: input.contractMonths,
-        contract_end_date: input.contractEndDate,
-        completion_date: input.completionDate,
-        start_date: input.startDate,
-        end_date: input.endDate,
-        description: input.description,
-        project_group_id: input.projectGroupId,
-        tags: input.tags,
-      })
-      .eq("id", id)
-      .select("*")
-      .single();
+    const { data, error } = await supabase.rpc("update_project_record", {
+      p_project_id: id,
+      p_name: input.name,
+      p_owner_id: input.ownerId,
+      p_contract_start_date: input.contractStartDate,
+      p_contract_months: input.contractMonths,
+      p_contract_end_date: input.contractEndDate,
+      p_description: input.description,
+      p_project_group_id: input.projectGroupId,
+      p_tags: input.tags,
+      p_partner_brand_id: input.partnerBrandId,
+    });
     if (error) throw new Error(error.message);
 
-    await syncProjectMembers(id, input.memberUserIds);
+    if (isSuperadmin(viewer)) {
+      await syncProjectMembers(id, input.memberUserIds);
+    }
 
     const [hydrated] = await hydrate([toProject(data)]);
     return hydrated;
+  },
+
+  async applyProjectTemplates(_viewer, projectId, templates) {
+    const supabase = createClient();
+    const { data, error } = await supabase.rpc("apply_project_templates", {
+      p_project_id: projectId,
+      p_templates: toTemplatesJson(templates),
+    });
+    if (error) throw new Error(error.message);
+    return hydrateWorkstreamRows((data ?? []) as WorkstreamRow[]);
   },
 
   async setProjectStatus(_viewer, id, status, reason) {
@@ -334,9 +367,12 @@ export const supabaseProjectsProvider: ProjectsProvider = {
     return (data ?? []) as ProjectGroup[];
   },
 
+  // Phase 3 (CD-208) section 30 — routed through the narrow create_project_group RPC (Admin or
+  // Supervisor) rather than the direct-table insert (still Admin-only at the RLS layer,
+  // project_groups_write_admin, unchanged).
   async createProjectGroup(_viewer, name) {
     const supabase = createClient();
-    const { data, error } = await supabase.from("project_groups").insert({ name: name.trim() }).select("id, name").single();
+    const { data, error } = await supabase.rpc("create_project_group", { p_name: name });
     if (error) throw new Error(error.message);
     return data as ProjectGroup;
   },

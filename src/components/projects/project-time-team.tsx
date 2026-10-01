@@ -88,7 +88,7 @@ export function ProjectTimeTeam({ user, tasks }: ProjectTimeTeamProps) {
     const totals = new Map<string, number>();
     for (const e of inRange) {
       const task = taskMap.get(e.taskId);
-      const label = task ? workstreamDisplayHeading(task.workstream.name, task.workstream.serviceLineName) : "Unknown Template";
+      const label = task ? workstreamDisplayHeading(task.workstream.name) : "Unknown Template";
       totals.set(label, (totals.get(label) ?? 0) + (e.durationMinutes ?? 0));
     }
     return Array.from(totals, ([label, minutes]) => ({ label, minutes })).sort((a, b) => b.minutes - a.minutes);

@@ -64,7 +64,7 @@ export function ProjectCompletedWork({ tasks }: ProjectCompletedWorkProps) {
 
   const serviceOptions = useMemo(() => {
     const byId = new Map<string, string>();
-    for (const t of completedTopLevel) byId.set(t.workstream.id, workstreamDisplayHeading(t.workstream.name, t.workstream.serviceLineName));
+    for (const t of completedTopLevel) byId.set(t.workstream.id, workstreamDisplayHeading(t.workstream.name));
     return Array.from(byId, ([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
   }, [completedTopLevel]);
 
@@ -166,7 +166,7 @@ export function ProjectCompletedWork({ tasks }: ProjectCompletedWorkProps) {
                         {task.title}
                       </span>
                       <span className="truncate text-xs text-muted-foreground">
-                        {workstreamDisplayHeading(task.workstream.name, task.workstream.serviceLineName)}
+                        {workstreamDisplayHeading(task.workstream.name)}
                         {task.activity && ` · ${task.activity.name}`}
                       </span>
                     </div>

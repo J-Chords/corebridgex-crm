@@ -1,4 +1,3 @@
-import type { WorkstreamActivity } from "../../types";
 import { seedWorkstreams } from "./seed-workstreams";
 import { seedDepartments } from "./seed-departments";
 import { seedActivities } from "./seed-activities";
@@ -19,7 +18,7 @@ import { seedActivities } from "./seed-activities";
  * genuinely nothing to associate, which is the correct, honest state under the new explicit
  * semantics, not a gap to fill.
  */
-function matchingDepartment(brandId: string, serviceLineId: string | null) {
+function matchingDepartment(brandId: string | null, serviceLineId: string | null) {
   if (!serviceLineId) return undefined;
   return seedDepartments.find((d) => d.brandId === brandId && d.serviceLineId === serviceLineId);
 }
@@ -28,7 +27,10 @@ function activitiesForDepartment(departmentId: string): string[] {
   return seedActivities.filter((a) => a.departmentId === departmentId).map((a) => a.id);
 }
 
-export const seedWorkstreamActivities: WorkstreamActivity[] = seedWorkstreams.flatMap((workstream) => {
+// Phase 3 (CD-208) — deliberately untyped as `WorkstreamActivity[]` here: the frozen
+// name/description/defaultTaskTitles/position snapshot fields are populated by mock-db.ts's own
+// backfill step (mirroring the real migration), not by this raw seed data.
+export const seedWorkstreamActivities = seedWorkstreams.flatMap((workstream) => {
   const department = matchingDepartment(workstream.brandId, workstream.serviceLineId);
   if (!department) return [];
   return activitiesForDepartment(department.id).map((activityId) => ({ workstreamId: workstream.id, activityId }));

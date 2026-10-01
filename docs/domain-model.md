@@ -17,8 +17,18 @@ This is the accepted, final product hierarchy. **There is no "Subtask" concept.*
 **Do not confuse this with the separate "Service Template" recipe feature** (`templates`/`template_tasks`/`template_checklist_items` tables, `apply_template` RPC, the Company-detail "Apply template" button/dialog) — that is a different, older, still-live feature, explicitly untouched and unrenamed by this terminology change. See `decisions.md`'s CD-205/CD-206 entries.
 
 A Workstream's *displayed* name is derived, not stored verbatim — see `src/lib/data/workstream-name.ts`:
-- `workstreamDisplayHeading(name, serviceLineName)` returns `serviceLineName ?? name` — the catalog Service Line's name wins whenever one is set.
+- `workstreamDisplayHeading(name)` returns `name` as-is. **Phase 3 (CD-208) changed this** — it previously took a second `serviceLineName` argument and preferred it live (`serviceLineName ?? name`), meaning a later catalog Service Line rename would retroactively change what every Project using it displayed. `name` is already frozen at write-time by `deriveWorkstreamName` (called with whatever the Service Line's name was *at that moment*), so the fix was simply to stop re-joining the live name at display time — see "Template → Project snapshot semantics" below.
 - `deriveWorkstreamName` / `workstreamCompactLabel` handle the optional "reference/qualifier" suffix (e.g. "Payroll — UK Payroll").
+
+### Template → Project snapshot semantics (Phase 3, CD-208)
+
+Applying a canonical Template to a Project is a **true snapshot**, not a live reference: `workstream_activities` stores its own frozen `name`/`description`/`defaultTaskTitles`/`position` for each applied Activity, copied at the moment of application (`create_workstream`, "Configure/Add Activities"). Editing the global Activity/Service Line catalog afterward (`/dashboard/admin/templates`) never retroactively changes an already-created Project's own display — only *future* Template applications pick up the new catalog state. `activityId` remains on the row as a pure lineage pointer (nullable — survives the source Activity later being deleted, `on delete set null`), but is never used as a live display join after this phase.
+
+**`tasks.activityId`/`project_issues.activityId` are explicitly unaffected** — they still point at the live global `activities` table by design. A Task's own Activity link is a stable identity reference (which catalog Activity this unit of work is categorized under), not part of what needed to snapshot; only "what does the Project believe this Activity currently looks like" (its display name/description/suggested Task titles) needed to freeze.
+
+Canonical Template Activities are also now **Brand-independent** (Phase 3) — previously `departments.brand_id` was `not null` and actively filtered which Activities were selectable, meaning the same nominal Template could have structurally different Activities per Brand. The canonical Department scoping a Service Line's Activities now has `brand_id = null` (a single, Brand-independent container per Service Line). Selecting/setting a Project's Partner Brand never restricts which Templates/Activities are available.
+
+See `decisions.md`'s "Phase 3 — Project creation, ownerId-based management authority, true Template snapshots, Partner Brand decoupling" entry for the full implementation.
 
 ## Four staffing/identity concepts that look similar but are not
 
@@ -37,6 +47,10 @@ These are frequently confused and are **deliberately separate authorization axes
 The code states this directly (`workstream-form-dialog.tsx`): *"Global Team Leads for the selected Template — surfaced as preferred/contextual candidates when picking a Project Template Lead, never auto-selected or auto-authorized... a global Team Lead relationship grants no automatic Project authority in V1."*
 
 ## Project
+
+### Ownership and management authority (Phase 3, CD-208)
+
+`Project.ownerId` is now the Project-management (write) authorization boundary — see `docs/authorization.md`'s `canManageProjectRecord`/`can_manage_project`. This is a change in *meaning*, not a new field: `ownerId` already existed and already fed `canAccessProject`'s Team Lead read-visibility branch; Phase 3 additionally made it the boundary for *writing* to a Project record. A Team Lead who creates a Project always becomes its owner (server-forced, never client-chosen); an Admin-created Project becomes manageable by whichever Team Lead the Admin sets as owner. This is **not** the future "Primary Team Lead" model (still Phase 4's to define) — it's the existing field pressed into service as Phase 3's bridge to that eventual richer staffing model. Team Lead may never reassign a Project's owner themselves (Admin-only, even for the owning Team Lead).
 
 ### Statuses
 

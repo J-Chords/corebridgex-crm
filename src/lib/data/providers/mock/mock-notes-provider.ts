@@ -7,6 +7,15 @@ function taskAssigneeIds(taskId: string): string[] {
   return db.taskAssignees.filter((ta) => ta.taskId === taskId).map((ta) => ta.userId);
 }
 
+/** Phase 3 (CD-208) parity fix — see `canAccessCompany`'s own doc comment. */
+function projectsForCompanyAccess(): { companyId: string; ownerId: string; memberUserIds: string[] }[] {
+  return db.projects.map((p) => ({
+    companyId: p.companyId,
+    ownerId: p.ownerId,
+    memberUserIds: db.projectMembers.filter((m) => m.projectId === p.id).map((m) => m.userId),
+  }));
+}
+
 function toNoteWithAuthor(note: Note): NoteWithAuthor {
   const author = db.users.find((u) => u.id === note.authorId);
   if (!author) {
@@ -30,7 +39,7 @@ export const mockNotesProvider: NotesProvider = {
   },
 
   async listNotesForCompany(viewer, companyId) {
-    if (!canAccessCompany(viewer, companyId, db.users)) return [];
+    if (!canAccessCompany(viewer, companyId, db.users, projectsForCompanyAccess())) return [];
     return sortNewestFirst(db.notes.filter((n) => n.companyId === companyId)).map(toNoteWithAuthor);
   },
 
@@ -59,7 +68,7 @@ export const mockNotesProvider: NotesProvider = {
   },
 
   async createCompanyNote(viewer, companyId, input: NoteInput) {
-    if (!canAccessCompany(viewer, companyId, db.users)) {
+    if (!canAccessCompany(viewer, companyId, db.users, projectsForCompanyAccess())) {
       throw new Error("You don't have access to this company.");
     }
 

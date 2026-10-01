@@ -183,7 +183,7 @@ export function TaskFormDialog({
   // the (filtered) list unique on its own (a Project can't attach the same Service Line twice).
   const showProjectContext = form.projectId === ALL_PROJECTS;
   function workstreamPrimaryLabel(w: typeof workstreams[number]): string {
-    return workstreamDisplayHeading(w.name, w.serviceLine?.name ?? null);
+    return workstreamDisplayHeading(w.name);
   }
   function workstreamProjectName(w: typeof workstreams[number]): string {
     return (w.projectId && projects.find((p) => p.id === w.projectId)?.name) || "No Project";

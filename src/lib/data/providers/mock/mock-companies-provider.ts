@@ -34,8 +34,20 @@ function toCompanyWithRelations(company: Company): CompanyWithRelations {
   return { ...company, brand, serviceLines, primaryContact, assignedStaff, health };
 }
 
+/** Phase 3 (CD-208) parity fix — see `canAccessCompany`'s own doc comment: mirrors the hosted
+ * `can_access_company` SQL function's "via an accessible Project" branches, so a Team Lead who
+ * owns/belongs to a Project under this Company isn't blocked just because they lack a separate
+ * `user_companies` assignment row. */
+function projectsForCompanyAccess(): { companyId: string; ownerId: string; memberUserIds: string[] }[] {
+  return db.projects.map((p) => ({
+    companyId: p.companyId,
+    ownerId: p.ownerId,
+    memberUserIds: db.projectMembers.filter((m) => m.projectId === p.id).map((m) => m.userId),
+  }));
+}
+
 function requireAccess(viewer: User, companyId: string) {
-  if (!canAccessCompany(viewer, companyId, db.users)) {
+  if (!canAccessCompany(viewer, companyId, db.users, projectsForCompanyAccess())) {
     throw new Error("You don't have access to this company.");
   }
 }
@@ -71,7 +83,7 @@ function syncServiceLines(companyId: string, serviceLineIds: string[]) {
 
 export const mockCompaniesProvider: CompaniesProvider = {
   async listCompanies(viewer) {
-    const visible = visibleCompanyIds(viewer, db.users);
+    const visible = visibleCompanyIds(viewer, db.users, projectsForCompanyAccess());
     const companies =
       visible === "all" ? db.companies : db.companies.filter((c) => visible.includes(c.id));
     return companies.map(toCompanyWithRelations);
@@ -80,7 +92,7 @@ export const mockCompaniesProvider: CompaniesProvider = {
   async getCompany(viewer, id) {
     const company = db.companies.find((c) => c.id === id);
     if (!company) return null;
-    if (!canAccessCompany(viewer, id, db.users)) return null;
+    if (!canAccessCompany(viewer, id, db.users, projectsForCompanyAccess())) return null;
     return toCompanyWithRelations(company);
   },
 

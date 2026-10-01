@@ -30,6 +30,7 @@ Re-verify with `git rev-parse origin/main` — this file goes stale the moment a
 - **CD-205** — Retire the legacy "Project Template" bundle architecture at the schema/source level (`project_templates`/`project_template_services`/`project_template_activities`, their RPCs/triggers/RLS/grants, and dead provider/hook/type source). PR #5, merged. Hosted migration `20260921090000_retire_project_template_bundle.sql` applied and independently re-verified live. The separate, still-live Service-recipe system (`templates`/`template_tasks`/`template_checklist_items`, `apply_template`, Company-detail "Apply template") is explicitly preserved and confirmed unaffected. Phase 0 of the Template terminology redesign. See `decisions.md` and `data-and-supabase.md`.
 - **CD-206** — Phase 1 Template workspace and terminology: the visible product term for the Service catalog becomes "Template" (Admin nav + new `/dashboard/admin/templates` list/detail routes, Project-facing "Templates" tab with "Global Service Staffing" removed, Task List column changes — Assignee column removed, Start Date column added — staffing-terminology relabel, Activity catalog "Suggested Tasks"→"Tasks"). PR #7, merged. `service_lines`/`workstreams` persistence and all authorization/RLS/RPCs are unchanged; no migration needed. The separate, still-live Service-recipe system (Company-detail "Apply template" and the Accomplishments Report's own unrelated "Add service" Activity-picker) is explicitly preserved and confirmed unaffected. Product Owner Try-It-Yourself review approved. See `decisions.md`'s "Phase 1 — Template workspace and terminology" entry.
 - **CD-207** — Phase 2 Project Overview redesign + KPI navigation: one shared Overview structure for every role, a locked 5-tile clickable KPI row (Templates/Open Tasks/Attention/Due/Members), Attention/Due definitions reusing existing Task/date helpers, the former "Project Details"/"Administrative Details" cards consolidated into one with zero field loss, a real Project tab/URL desync bug fixed, and Projects list rows converted to real `<Link>` navigation. PR #9, merged (merge commit `997c3ce`). Permissions unchanged, no database migration. Blocked→Waiting retirement remains Phase 5 — Blocked exists globally, unchanged. Product Owner manual review approved (2026-09-23). See `decisions.md`'s "Phase 2 — Project Overview redesign + KPI navigation" entry.
+- **CD-208** — Phase 3 Project creation + unified editing: Admin and Team Lead can create Projects (0/1/multiple canonical Templates, applied atomically); `Project.ownerId` is now the Project-management authorization boundary (`canManageProjectRecord`/`can_manage_project`, app + backend enforced); a Team Lead creator always becomes owner; Name/Partner Brand/Owner protected after creation for Team Lead; canonical Template→Project application is now a true snapshot (frozen at application time, independent of later catalog edits); Partner Brand is now Project-specific (`projects.partner_brand_id`, independent of Company Brand); canonical Template Activities are now Brand-independent. **Implemented on branch `feature/CD-208-project-creation-unified-editing`, NOT committed/pushed, no PR — awaiting Product Owner review.** 5 migrations drafted locally, not hosted-applied. See `decisions.md`'s Phase 3 entry.
 
 ## 5. Open ticket(s)
 
@@ -37,7 +38,7 @@ Re-verify with `git rev-parse origin/main` — this file goes stale the moment a
 
 ## 6. Current Jira states
 
-CD-162, CD-190, CD-196, CD-205, CD-206, and CD-207: `pending deployment` (merged + validated, awaiting a hosting decision — see `current-state.md` for each ticket's exact status). CD-194: `Sign-off`. CD-193: `New`. Full workflow state list and the reasoning behind each transition: `current-state.md`.
+CD-162, CD-190, CD-196, CD-205, CD-206, and CD-207: `pending deployment` (merged + validated, awaiting a hosting decision — see `current-state.md` for each ticket's exact status). CD-194: `Sign-off`. CD-193: `New`. CD-208: `In Progress` (implemented and validated, awaiting Product Owner manual review — not merged). Full workflow state list and the reasoning behind each transition: `current-state.md`.
 
 ## 7. Current deployment state
 
@@ -191,10 +192,39 @@ CD-162, CD-190, CD-196, CD-205, CD-206, and CD-207 currently sit at "pending
 deployment" (merged + validated, no hosting target exists yet to deploy to); CD-194 at
 "Sign-off".
 
-NEXT UP: Phase 3 of the Project module redesign series (Project creation/edit
-redesign, Template cloning, Partner Brand decoupling) — NOT started, no ticket created
-yet. Phase 4 (staffing/authorization redesign) and Phase 5 (Blocked -> Waiting status
-retirement) are also not started.
+IN CODE REVIEW (implemented, hosted-verified, NOT merged):
+- CD-208: Phase 3 Project creation + unified editing, on branch
+  feature/CD-208-project-creation-unified-editing (based on main at 57021cd). Admin
+  and Team Lead can create Projects (0/1/multiple canonical Templates, applied
+  atomically); Project.ownerId is the Project-management authorization boundary
+  (canManageProjectRecord/can_manage_project SQL function, app AND backend enforced —
+  a Team Lead may only manage a Project they literally own; direct-report read
+  visibility via canAccessProject is unchanged and stays broader); a Team Lead creator
+  always becomes owner (server-forced, never client-chosen — not a new "Primary Team
+  Lead" model, Phase 4 still owns that); Name/Partner Brand/Owner are protected after
+  creation for Team Lead, Admin unaffected; canonical Template->Project application is
+  a TRUE SNAPSHOT (Activity name/description/suggested Task titles freeze at
+  application time — workstream_activities gained frozen columns; a later catalog
+  edit no longer retroactively changes an existing Project); real Task rows are still
+  never auto-materialized (confirmed pre-existing, preserved); Partner Brand is
+  Project-specific (projects.partner_brand_id, independent of Company brandId, no
+  ongoing sync); canonical Template Activities are Brand-independent
+  (departments.brand_id nullable, was previously real structural coupling); a
+  follow-up authorization-hardening migration closed 3 residual gaps where Service/
+  Workstream mutation (create_project's member injection, create_workstream, the
+  workstreams/workstream_activities RLS) was still gated by read-visibility
+  predicates instead of the owner boundary.
+  TypeScript/ESLint/git diff --check clean, all 4 provider builds pass. All 6
+  migrations (20260924090000-20260924130000, plus 20260930160000 hardening) are
+  applied to hosted Supabase — migration history and postflight data preservation
+  verified. Committed and pushed; PR opened against main; Jira CD-208 moved to
+  "Code review". A2/global Template cloning remains explicitly deferred within this
+  phase. Not merged, not deployed. See decisions.md's Phase 3 entry for full scope
+  before doing anything with this branch.
+
+NEXT UP: Phase 4 (staffing/authorization redesign — Primary/Additional Team Leads,
+per-Template Lead permissions) and Phase 5 (Blocked -> Waiting status retirement) are
+not started. Template cloning (A2) also remains deferred, no ticket yet.
 
 OPEN TICKETS:
 - CD-193 — Normalize local-date handling across task and dashboard date surfaces.

@@ -127,11 +127,9 @@ export function AddProjectServiceDialog({
             </div>
             <div className="flex flex-col gap-4 px-6 py-4">
               <ProjectServicePicker
-                brandId={company.brand?.id ?? null}
                 value={services}
                 onChange={setServices}
                 excludeServiceLineIds={existingServiceLineIds}
-                context="add-service"
               />
 
               <div className="flex flex-col gap-1.5">

@@ -53,14 +53,14 @@ export function WorkstreamOverviewCard({ workstream, className, style }: Workstr
       <div className="flex items-start gap-3">
         <div
           className="flex size-9 shrink-0 items-center justify-center rounded-lg text-xs font-semibold text-white"
-          style={{ backgroundColor: brandColor(workstream.brand.id) }}
+          style={{ backgroundColor: brandColor(workstream.brand?.id ?? workstream.id) }}
           aria-hidden="true"
         >
-          {brandInitials(workstream.brand.name)}
+          {workstream.brand ? brandInitials(workstream.brand.name) : "—"}
         </div>
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-medium">
-            {workstreamDisplayHeading(workstream.name, workstream.serviceLine?.name ?? null)}
+            {workstreamDisplayHeading(workstream.name)}
           </p>
           <p className="truncate text-xs text-muted-foreground">{workstream.company.name}</p>
         </div>

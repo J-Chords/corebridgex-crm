@@ -16,8 +16,10 @@ interface AddServiceDialogProps {
 }
 
 /** Picks an activity that wasn't auto-detected this period — the direct sibling of Client Report's own `AddSectionDialog`, same search-a-catalog-grouped-by-department shape. Picking one appends a single blank activity line to its department (creating the department if it isn't already in the report); "Other" is offered the same way once it isn't already showing. */
-export function AddServiceDialog({ open, onOpenChange, brandId, section, onAddActivity, onAddOther }: AddServiceDialogProps) {
-  const { departments: catalog } = useActivityCatalog(brandId);
+export function AddServiceDialog({ open, onOpenChange, section, onAddActivity, onAddOther }: AddServiceDialogProps) {
+  // Phase 3 (CD-208) — canonical Template Activities are Brand-independent; brandId (still accepted
+  // in the props contract for caller compatibility) is no longer used to scope this catalog fetch.
+  const { departments: catalog } = useActivityCatalog(undefined);
   const [search, setSearch] = useState("");
 
   const includedActivityIds = useMemo(() => {

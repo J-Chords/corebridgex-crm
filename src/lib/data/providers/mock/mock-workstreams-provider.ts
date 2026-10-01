@@ -16,16 +16,21 @@ import { computeWorkstreamRecurrence } from "../../recurrence";
 import { isProjectActiveForNewWork, projectNotActiveMessage } from "../../project-display";
 import { db } from "./mock-db";
 
+/** Phase 3 (CD-208) parity fix — see `canAccessCompany`'s own doc comment. */
+function projectsForCompanyAccess(): { companyId: string; ownerId: string; memberUserIds: string[] }[] {
+  return db.projects.map((p) => ({
+    companyId: p.companyId,
+    ownerId: p.ownerId,
+    memberUserIds: db.projectMembers.filter((m) => m.projectId === p.id).map((m) => m.userId),
+  }));
+}
+
 function todayDateString(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
 function workstreamTeamIds(workstreamId: string): string[] {
   return db.workstreamMembers.filter((m) => m.workstreamId === workstreamId).map((m) => m.userId);
-}
-
-function workstreamActivityIds(workstreamId: string): string[] {
-  return db.workstreamActivities.filter((wa) => wa.workstreamId === workstreamId).map((wa) => wa.activityId);
 }
 
 /**
@@ -63,10 +68,7 @@ function toWorkstreamWithRelations(workstream: Workstream): WorkstreamWithRelati
   if (!company) {
     throw new Error(`Workstream ${workstream.id} references unknown company ${workstream.companyId}`);
   }
-  const brand = db.brands.find((b) => b.id === workstream.brandId);
-  if (!brand) {
-    throw new Error(`Workstream ${workstream.id} references unknown brand ${workstream.brandId}`);
-  }
+  const brand = workstream.brandId ? (db.brands.find((b) => b.id === workstream.brandId) ?? null) : null;
   const serviceLine = workstream.serviceLineId
     ? (db.serviceLines.find((sl) => sl.id === workstream.serviceLineId) ?? null)
     : null;
@@ -79,9 +81,25 @@ function toWorkstreamWithRelations(workstream: Workstream): WorkstreamWithRelati
     throw new Error(`Workstream ${workstream.id} references unknown creator ${workstream.createdById}`);
   }
   const team = db.users.filter((u) => workstreamTeamIds(workstream.id).includes(u.id));
-  const activityIds = workstreamActivityIds(workstream.id);
-  const activities = db.activities
-    .filter((a) => activityIds.includes(a.id))
+  // Phase 3 (CD-208) — true snapshot: read this Workstream's own frozen Activity data, never a
+  // live join against db.activities (that's the whole point — a later catalog Activity edit must
+  // not change what an already-applied Project displays). `id` stays the lineage `activityId` so
+  // Task-creation's "pick an already-enabled Activity" flow keeps writing the same stable global id
+  // it always has (tasks.activityId is explicitly untouched by Phase 3).
+  const activities = db.workstreamActivities
+    .filter((wa) => wa.workstreamId === workstream.id)
+    .map((wa) => ({
+      id: wa.activityId ?? `${wa.workstreamId}:${wa.name}`,
+      departmentId: "",
+      name: wa.name,
+      description: wa.description,
+      position: wa.position,
+      defaultTaskTitles: wa.defaultTaskTitles,
+      isActive: true,
+      createdById: null,
+      createdAt: workstream.createdAt,
+      updatedAt: workstream.createdAt,
+    }))
     .sort((a, b) => a.position - b.position);
 
   const tasks = db.tasks.filter((t) => t.workstreamId === workstream.id);
@@ -166,10 +184,24 @@ function syncTeam(workstreamId: string, userIds: string[]) {
   ];
 }
 
+/** Phase 3 (CD-208) — freezes each selected Activity's CURRENT name/description/defaultTaskTitles/
+ * position at the moment it's (re-)applied, instead of storing only the join key. A later catalog
+ * Activity edit never changes an already-applied snapshot; re-running this (e.g. via "Configure
+ * Activities") re-freezes to whatever is current at that later moment, same as the real RPC. */
 function syncWorkstreamActivities(workstreamId: string, activityIds: string[]) {
   db.workstreamActivities = [
     ...db.workstreamActivities.filter((wa) => wa.workstreamId !== workstreamId),
-    ...activityIds.map((activityId) => ({ workstreamId, activityId })),
+    ...activityIds.map((activityId) => {
+      const activity = db.activities.find((a) => a.id === activityId);
+      return {
+        workstreamId,
+        activityId,
+        name: activity?.name ?? "Unknown Activity",
+        description: activity?.description ?? null,
+        defaultTaskTitles: activity?.defaultTaskTitles ?? [],
+        position: activity?.position ?? 0,
+      };
+    }),
   ];
 }
 
@@ -249,9 +281,11 @@ export const mockWorkstreamsProvider: WorkstreamsProvider = {
     }
     const company = db.companies.find((c) => c.id === resolved.companyId);
     if (!company) throw new Error("Company not found.");
-    if (!company.brandId) {
-      throw new Error("This client has no Brand set yet — add a Brand to this client before creating a Template.");
-    }
+    // Phase 3 (CD-208) — no longer required; canonical Template Activities are Brand-independent.
+    // Falls back through the owning Project's own partnerBrandId, then the Company's brandId, then
+    // null — never blocks creation for a Brand-less client.
+    const owningProject = resolved.projectId ? db.projects.find((p) => p.id === resolved.projectId) : undefined;
+    const effectiveBrandId = owningProject?.partnerBrandId ?? company.brandId ?? null;
     // CD-162 post-manual-QA pass — duplicate-active-service prevention, enforced here (not just by
     // the picker hiding already-attached options) so a direct provider call can never create a
     // second active Workstream for the same (Project, Service Line) pair. A Service whose earlier
@@ -276,7 +310,7 @@ export const mockWorkstreamsProvider: WorkstreamsProvider = {
       companyId: resolved.companyId,
       projectId: resolved.projectId,
       serviceLineId: input.serviceLineId,
-      brandId: company.brandId,
+      brandId: effectiveBrandId,
       leadUserId: input.leadUserId,
       status: input.status,
       startDate: input.startDate,
@@ -301,7 +335,7 @@ export const mockWorkstreamsProvider: WorkstreamsProvider = {
     const existing = db.workstreams.find((e) => e.id === id);
     if (!existing) throw new Error("Template not found.");
     requireManage(viewer, existing);
-    if (!canAccessCompany(viewer, input.companyId, db.users)) {
+    if (!canAccessCompany(viewer, input.companyId, db.users, projectsForCompanyAccess())) {
       throw new Error("You don't have access to that company.");
     }
     // Security correction — reassigning the Project Service Lead must follow the same eligibility
@@ -441,7 +475,17 @@ export const mockWorkstreamsProvider: WorkstreamsProvider = {
       (wa) => wa.workstreamId === workstreamId && wa.activityId === activity.id
     );
     if (!alreadyAssociated) {
-      db.workstreamActivities = [...db.workstreamActivities, { workstreamId, activityId: activity.id }];
+      db.workstreamActivities = [
+        ...db.workstreamActivities,
+        {
+          workstreamId,
+          activityId: activity.id,
+          name: activity.name,
+          description: activity.description,
+          defaultTaskTitles: activity.defaultTaskTitles,
+          position: activity.position,
+        },
+      ];
     }
 
     return activity;
