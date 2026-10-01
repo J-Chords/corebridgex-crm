@@ -49,7 +49,7 @@ import { getInitials as initials } from "@/lib/initials";
 const STATUS_STRIP = [
   { key: "open" as const, label: "Open", icon: Circle, color: STATUS_COLOR_VAR["not-started"] },
   { key: "inProgress" as const, label: "In Progress", icon: PlayCircle, color: STATUS_COLOR_VAR["in-progress"] },
-  { key: "blockedWaiting" as const, label: "Blocked / Waiting", icon: AlertTriangle, color: STATUS_COLOR_VAR.blocked },
+  { key: "waiting" as const, label: "Waiting", icon: AlertTriangle, color: STATUS_COLOR_VAR.waiting },
   { key: "done" as const, label: "Completed", icon: CheckCircle2, color: STATUS_COLOR_VAR.completed },
 ];
 
@@ -142,7 +142,7 @@ function LoadedWorkstreamDetailPage({
   const statusCounts = {
     open: tasks.filter((t) => t.status === "not-started").length,
     inProgress: tasks.filter((t) => t.status === "in-progress").length,
-    blockedWaiting: tasks.filter((t) => t.status === "blocked" || t.status === "waiting").length,
+    waiting: tasks.filter((t) => t.status === "waiting").length,
     done: tasks.filter((t) => t.status === "completed").length,
   };
   return (

@@ -3,12 +3,15 @@
  * todo/in-progress/blocked/waiting-on-client/done set; `canceled` is new). Persisted value IS the
  * canonical name — no separate display-mapping layer. See `supabase/migrations/
  * 20260908090000_task_status_model_phase1.sql` for the historical-data rename.
+ *
+ * Phase 5 (CD-214) — `"blocked"` retired in favor of `"waiting"`. A legacy `"blocked"` value may
+ * still appear in a stale URL/sessionStorage/Saved-View filter; see `src/lib/data/task-status.ts`
+ * for the FILTER/READ-only compatibility mapping. It is no longer a valid Task status value.
  */
 export type TaskStatus =
   | "not-started"
   | "in-progress"
   | "waiting"
-  | "blocked"
   | "completed"
   | "canceled";
 
@@ -25,10 +28,12 @@ export interface Task {
   /** Every task belongs to a workstream; companyId above is a denormalized copy of workstream.companyId, synced by the provider — never independently editable. */
   workstreamId: string;
   status: TaskStatus;
-  /** Task Level Phase 1 — the CURRENT reason this Task is Waiting or Blocked; required exactly when
-   * `status` is `"waiting"` or `"blocked"`, and auto-cleared the moment status leaves either of those
-   * (server-enforced by `enforce_task_invariants`, never left stale). This is workflow state, not
-   * conversation history — it never replaces or is replaced by Comments. */
+  /** Task Level Phase 1 — the CURRENT reason this Task is Waiting; required exactly when `status`
+   * is `"waiting"`, and auto-cleared the moment status leaves it (server-enforced by
+   * `enforce_task_invariants`, never left stale). This is workflow state, not conversation
+   * history — it never replaces or is replaced by Comments. Phase 5 (CD-214) — previously also
+   * required for the now-retired `"blocked"` status; a handful of legacy pre-Phase-1 rows are
+   * exempt from the requirement on unrelated edits (see `enforce_task_invariants`'s own comment). */
   statusReason: string | null;
   priority: TaskPriority;
   /** Optional planned/scheduled start date, set directly by the user — never derived from

@@ -6,6 +6,7 @@ import { useAuth } from "@/lib/auth/auth-context";
 import { useSavedViews } from "@/lib/data/hooks/use-saved-views";
 import { savedViewsProvider } from "@/lib/data/providers";
 import { DEFAULT_TASK_FILTERS, type TaskFilters } from "@/lib/data/hooks/use-task-filters";
+import { normalizeLegacyTaskFilterStatusOrAll } from "@/lib/data/task-status";
 import type { SavedViewFilters } from "@/lib/data/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,9 +19,19 @@ import {
 
 /** A saved view stored before Phase 8C's projectId/activityId fields existed has neither key in its
  * stored jsonb at all — normalized here to "all" (never undefined) so it compares/applies exactly
- * like every other filter that was never set, instead of silently mismatching or crashing. */
+ * like every other filter that was never set, instead of silently mismatching or crashing.
+ * Phase 5 (CD-214) — a saved view stored before Blocked's retirement may still carry
+ * `status: "blocked"`; normalized here to `"waiting"` (its current equivalent) rather than an
+ * impossible, permanently-empty filter. This is read/apply-time compatibility only — the saved
+ * view's own persisted record is left untouched here; see each provider's `createSavedView` for the
+ * write-time normalization that updates it the next time it's (re)saved. */
 function normalizeSavedFilters(filters: SavedViewFilters): TaskFilters {
-  return { ...filters, projectId: filters.projectId ?? "all", activityId: filters.activityId ?? "all" };
+  return {
+    ...filters,
+    projectId: filters.projectId ?? "all",
+    activityId: filters.activityId ?? "all",
+    status: normalizeLegacyTaskFilterStatusOrAll(filters.status),
+  };
 }
 
 function filtersEqual(a: TaskFilters, b: SavedViewFilters): boolean {

@@ -8,8 +8,9 @@ import { isProjectActiveForNewWork } from "@/lib/data/project-display";
  * triplication). No behavior change: same overdue rule, same due-date format, same
  * Service/Client fallback logic every one of those files already used.
  */
-/** OPEN = Not Started/In Progress/Waiting/Blocked; CLOSED = Completed/Canceled — a Canceled or
- * Completed task is never overdue, matching the locked six-status model's semantic rules. */
+/** OPEN = Not Started/In Progress/Waiting; CLOSED = Completed/Canceled — a Canceled or Completed
+ * task is never overdue, matching the locked five-status model's semantic rules (Phase 5/CD-214
+ * retired Blocked in favor of Waiting). */
 export function isTaskClosed(status: Pick<TaskWithRelations, "status">["status"]): boolean {
   return status === "completed" || status === "canceled";
 }

@@ -67,21 +67,28 @@ function buildAtRiskCategory(
 
 function buildStaffCategory(teamMembers: User[], teamTasks: TaskWithRelations[]): AttentionCategory | null {
   const today = todayDateString();
+  // Phase 5 (CD-214), Decision 2 — Attention is UNIQUE Tasks that are overdue OR Waiting; a Task
+  // that is both counts once in the total, never twice. `isOverdue` is reused for both the
+  // explanatory "N overdue" count and the deduplicated total's own single filter pass.
+  function isOverdue(t: TaskWithRelations) {
+    return !isTaskClosed(t.status) && t.dueDate != null && t.dueDate < today;
+  }
   const items = teamMembers
     .map((member) => {
-      // Final V1 Regression correction — a member's blocked/overdue "needs attention" figures must
+      // Final V1 Regression correction — a member's waiting/overdue "needs attention" figures must
       // not count a Task whose own Project has been Archived/Trashed.
       const memberTasks = teamTasks.filter((t) => t.assignees.some((a) => a.id === member.id) && isTaskInActiveProject(t));
-      const blocked = memberTasks.filter((t) => t.status === "blocked").length;
-      const overdue = memberTasks.filter((t) => !isTaskClosed(t.status) && t.dueDate && t.dueDate < today).length;
-      return { member, blocked, overdue, total: blocked + overdue };
+      const waiting = memberTasks.filter((t) => t.status === "waiting").length;
+      const overdue = memberTasks.filter(isOverdue).length;
+      const total = memberTasks.filter((t) => t.status === "waiting" || isOverdue(t)).length;
+      return { member, waiting, overdue, total };
     })
     .filter((entry) => entry.total > 0)
     .sort((a, b) => b.total - a.total)
     .map((entry) => {
       const parts: string[] = [];
       if (entry.overdue > 0) parts.push(`${entry.overdue} overdue`);
-      if (entry.blocked > 0) parts.push(`${entry.blocked} blocked`);
+      if (entry.waiting > 0) parts.push(`${entry.waiting} waiting`);
       return { id: `member-${entry.member.id}`, message: `${entry.member.fullName} — ${parts.join(", ")}`, href: "/dashboard/tasks" };
     });
   if (items.length === 0) return null;
@@ -108,7 +115,8 @@ interface NeedsAttentionStripProps {
 
 /**
  * Compact, scalable heads-up strip for a Supervisor's or Superadmin's My Day — teammates (or org-wide
- * staff) with blocked/overdue work, and (Superadmin only) at-risk clients. Phase 11C removed the
+ * staff) with overdue-or-Waiting work (Phase 5/CD-214 — same deduplicated definition as the Project
+ * detail page's own Attention KPI), and (Superadmin only) at-risk clients. Phase 11C removed the
  * legacy Internal/Accomplishments Report "reports to review" category — that report type is no
  * longer part of normal Employee/Supervisor workflow. Phase 11D: Client Report reviewers now locate
  * Drafts via the ordinary Recent Reports Status filter on /dashboard/reports/client (there is no

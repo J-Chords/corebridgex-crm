@@ -1,5 +1,6 @@
 import type { SavedViewsProvider } from "../saved-views-provider";
 import type { SavedView, User } from "../../types";
+import { normalizeLegacyTaskFilterStatusOrAll } from "@/lib/data/task-status";
 import { db } from "./mock-db";
 
 function requireOwner(viewer: User, view: SavedView) {
@@ -24,7 +25,10 @@ export const mockSavedViewsProvider: SavedViewsProvider = {
       id: crypto.randomUUID(),
       userId: viewer.id,
       name,
-      filters: input.filters,
+      // Phase 5 (CD-214) persistence-boundary compatibility — a caller holding stale filter state
+      // (e.g. `status: "blocked"`) never persists that legacy value; this is FILTER state being
+      // normalized to its current equivalent, not a Task write, so it's mapped rather than rejected.
+      filters: { ...input.filters, status: normalizeLegacyTaskFilterStatusOrAll(input.filters.status) },
       createdAt: now,
       updatedAt: now,
     };

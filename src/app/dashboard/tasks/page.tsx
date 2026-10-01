@@ -18,6 +18,7 @@ import {
 } from "@/lib/data/hooks/use-task-filters";
 import { isEmployee } from "@/lib/data/permissions";
 import { isAssigneeColumnRedundantForViewer, isTaskActiveWork } from "@/lib/data/task-display";
+import { normalizeLegacyTaskFilterStatus } from "@/lib/data/task-status";
 import type { TaskStatus } from "@/lib/data/types";
 import type { TaskWithRelations } from "@/lib/data/providers/tasks-provider";
 import { Card } from "@/components/ui/card";
@@ -34,8 +35,6 @@ import { TaskBoard } from "@/components/tasks/task-board";
 import { TaskListSection, FlatTaskList } from "@/components/tasks/task-list-section";
 import { TaskTimeline } from "@/components/tasks/task-timeline";
 import { TaskFormDialog } from "@/components/tasks/task-form-dialog";
-
-const VALID_STATUSES: TaskStatus[] = ["not-started", "in-progress", "waiting", "blocked", "completed", "canceled"];
 
 function todayDateString() {
   return new Date().toISOString().slice(0, 10);
@@ -78,8 +77,12 @@ function TasksPageContent() {
   const [dueTodayOnly, setDueTodayOnly] = useState(() => searchParams.get("due") === "today");
   useEffect(() => {
     const status = searchParams.get("status");
-    if (status && VALID_STATUSES.includes(status as TaskStatus)) {
-      patch({ status: status as TaskStatus });
+    // Phase 5 (CD-214) legacy link compatibility — a bookmarked/shared `?status=blocked` link must
+    // transparently behave as `?status=waiting`, never silently drop the filter. Any other
+    // unrecognized value degrades safely (the deep-link seed is simply skipped).
+    const normalizedStatus = status ? normalizeLegacyTaskFilterStatus(status) : null;
+    if (normalizedStatus) {
+      patch({ status: normalizedStatus });
     }
     // Phase 8E — same one-time deep-link seeding, for a Supervisor/Superadmin dashboard card
     // drilling down to one team member's own tasks (e.g. Team Workload's per-person row).
@@ -156,7 +159,6 @@ function TasksPageContent() {
     "not-started": 0,
     "in-progress": 0,
     waiting: 0,
-    blocked: 0,
     completed: 0,
     canceled: 0,
     running: beforeStatusFilter.filter((t) => t.id === runningTaskId).length,

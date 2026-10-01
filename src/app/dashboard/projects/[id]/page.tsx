@@ -697,10 +697,10 @@ function LoadedProjectDetailPage({
     [tasks, user.id]
   );
 
-  // CD-207 — Attention KPI: unique (deduplicated) Tasks that are overdue OR Waiting, explicitly
-  // excluding Blocked (Blocked stays fully live everywhere else in the app — only folded out of
-  // this one KPI's definition). A single filter pass over one array guarantees a Task that's both
-  // overdue and Waiting is counted once, never twice.
+  // CD-207 — Attention KPI: unique (deduplicated) Tasks that are overdue OR Waiting. A single
+  // filter pass over one array guarantees a Task that's both overdue and Waiting is counted once,
+  // never twice. Phase 5 (CD-214) locked this as the canonical Attention definition app-wide — see
+  // `needs-attention-strip.tsx`'s matching rule.
   const attentionScope = isEmployee(user) ? myTasks : tasks;
   const attentionCount = attentionScope.filter((t) => isTaskOverdue(t) || t.status === "waiting").length;
 

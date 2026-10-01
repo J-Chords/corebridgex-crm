@@ -3,19 +3,25 @@
 import { useState, type CSSProperties } from "react";
 import type { TaskStatus } from "@/lib/data/types";
 import { STATUS_COLOR_VAR, TASK_STATUS_SELECT_ITEMS } from "@/components/tasks/task-status-badge";
+import { ACTIVE_TASK_STATUS_ORDER, normalizeLegacyTaskFilterStatus } from "@/lib/data/task-status";
 import { cn } from "@/lib/utils";
 
 /** My Day's own personal "today" buckets — Canceled is deliberately excluded here (closed, not
- * actionable daily work); it still appears in the org-wide "Task(s) by Status" breakdown. */
-export const STATUS_ORDER: TaskStatus[] = ["not-started", "in-progress", "blocked", "waiting", "completed"];
+ * actionable daily work); it still appears in the org-wide "Task(s) by Status" breakdown. Derived
+ * from the shared `ACTIVE_TASK_STATUS_ORDER` rather than an independent literal list. */
+export const STATUS_ORDER: TaskStatus[] = ACTIVE_TASK_STATUS_ORDER;
 
 const STATUS_BUCKET_STORAGE_KEY = "my-day-status-bucket";
 
+/** Phase 5 (CD-214) legacy bucket compatibility — a stale persisted `"blocked"` bucket selection
+ * must normalize to `"waiting"`, not merely fall back to the default bucket. */
 function readPersistedStatusBucket(): TaskStatus | null {
   if (typeof window === "undefined") return null;
   try {
     const raw = window.sessionStorage.getItem(STATUS_BUCKET_STORAGE_KEY);
-    return raw && (STATUS_ORDER as string[]).includes(raw) ? (raw as TaskStatus) : null;
+    if (!raw) return null;
+    const normalized = normalizeLegacyTaskFilterStatus(raw);
+    return normalized && (STATUS_ORDER as string[]).includes(normalized) ? normalized : null;
   } catch {
     return null;
   }
@@ -47,7 +53,6 @@ export function usePersistedStatusBucket() {
 export const EMPTY_BUCKET_COPY: Record<TaskStatus, string> = {
   "not-started": "Inbox zero for today ✨",
   "in-progress": "Nothing in progress right now",
-  blocked: "No blocked tasks — smooth sailing ⛵",
   waiting: "Nothing waiting right now",
   completed: "No completed tasks yet — get after it 💪",
   canceled: "No canceled tasks",

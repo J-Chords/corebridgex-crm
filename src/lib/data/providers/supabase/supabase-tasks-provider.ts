@@ -310,7 +310,7 @@ export const supabaseTasksProvider: TasksProvider = {
         // Status itself is never set here — status changes always route through the
         // `update_task_status` RPC below (see the `input.status !== data.status` branch) so the
         // actor/notification/lifecycle side effects stay atomic. But the reason text for an
-        // already-Waiting/Blocked task (no status change) must still be editable from this form —
+        // already-Waiting task (no status change) must still be editable from this form —
         // `enforce_task_invariants` validates/clears it against the task's current (unchanged) status.
         status_reason: input.statusReason ?? null,
       })

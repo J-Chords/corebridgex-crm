@@ -248,9 +248,15 @@ reviewed/merged):
   RPC (list_project_staffing_candidates). Not hosted-applied, not committed, not
   pushed, no PR, no Jira. See decisions.md's Phase 4 entry for full scope.
 
-NEXT UP: Phase 4 (this entry) awaits Product Owner manual QA before checkpoint.
-Phase 5 (Blocked -> Waiting status retirement) is not started. Template cloning (A2)
-also remains deferred, no ticket yet.
+NEXT UP: Phase 3 (CD-208) and Phase 4 (CD-211) are both merged to main (PR #11 merge
+commit cb3fe96, PR #12 merge commit 6ef8b7d), Jira `pending deployment`. Phase 5
+(CD-214, Blocked -> Waiting status retirement) is implemented on
+feature/CD-214-retire-blocked-task-status, Product Owner manual QA approved, hosted
+migration applied and postflight-verified (zero drift, zero row-count regressions,
+direct hosted probe confirms blocked writes rejected). Checkpoint (commit/push/PR) in
+progress — not yet merged, Jira not yet updated. See decisions.md's Phase 5 entry and
+current-state.md for the full record. Template cloning (A2) remains deferred, no ticket
+yet.
 
 OPEN TICKETS:
 - CD-193 — Normalize local-date handling across task and dashboard date surfaces.
@@ -276,8 +282,10 @@ TEAM ACTIVITY: /dashboard/team-activity (tabs ?view=updates / ?view=time) replac
 old pages (Team Updates, Team Time — now 307-redirected here). This was a UI/navigation
 merge ONLY — daily_updates and time_entries remain two fully separate models/tables.
 
-TASK MODEL: statuses not-started/in-progress/waiting/blocked/completed/canceled (single-L).
-Waiting/Blocked require a reason. Closed = completed or canceled. Checklist completion
+TASK MODEL: statuses not-started/in-progress/waiting/completed/canceled (single-L).
+Blocked was retired in favor of Waiting (Phase 5/CD-214) — a legacy "blocked" value may
+still appear in stale client filter state and normalizes to "waiting" on read only, never
+on write. Waiting requires a reason. Closed = completed or canceled. Checklist completion
 can auto-complete/reopen a Task. No dedicated "reopen" action — just change status back.
 Comments is canonical; Task Notes and Task Handoff authoring are both retired
 (read-only history only).
