@@ -61,19 +61,33 @@ export function managesUser(manager: User, target: User): boolean {
  * Company's own name. This app-layer/mock function is the parity mirror of that; `projects` is
  * optional only for callers that genuinely have no Project context available (defaults to none,
  * matching the pre-Phase-8B behavior for those) — every real caller should pass it. */
+/** Phase 4 — a Project's Additional Team Leads (`project_team_leads`) get the same Company-access
+ * parity as its Primary TL (`ownerId`)/Members: `manages_user`-equivalent (self or managed report)
+ * grants visibility through a Project one legitimately co-manages, mirroring the hosted
+ * `can_access_company` SQL's own new branch exactly. */
 export function visibleCompanyIds(
   viewer: User,
   allUsers: User[],
-  projects: { companyId: string; ownerId: string; memberUserIds: string[] }[] = []
+  projects: { companyId: string; ownerId: string; memberUserIds: string[]; additionalTeamLeadUserIds: string[] }[] = []
 ): "all" | string[] {
   if (isSuperadmin(viewer)) return "all";
   const viaProjects = projects
-    .filter((p) => p.ownerId === viewer.id || p.memberUserIds.includes(viewer.id))
+    .filter(
+      (p) =>
+        p.ownerId === viewer.id ||
+        p.memberUserIds.includes(viewer.id) ||
+        p.additionalTeamLeadUserIds.includes(viewer.id)
+    )
     .map((p) => p.companyId);
   if (isSupervisor(viewer)) {
     const team = allUsers.filter((u) => managesUser(viewer, u));
     const viaReportsProjects = projects
-      .filter((p) => team.some((u) => u.id === p.ownerId) || p.memberUserIds.some((id) => team.some((u) => u.id === id)))
+      .filter(
+        (p) =>
+          team.some((u) => u.id === p.ownerId) ||
+          p.memberUserIds.some((id) => team.some((u) => u.id === id)) ||
+          p.additionalTeamLeadUserIds.some((id) => team.some((u) => u.id === id))
+      )
       .map((p) => p.companyId);
     return Array.from(
       new Set([...team.flatMap((u) => u.assignedCompanyIds), ...viaProjects, ...viaReportsProjects, INTERNAL_COMPANY_ID])
@@ -86,7 +100,7 @@ export function canAccessCompany(
   viewer: User,
   companyId: string,
   allUsers: User[],
-  projects?: { companyId: string; ownerId: string; memberUserIds: string[] }[]
+  projects?: { companyId: string; ownerId: string; memberUserIds: string[]; additionalTeamLeadUserIds: string[] }[]
 ): boolean {
   const visible = visibleCompanyIds(viewer, allUsers, projects);
   return visible === "all" || visible.includes(companyId);
@@ -420,7 +434,7 @@ export function canCommentOnAccomplishmentsReport(
  */
 export function canGenerateClientReport(
   viewer: User,
-  project: { companyId: string; ownerId: string; memberUserIds: string[] },
+  project: { companyId: string; ownerId: string; memberUserIds: string[]; additionalTeamLeadUserIds: string[] },
   allUsers: User[]
 ): boolean {
   return canAccessProject(viewer, project, allUsers);
@@ -711,14 +725,21 @@ export function canCreateWorkstreamInProject(viewer: User): boolean {
  * Workstream visibility gate: lead/team membership, mirroring the task visibility
  * gate's shape. The Internal/Non-billable workstream is always visible to everyone,
  * same special-casing as INTERNAL_COMPANY_ID in visibleCompanyIds.
+ *
+ * Phase 4 — `project` is this Workstream's own owning Project's management context (null for a
+ * legacy Company-only Workstream with no Project at all). A Primary or Additional Project Team
+ * Lead can always read a Workstream under a Project they manage, even when they're not personally
+ * its lead/team — mirrors the hosted SQL's new `can_manage_project(w.project_id)` read branch.
  */
 export function canAccessWorkstream(
   viewer: User,
   workstream: { leadUserId: string; teamUserIds: string[]; companyId: string },
+  project: { ownerId: string; additionalTeamLeadUserIds: string[] } | null,
   allUsers: User[]
 ): boolean {
   if (isSuperadmin(viewer)) return true;
   if (workstream.companyId === INTERNAL_COMPANY_ID) return true;
+  if (project != null && canManageProjectRecord(viewer, project)) return true;
   if (isSupervisor(viewer)) {
     const teamIds = new Set(allUsers.filter((u) => managesUser(viewer, u)).map((u) => u.id));
     return teamIds.has(workstream.leadUserId) || workstream.teamUserIds.some((id) => teamIds.has(id));
@@ -747,27 +768,23 @@ export function canExtendServiceActivities(
 
 /**
  * The real narrow boundary for "may this viewer configure which existing catalog Activities this
- * Project Service uses" (not `canManageWorkstreams`, which is broader — full Service edit). MVP
- * Simplification Pass (boss feedback) — Supervisor/Superadmin only; an Employee no longer
- * configures Activities even for a Service they lead, matching the same narrowing applied to
- * `canCreateWorkstreamInProject`. NOTE: the hosted Supabase `workstream_activities_write` RLS
- * policy still technically permits an Employee-as-lead write (this app-layer/mock-provider
- * narrowing was not mirrored into a new migration — this pass was not authorized to touch the
- * database — see the audit report's Section G for this known, explicitly-flagged parity gap).
+ * Project Service uses" (not `canManageWorkstreams`, which is broader — full Service edit).
+ *
+ * Phase 4 parity fix — this previously used its own broader `manages_user(lead) +
+ * canAccessProject` shape, which drifted out of sync with the hosted `workstream_activities_write`
+ * RLS policy once Phase 3's authorization-hardening migration narrowed that policy to
+ * `can_manage_project` (owner-only). Now mirrors it exactly: Admin, or an authorized Project Team
+ * Lead (Primary or Additional) via `canManageProjectRecord` — the Workstream's own lead, its team,
+ * and plain Project membership are none of them sufficient on their own. The caller is responsible
+ * for the separate Project-must-be-Active lifecycle guard (this function only decides the
+ * role/ownership boundary, matching every other Project-management predicate in this module).
  */
 export function canConfigureWorkstreamActivities(
   viewer: User,
-  workstream: { leadUserId: string },
-  allUsers: User[],
-  project: { companyId: string; ownerId: string; memberUserIds: string[] } | null
+  project: { ownerId: string; additionalTeamLeadUserIds: string[] } | null
 ): boolean {
   if (isSuperadmin(viewer)) return true;
-  if (isSupervisor(viewer)) {
-    const lead = allUsers.find((u) => u.id === workstream.leadUserId);
-    if (!lead || !managesUser(viewer, lead)) return false;
-    return project != null && canAccessProject(viewer, project, allUsers);
-  }
-  return false;
+  return project != null && canManageProjectRecord(viewer, project);
 }
 
 /**
@@ -781,16 +798,24 @@ export function canConfigureWorkstreamActivities(
  */
 export function canAccessProject(
   viewer: User,
-  project: { companyId: string; ownerId: string; memberUserIds: string[] },
+  project: { companyId: string; ownerId: string; memberUserIds: string[]; additionalTeamLeadUserIds: string[] },
   allUsers: User[]
 ): boolean {
   if (isSuperadmin(viewer)) return true;
   if (project.companyId === INTERNAL_COMPANY_ID) return true;
   if (isSupervisor(viewer)) {
     const teamIds = new Set(allUsers.filter((u) => managesUser(viewer, u)).map((u) => u.id));
-    return teamIds.has(project.ownerId) || project.memberUserIds.some((id) => teamIds.has(id));
+    return (
+      teamIds.has(project.ownerId) ||
+      project.memberUserIds.some((id) => teamIds.has(id)) ||
+      project.additionalTeamLeadUserIds.some((id) => teamIds.has(id))
+    );
   }
-  return project.ownerId === viewer.id || project.memberUserIds.includes(viewer.id);
+  return (
+    project.ownerId === viewer.id ||
+    project.memberUserIds.includes(viewer.id) ||
+    project.additionalTeamLeadUserIds.includes(viewer.id)
+  );
 }
 
 /**
@@ -817,21 +842,30 @@ export function canCreateProject(user: User): boolean {
 }
 
 /**
- * Phase 3 (CD-208) — the Project-management (write) boundary, mirroring the hosted
+ * Phase 3/4 (CD-208) — the Project-management (write) boundary, mirroring the hosted
  * `can_manage_project(target_project_id)` SQL function exactly. Deliberately narrower than
  * `canAccessProject` (read) — read visibility via direct-report ownership/membership does NOT
- * imply write authority. A Supervisor may manage a Project only when they are *literally* its
- * `ownerId` — never via `managesUser`/direct-report scope, never via `project_members`/
- * `projectRole` (data-only, never consulted), never via global Template staffing
- * (`service_team_leads`/`service_employees`, "Works In Templates"), and never via
- * `workstream.leadUserId` ("Project Template Lead" — Template-instance-scoped, not Project-scoped).
- * Those are all deliberately separate authorization axes — see `docs/domain-model.md`. Used for:
- * the Project Edit button/dialog, Add Template, Project Group/Tag edits reached through Project
- * editing, and every other Phase-3 Project-record mutation. Global list/create permissions
- * (`canManageProjects`, `canCreateProject`) stay separate on purpose.
+ * imply write authority. A Supervisor may manage a Project when they are literally its `ownerId`
+ * (Primary Team Lead) OR appear in `project_team_leads` (Additional Team Lead, Phase 4) — an
+ * Additional TL gets the exact same normal management authority as the Primary TL, with the sole
+ * exception of changing `ownerId` itself (Admin-only, see `update_project_record`). Never via
+ * `managesUser`/direct-report scope, never via `project_members`/`projectRole` (data-only, never
+ * consulted), never via global Template staffing (`service_team_leads`/`service_employees`, "Works
+ * In Templates"), and never via `workstream.leadUserId` ("Project Template Lead" —
+ * Template-instance-scoped, not Project-scoped). Those are all deliberately separate authorization
+ * axes — see `docs/domain-model.md`. Used for: the Project Edit button/dialog, Add Template, Project
+ * Group/Tag edits reached through Project editing, Project/Service staffing mutation, and every
+ * other Phase-3/4 Project-record mutation. Global list/create permissions (`canManageProjects`,
+ * `canCreateProject`) stay separate on purpose.
  */
-export function canManageProjectRecord(viewer: User, project: { ownerId: string }): boolean {
-  return isSuperadmin(viewer) || (isSupervisor(viewer) && project.ownerId === viewer.id);
+export function canManageProjectRecord(
+  viewer: User,
+  project: { ownerId: string; additionalTeamLeadUserIds: string[] }
+): boolean {
+  return (
+    isSuperadmin(viewer) ||
+    (isSupervisor(viewer) && (project.ownerId === viewer.id || project.additionalTeamLeadUserIds.includes(viewer.id)))
+  );
 }
 
 /**
@@ -876,7 +910,7 @@ export function canAccessDocumentRecord(
   doc: {
     taskId: string | null;
     task?: { assigneeIds: string[]; companyId: string };
-    project?: { companyId: string; ownerId: string; memberUserIds: string[] };
+    project?: { companyId: string; ownerId: string; memberUserIds: string[]; additionalTeamLeadUserIds: string[] };
   },
   allUsers: User[]
 ): boolean {
@@ -908,7 +942,7 @@ export function canManageDocument(
     uploadedById: string;
     taskId: string | null;
     task?: { assigneeIds: string[]; companyId: string };
-    project?: { companyId: string; ownerId: string; memberUserIds: string[] };
+    project?: { companyId: string; ownerId: string; memberUserIds: string[]; additionalTeamLeadUserIds: string[] };
   },
   allUsers: User[]
 ): boolean {

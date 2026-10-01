@@ -10,6 +10,10 @@ function memberUserIds(projectId: string): string[] {
   return db.projectMembers.filter((m) => m.projectId === projectId).map((m) => m.userId);
 }
 
+function additionalTeamLeadUserIds(projectId: string): string[] {
+  return db.projectTeamLeads.filter((tl) => tl.projectId === projectId).map((tl) => tl.userId);
+}
+
 function overlaps(userId: string, startAt: string, endAt: string, excludeVisitId: string | null): boolean {
   return visitOverlapsExisting(userId, startAt, endAt, excludeVisitId, db.visitEntries, db.timeEntries);
 }
@@ -45,7 +49,18 @@ export const mockVisitEntriesProvider: VisitEntriesProvider = {
   async createVisitEntry(viewer, input) {
     const project = db.projects.find((p) => p.id === input.projectId);
     if (!project) throw new Error("Project not found.");
-    if (!canAccessProject(viewer, { companyId: project.companyId, ownerId: project.ownerId, memberUserIds: memberUserIds(project.id) }, db.users)) {
+    if (
+      !canAccessProject(
+        viewer,
+        {
+          companyId: project.companyId,
+          ownerId: project.ownerId,
+          memberUserIds: memberUserIds(project.id),
+          additionalTeamLeadUserIds: additionalTeamLeadUserIds(project.id),
+        },
+        db.users
+      )
+    ) {
       throw new Error("You do not have access to plan a Visit for that Project.");
     }
     if (project.companyId === INTERNAL_COMPANY_ID) {

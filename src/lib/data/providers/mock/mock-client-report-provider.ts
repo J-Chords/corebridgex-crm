@@ -19,6 +19,10 @@ function projectMemberUserIds(projectId: string): string[] {
   return db.projectMembers.filter((m) => m.projectId === projectId).map((m) => m.userId);
 }
 
+function projectAdditionalTeamLeadUserIds(projectId: string): string[] {
+  return db.projectTeamLeads.filter((tl) => tl.projectId === projectId).map((tl) => tl.userId);
+}
+
 /**
  * Phase 9D — the Weekly Client Report content generator. Gathers already-real Tasks/TimeEntries/
  * confirmed-Daily-Update-entries/catalog data (Project-scoped exactly like the pre-9D algorithm:
@@ -193,7 +197,12 @@ export const mockClientReportProvider: ClientReportProvider = {
     if (
       !canGenerateClientReport(
         viewer,
-        { companyId: project.companyId, ownerId: project.ownerId, memberUserIds: projectMemberUserIds(project.id) },
+        {
+          companyId: project.companyId,
+          ownerId: project.ownerId,
+          memberUserIds: projectMemberUserIds(project.id),
+          additionalTeamLeadUserIds: projectAdditionalTeamLeadUserIds(project.id),
+        },
         db.users
       )
     ) {

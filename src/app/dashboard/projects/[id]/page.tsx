@@ -29,7 +29,13 @@ import {
   isProjectActiveForNewWork,
   projectNotActiveMessage,
 } from "@/lib/data/project-display";
-import { canConfigureWorkstreamActivities, canManageProjects, canManageProjectRecord, isEmployee } from "@/lib/data/permissions";
+import {
+  canConfigureWorkstreamActivities,
+  canManageProjects,
+  canManageProjectRecord,
+  canManageWorkstreams,
+  isEmployee,
+} from "@/lib/data/permissions";
 import { AddServiceActivitiesDialog } from "@/components/workstreams/add-service-activities-dialog";
 import type { WorkstreamWithRelations } from "@/lib/data/providers/workstreams-provider";
 import type { ProjectWithRelations } from "@/lib/data/providers/projects-provider";
@@ -190,6 +196,7 @@ function ServiceRow({
   openTaskCount,
   onConfigureActivities,
   onEdit,
+  onManageStaffing,
   onChanged,
 }: {
   workstream: WorkstreamWithRelations;
@@ -198,17 +205,22 @@ function ServiceRow({
   openTaskCount: number;
   onConfigureActivities: () => void;
   onEdit: () => void;
+  onManageStaffing: () => void;
   onChanged: () => void;
 }) {
   const activityCount = workstream.activities.length;
-  const canConfigure =
+  const projectManageContext = {
+    ownerId: project.ownerId,
+    additionalTeamLeadUserIds: project.additionalTeamLeads.map((u) => u.id),
+  };
+  const canConfigure = isProjectActiveForNewWork(project.status) && canConfigureWorkstreamActivities(user, projectManageContext);
+  // Phase 4 — a Team Lead (Primary or Additional) who isn't Admin has no access to the full
+  // Admin-only Edit dialog (WorkstreamLifecycleMenu stays gated by canManageWorkstreams, unchanged)
+  // but can still restaff a Service they manage through this narrower, staffing-only entry point.
+  const canManageStaffingOnly =
     isProjectActiveForNewWork(project.status) &&
-    canConfigureWorkstreamActivities(
-      user,
-      { leadUserId: workstream.leadUserId },
-      project.members,
-      { companyId: project.companyId, ownerId: project.ownerId, memberUserIds: project.members.map((m) => m.id) }
-    );
+    !canManageWorkstreams(user) &&
+    canManageProjectRecord(user, projectManageContext);
 
   const serviceName = workstreamDisplayHeading(workstream.name);
 
@@ -250,6 +262,20 @@ function ServiceRow({
                 }}
               >
                 <SlidersHorizontal /> View Activities
+              </Button>
+            )}
+            {canManageStaffingOnly && (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onManageStaffing();
+                }}
+              >
+                Manage Staffing
               </Button>
             )}
             <span
@@ -584,6 +610,9 @@ function LoadedProjectDetailPage({
   // Activities, never requires re-adding the Service itself.
   const [configureActivitiesFor, setConfigureActivitiesFor] = useState<WorkstreamWithRelations | null>(null);
   const [editingWorkstream, setEditingWorkstream] = useState<WorkstreamWithRelations | null>(null);
+  // Phase 4 — the narrow "staffing only" entry point for an authorized Project Team Lead who isn't
+  // Admin (Admin keeps using editingWorkstream's full edit dialog above).
+  const [staffingWorkstream, setStaffingWorkstream] = useState<WorkstreamWithRelations | null>(null);
   const [showArchivedServices, setShowArchivedServices] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [taskSearch, setTaskSearch] = useState("");
@@ -597,6 +626,34 @@ function LoadedProjectDetailPage({
   const [editingTask, setEditingTask] = useState<TaskWithRelations | null>(null);
   const [memberIds, setMemberIds] = useState<string[]>(() => project.members.map((m) => m.id));
   const [savingMembers, setSavingMembers] = useState(false);
+  // Phase 4 — Additional Team Leads. Mirrors the Members bulk-MultiSelect-plus-Save pattern above
+  // (reuses the existing UI shape rather than inventing a new one), but gated by
+  // canManageProjectRecord (Admin OR an authorized Project Team Lead), not Admin-only, and diffed
+  // against the new incremental add/remove RPCs rather than a bulk replace (Additional TLs are a
+  // dedicated relation, never folded into memberUserIds).
+  const [additionalTeamLeadIds, setAdditionalTeamLeadIds] = useState<string[]>(() =>
+    project.additionalTeamLeads.map((u) => u.id)
+  );
+  const [savingTeamLeads, setSavingTeamLeads] = useState(false);
+  // Phase 4 — incremental, TL-usable single Member add (separate from the Admin-only bulk
+  // MultiSelect+Save above, which stays untouched). `addMemberCandidate` is the pending pick.
+  const [addMemberCandidate, setAddMemberCandidate] = useState<string[]>([]);
+  const [savingAddMember, setSavingAddMember] = useState(false);
+  const [removingMemberId, setRemovingMemberId] = useState<string | null>(null);
+  // Phase 4 QA fix — the Additional Team Lead / Project Member pickers need every active
+  // Employee/Supervisor, unscoped by reporting line (the locked "no direct-report restriction"
+  // requirement) — deliberately NOT `assignableStaff` (team-scoped for its own existing uses:
+  // Company staff assignment, Workstream Lead/Team, which stay correctly restricted).
+  const [staffingCandidates, setStaffingCandidates] = useState<import("@/lib/data/types").User[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    projectsProvider.listProjectStaffingCandidates(user).then((result) => {
+      if (!cancelled) setStaffingCandidates(result);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
   // Project Final Pre-Acceptance Correction — Project Role/Responsibility editing. Reuses the
   // already-hosted `project_role` column + `set_project_member_role` RPC (Admin-only server-side)
   // via the existing `projectsProvider.setProjectMemberRole` method — no new migration/provider.
@@ -676,6 +733,65 @@ function LoadedProjectDetailPage({
     setMemberIds(project.members.map((m) => m.id));
   }, [project.members]);
 
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setAdditionalTeamLeadIds(project.additionalTeamLeads.map((u) => u.id));
+  }, [project.additionalTeamLeads]);
+
+  // Phase 4 — diffs the MultiSelect's new selection against the currently-known Additional TLs and
+  // calls the narrow add/remove RPCs for exactly what changed (never a bulk replace — this is a
+  // dedicated relation, not memberUserIds).
+  async function handleSaveTeamLeads() {
+    const before = new Set(project.additionalTeamLeads.map((u) => u.id));
+    const after = new Set(additionalTeamLeadIds);
+    const toAdd = additionalTeamLeadIds.filter((id) => !before.has(id));
+    const toRemove = [...before].filter((id) => !after.has(id));
+    setSavingTeamLeads(true);
+    try {
+      for (const userId of toAdd) {
+        await projectsProvider.addProjectTeamLead(user, project.id, userId);
+      }
+      for (const userId of toRemove) {
+        await projectsProvider.removeProjectTeamLead(user, project.id, userId);
+      }
+      refreshProject();
+      toastManager.add({ description: "Team Leads updated" });
+    } catch (err) {
+      toastManager.add({ description: err instanceof Error ? err.message : "Couldn't update Team Leads." });
+    } finally {
+      setSavingTeamLeads(false);
+    }
+  }
+
+  // Phase 4 — the narrow, TL-usable single Member add (Admin's own bulk MultiSelect+Save below is
+  // separate and untouched).
+  async function handleAddMember() {
+    const userId = addMemberCandidate[0];
+    if (!userId) return;
+    setSavingAddMember(true);
+    try {
+      await projectsProvider.addProjectMember(user, project.id, userId);
+      setAddMemberCandidate([]);
+      refreshProject();
+    } catch (err) {
+      toastManager.add({ description: err instanceof Error ? err.message : "Couldn't add member." });
+    } finally {
+      setSavingAddMember(false);
+    }
+  }
+
+  async function handleRemoveMember(userId: string) {
+    setRemovingMemberId(userId);
+    try {
+      await projectsProvider.removeProjectMember(user, project.id, userId);
+      refreshProject();
+    } catch (err) {
+      toastManager.add({ description: err instanceof Error ? err.message : "Couldn't remove member." });
+    } finally {
+      setRemovingMemberId(null);
+    }
+  }
+
   async function handleSaveMembers() {
     setSavingMembers(true);
     try {
@@ -731,9 +847,25 @@ function LoadedProjectDetailPage({
     });
   }
 
-  // Phase 3 (CD-208) section 32/39 — Admin always; a Team Lead only when they are literally this
-  // Project's owner (canManageProjectRecord already covers both branches).
-  const canAddService = canManageProjectRecord(user, project);
+  // Phase 3/4 (CD-208) section 32/39 — Admin always; a Team Lead only when they are literally this
+  // Project's owner OR one of its Additional Team Leads (canManageProjectRecord already covers
+  // every branch). `projectForManage` adapts the full ProjectWithRelations' resolved
+  // `additionalTeamLeads: User[]` into the thin `additionalTeamLeadUserIds: string[]` shape every
+  // permission helper expects, mirroring `memberUserIds`'s own convention.
+  const projectForManage = { ...project, additionalTeamLeadUserIds: project.additionalTeamLeads.map((u) => u.id) };
+  const canAddService = canManageProjectRecord(user, projectForManage);
+  const canManageStaffing = canManageProjectRecord(user, projectForManage) && isProjectActiveForNewWork(project.status);
+
+  // Phase 4 QA fix — candidate pools sourced from `staffingCandidates` (every active
+  // Employee/Supervisor, unscoped by reporting line — see its own fetch above), never
+  // `assignableStaff` (team-scoped, correctly so for Company staff assignment/Workstream Lead-Team,
+  // which stay unaffected and still use `assignableStaff` directly elsewhere in this file).
+  const teamLeadCandidates = staffingCandidates.filter(
+    (s) => s.active && s.role === "supervisor" && s.id !== project.ownerId
+  );
+  const memberCandidates = staffingCandidates.filter(
+    (s) => s.active && (s.role === "employee" || s.role === "supervisor") && !memberIds.includes(s.id)
+  );
 
   return (
     <div className="flex flex-col gap-5">
@@ -779,7 +911,7 @@ function LoadedProjectDetailPage({
               </Button>
             )
           )}
-          {canManageProjectRecord(user, project) && (
+          {canManageProjectRecord(user, projectForManage) && (
             <Button size="sm" variant="outline" onClick={() => setEditOpen(true)}>
               <Pencil /> Edit
             </Button>
@@ -833,7 +965,7 @@ function LoadedProjectDetailPage({
             projectGroups={projectGroups}
             company={company}
             clientContacts={clientContacts}
-            canEdit={canManageProjectRecord(user, project)}
+            canEdit={canManageProjectRecord(user, projectForManage)}
             onEditCompany={() => setEditCompanyOpen(true)}
             onAddContact={() => setEditContact("new")}
             onEditContact={(contact) => setEditContact(contact)}
@@ -946,6 +1078,7 @@ function LoadedProjectDetailPage({
                 openTaskCount={tasks.filter((t) => t.workstreamId === workstream.id && !isTaskClosed(t.status)).length}
                 onConfigureActivities={() => setConfigureActivitiesFor(workstream)}
                 onEdit={() => setEditingWorkstream(workstream)}
+                onManageStaffing={() => setStaffingWorkstream(workstream)}
                 onChanged={refreshWorkstreams}
               />
             ))}
@@ -978,6 +1111,7 @@ function LoadedProjectDetailPage({
                       openTaskCount={tasks.filter((t) => t.workstreamId === workstream.id && !isTaskClosed(t.status)).length}
                       onConfigureActivities={() => setConfigureActivitiesFor(workstream)}
                       onEdit={() => setEditingWorkstream(workstream)}
+                      onManageStaffing={() => setStaffingWorkstream(workstream)}
                       onChanged={refreshWorkstreams}
                     />
                   ))}
@@ -989,6 +1123,65 @@ function LoadedProjectDetailPage({
       )}
 
       {tab === "members" && (
+        <>
+        {/* Phase 4 — Project Leadership: Primary Team Lead (projects.owner_id, Admin-only to
+            change — see the header Edit button / Administrative Details) plus Additional Team
+            Leads (project_team_leads), each with the exact same normal Project-management
+            authority as the Primary TL. Visible to everyone with read access; the MultiSelect/Save
+            controls only render for an authorized manager (Admin or Primary/Additional TL) on an
+            Active Project. */}
+        <Card>
+          <CardHeader className="flex items-center justify-between">
+            <CardTitle className="text-base">Project Leadership</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4">
+            <div className="flex items-center gap-2.5">
+              <Avatar className="size-7 ring-2 ring-card">
+                <AvatarFallback className="text-xs">{initials(project.owner.fullName)}</AvatarFallback>
+              </Avatar>
+              <div className="flex flex-col">
+                <span className="text-sm font-medium">{project.owner.fullName} (Primary Team Lead)</span>
+                <span className="text-xs text-muted-foreground">{ROLE_LABELS[project.owner.role]}</span>
+              </div>
+            </div>
+            {canManageStaffing && (
+              <div className="flex flex-col gap-2 rounded-md border p-3">
+                <span className="font-mono text-[10px] tracking-wide text-muted-foreground uppercase">
+                  Additional Team Leads
+                </span>
+                <MultiSelect
+                  options={teamLeadCandidates.map((s) => ({ id: s.id, label: s.fullName, sublabel: s.email }))}
+                  value={additionalTeamLeadIds}
+                  onChange={setAdditionalTeamLeadIds}
+                  placeholder="No Additional Team Leads"
+                  searchPlaceholder="Search Team Leads…"
+                  aria-label="Additional Team Leads"
+                />
+                <div className="flex justify-end">
+                  <Button size="sm" disabled={savingTeamLeads} onClick={handleSaveTeamLeads}>
+                    {savingTeamLeads ? "Saving…" : "Save Team Leads"}
+                  </Button>
+                </div>
+              </div>
+            )}
+            {!canManageStaffing && (
+              <div className="flex flex-col gap-1">
+                {project.additionalTeamLeads.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No Additional Team Leads.</p>
+                ) : (
+                  project.additionalTeamLeads.map((tl) => (
+                    <div key={tl.id} className="flex items-center gap-2.5">
+                      <Avatar className="size-7 ring-2 ring-card">
+                        <AvatarFallback className="text-xs">{initials(tl.fullName)}</AvatarFallback>
+                      </Avatar>
+                      <span className="text-sm">{tl.fullName}</span>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
         <Card>
           <CardHeader className="flex items-center justify-between">
             <CardTitle className="text-base">Members</CardTitle>
@@ -1007,6 +1200,25 @@ function LoadedProjectDetailPage({
                 <div className="flex justify-end">
                   <Button size="sm" disabled={savingMembers} onClick={handleSaveMembers}>
                     {savingMembers ? "Saving…" : "Save members"}
+                  </Button>
+                </div>
+              </div>
+            )}
+            {/* Phase 4 — the narrow, TL-usable single-add control (Admin's own bulk MultiSelect
+                above stays untouched and Admin-only). */}
+            {canManageStaffing && !canManageProjects(user) && (
+              <div className="flex flex-col gap-2 rounded-md border p-3">
+                <MultiSelect
+                  options={memberCandidates.map((s) => ({ id: s.id, label: s.fullName, sublabel: s.email }))}
+                  value={addMemberCandidate}
+                  onChange={(ids) => setAddMemberCandidate(ids.slice(-1))}
+                  placeholder="Add a member…"
+                  searchPlaceholder="Search people…"
+                  aria-label="Add a Project member"
+                />
+                <div className="flex justify-end">
+                  <Button size="sm" disabled={savingAddMember || addMemberCandidate.length === 0} onClick={handleAddMember}>
+                    {savingAddMember ? "Adding…" : "Add member"}
                   </Button>
                 </div>
               </div>
@@ -1036,15 +1248,27 @@ function LoadedProjectDetailPage({
                           )}
                         </div>
                       </div>
-                      {canManageProjects(user) && !isEditingRole && (
-                        <button
-                          type="button"
-                          onClick={() => startEditingRole(member.id, member.projectRole)}
-                          className="shrink-0 text-xs text-muted-foreground hover:underline"
-                        >
-                          {member.projectRole ? "Edit responsibility" : "+ Add responsibility"}
-                        </button>
-                      )}
+                      <div className="flex shrink-0 items-center gap-2.5">
+                        {canManageProjects(user) && !isEditingRole && (
+                          <button
+                            type="button"
+                            onClick={() => startEditingRole(member.id, member.projectRole)}
+                            className="text-xs text-muted-foreground hover:underline"
+                          >
+                            {member.projectRole ? "Edit responsibility" : "+ Add responsibility"}
+                          </button>
+                        )}
+                        {canManageStaffing && (
+                          <button
+                            type="button"
+                            disabled={removingMemberId === member.id}
+                            onClick={() => handleRemoveMember(member.id)}
+                            className="text-xs text-muted-foreground hover:underline disabled:opacity-50"
+                          >
+                            {removingMemberId === member.id ? "Removing…" : "Remove"}
+                          </button>
+                        )}
+                      </div>
                     </div>
                     {isEditingRole && (
                       <div className="mt-1.5 ml-9.5 flex items-center gap-1.5">
@@ -1069,6 +1293,7 @@ function LoadedProjectDetailPage({
             </div>
           </CardContent>
         </Card>
+        </>
       )}
 
       {tab === "comments" && (
@@ -1150,6 +1375,21 @@ function LoadedProjectDetailPage({
         />
       )}
 
+      {/* Phase 4 — the narrow staffing-only dialog for an authorized Project Team Lead who isn't
+          Admin (see ServiceRow's canManageStaffingOnly / "Manage Staffing" button above). */}
+      {company && staffingWorkstream && (
+        <WorkstreamFormDialog
+          open={Boolean(staffingWorkstream)}
+          onOpenChange={(open) => !open && setStaffingWorkstream(null)}
+          mode="edit"
+          staffingOnly
+          company={company}
+          projectId={project.id}
+          workstream={staffingWorkstream}
+          onSaved={refreshWorkstreams}
+        />
+      )}
+
       <GenerateClientReportDialog
         open={generateReportOpen}
         onOpenChange={setGenerateReportOpen}
@@ -1165,7 +1405,7 @@ function LoadedProjectDetailPage({
         />
       )}
 
-      {company && canManageProjectRecord(user, project) && (
+      {company && canManageProjectRecord(user, projectForManage) && (
         <CompanyFormDialog
           open={editCompanyOpen}
           onOpenChange={setEditCompanyOpen}
@@ -1175,7 +1415,7 @@ function LoadedProjectDetailPage({
         />
       )}
 
-      {company && canManageProjectRecord(user, project) && editContact !== null && (
+      {company && canManageProjectRecord(user, projectForManage) && editContact !== null && (
         <ContactFormDialog
           open
           onOpenChange={(next) => !next && setEditContact(null)}
@@ -1213,7 +1453,7 @@ function LoadedProjectDetailPage({
         />
       )}
 
-      {canManageProjectRecord(user, project) && (
+      {canManageProjectRecord(user, projectForManage) && (
         <ProjectFormDialog open={editOpen} onOpenChange={setEditOpen} mode="edit" project={project} onSaved={refreshProject} />
       )}
     </div>

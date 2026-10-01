@@ -7,12 +7,21 @@ function memberUserIds(projectId: string): string[] {
   return db.projectMembers.filter((m) => m.projectId === projectId).map((m) => m.userId);
 }
 
+function additionalTeamLeadUserIds(projectId: string): string[] {
+  return db.projectTeamLeads.filter((tl) => tl.projectId === projectId).map((tl) => tl.userId);
+}
+
 function requireProjectAccess(viewer: User, projectId: string) {
   const project = db.projects.find((p) => p.id === projectId);
   if (!project) throw new Error("Project not found.");
   const accessible = canAccessProject(
     viewer,
-    { companyId: project.companyId, ownerId: project.ownerId, memberUserIds: memberUserIds(project.id) },
+    {
+      companyId: project.companyId,
+      ownerId: project.ownerId,
+      memberUserIds: memberUserIds(project.id),
+      additionalTeamLeadUserIds: additionalTeamLeadUserIds(project.id),
+    },
     db.users
   );
   if (!accessible) throw new Error("You don't have access to this project.");

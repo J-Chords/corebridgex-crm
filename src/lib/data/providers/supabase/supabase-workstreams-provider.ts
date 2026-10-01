@@ -414,10 +414,26 @@ export const supabaseWorkstreamsProvider: WorkstreamsProvider = {
   async setWorkstreamActivities(_viewer, workstreamId, activityIds) {
     // Deliberately never touches the `workstreams` row itself (that's `workstreams_update` RLS,
     // Supervisor/Superadmin only) — only `workstream_activities`, whose own RLS
-    // (`workstream_activities_write`) already correctly allows an Employee who leads this specific
-    // Workstream. `enforce_workstream_activity_service_match` (a trigger on that table) is the real
+    // (`workstream_activities_write`) already enforces the Phase-4 can_manage_project boundary
+    // directly. `enforce_workstream_activity_service_match` (a trigger on that table) is the real
     // "activities belong to this service" enforcement, same as `updateWorkstream`'s own path.
     await syncActivities(workstreamId, activityIds);
+  },
+
+  // Phase 4 — the narrow "change this Service's Lead/Team" RPC, kept separate from
+  // `updateWorkstream` (Admin-only direct-table path above) so an authorized Project Team Lead can
+  // staff a Service they manage without the broader Admin edit surface. The RPC re-validates
+  // can_manage_project/Active-lifecycle/target-eligibility itself server-side.
+  async updateWorkstreamStaffing(_viewer, workstreamId, leadUserId, teamUserIds) {
+    const supabase = createClient();
+    const { data, error } = await supabase.rpc("update_workstream_staffing", {
+      p_workstream_id: workstreamId,
+      p_lead_user_id: leadUserId,
+      p_team_user_ids: teamUserIds,
+    });
+    if (error) throw new Error(error.message);
+    const [hydrated] = await hydrate([toWorkstream(data)]);
+    return hydrated;
   },
 
   async createActivityForWorkstream(_viewer, workstreamId, name) {

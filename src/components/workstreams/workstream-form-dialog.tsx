@@ -53,6 +53,13 @@ interface WorkstreamFormDialogProps {
   onSaved: () => void;
   /** Fires with the newly-created workstream on create — lets an embedded caller (e.g. the task form's inline "+ New workstream") pick it up directly instead of re-fetching. Never fires on edit. */
   onCreated?: (workstream: WorkstreamWithRelations) => void;
+  /** Phase 4 — the narrow "change this Service's Lead/Team only" mode for an authorized Project
+   * Team Lead (Primary or Additional) who isn't Admin. Only meaningful with mode="edit" and a real
+   * `workstream`. Hides every other field (Template/description/schedule/recurrence/activities —
+   * all Admin-only, unchanged) and submits through `updateWorkstreamStaffing` instead of
+   * `updateWorkstream`, so a Team Lead never gains the broader Admin edit surface just to restaff a
+   * Service they already manage. */
+  staffingOnly?: boolean;
 }
 
 function emptyForm(defaultLeadId: string) {
@@ -82,6 +89,7 @@ export function WorkstreamFormDialog({
   workstream,
   onSaved,
   onCreated,
+  staffingOnly = false,
 }: WorkstreamFormDialogProps) {
   const { user } = useAuth();
   const { assignableStaff, serviceLines } = useCompanyLookups();
@@ -160,7 +168,8 @@ export function WorkstreamFormDialog({
   const activityRequired = form.serviceLineId !== NO_SERVICE_LINE && activityDepartments.length > 0;
   const activitiesSatisfied = !activityRequired || form.activityIds.length > 0;
 
-  const canSubmit = !isSubmitting && form.leadUserId.length > 0 && serviceSatisfied && activitiesSatisfied;
+  const canSubmit =
+    !isSubmitting && form.leadUserId.length > 0 && (staffingOnly || (serviceSatisfied && activitiesSatisfied));
 
   // Cmd/Ctrl+Enter submits from anywhere in the panel, guarded by the same validity check the submit
   // button itself uses — same document-level-listener pattern the Task form panel uses, since a
@@ -198,6 +207,17 @@ export function WorkstreamFormDialog({
     setError(null);
     setIsSubmitting(true);
     try {
+      if (staffingOnly && workstream) {
+        await workstreamsProvider.updateWorkstreamStaffing(
+          user,
+          workstream.id,
+          form.leadUserId,
+          isEmployee(user) ? [] : form.teamUserIds
+        );
+        onSaved();
+        onOpenChange(false);
+        return;
+      }
       const serviceLineId = form.serviceLineId === NO_SERVICE_LINE ? null : form.serviceLineId;
       const input = {
         name: deriveWorkstreamName(selectedServiceLine?.name ?? null, form.qualifier),
@@ -244,15 +264,22 @@ export function WorkstreamFormDialog({
     <FormDialog
       open={open}
       onOpenChange={onOpenChange}
-      srTitle={mode === "create" ? `New template for ${company.name}` : `Editing "${workstream?.name ?? "this template"}"`}
+      srTitle={
+        staffingOnly
+          ? `Manage staffing for "${workstream?.name ?? "this template"}"`
+          : mode === "create"
+            ? `New template for ${company.name}`
+            : `Editing "${workstream?.name ?? "this template"}"`
+      }
     >
       <form onSubmit={handleSubmit} className="flex h-full min-h-0 flex-col">
         <FormDrawerHeader
-          title={mode === "create" ? "New Template" : "Edit Template"}
+          title={staffingOnly ? "Manage Staffing" : mode === "create" ? "New Template" : "Edit Template"}
           context={company.name}
           secondaryContext={company.brand ? `Partner brand: ${company.brand.name}` : "No Brand set for this client yet"}
         />
         <FormDrawerBody>
+          {!staffingOnly && (
           <FormDrawerSection label="Template">
             <div className="flex flex-col gap-1.5">
               <Select
@@ -307,6 +334,7 @@ export function WorkstreamFormDialog({
               className="min-h-0 resize-none rounded-none border-0 bg-transparent px-0 py-1 text-sm shadow-none focus-visible:ring-0"
             />
           </FormDrawerSection>
+          )}
 
           <FormDialogColumns>
             <FormDrawerSection label="Ownership">
@@ -346,6 +374,7 @@ export function WorkstreamFormDialog({
               )}
             </FormDrawerSection>
 
+            {!staffingOnly && (
             <FormDrawerSection label="Schedule">
               <FormDrawerField label="Status">
                 <WorkstreamStatusPicker value={form.status} onChange={(status) => setForm((p) => ({ ...p, status }))} />
@@ -370,8 +399,10 @@ export function WorkstreamFormDialog({
                 Start/end are both optional — an ongoing template doesn&apos;t need a fixed end date.
               </p>
             </FormDrawerSection>
+            )}
           </FormDialogColumns>
 
+          {!staffingOnly && (
           <FormDrawerSection label="Recurrence">
             <label className="flex items-center justify-between gap-4 rounded-lg border bg-muted/20 p-3">
               <div className="flex flex-col gap-0.5">
@@ -444,6 +475,7 @@ export function WorkstreamFormDialog({
               </FormDrawerPropertyGrid>
             )}
           </FormDrawerSection>
+          )}
 
           {!isEmployee(user) && (
             <FormDrawerSection label="Project Template Team">
@@ -462,6 +494,7 @@ export function WorkstreamFormDialog({
             </FormDrawerSection>
           )}
 
+          {!staffingOnly && (
           <FormDrawerSection
             label={
               selectedServiceLine
@@ -501,6 +534,7 @@ export function WorkstreamFormDialog({
               </>
             )}
           </FormDrawerSection>
+          )}
 
           {error && (
             <Alert variant="destructive">

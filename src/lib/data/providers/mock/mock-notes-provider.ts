@@ -8,11 +8,12 @@ function taskAssigneeIds(taskId: string): string[] {
 }
 
 /** Phase 3 (CD-208) parity fix — see `canAccessCompany`'s own doc comment. */
-function projectsForCompanyAccess(): { companyId: string; ownerId: string; memberUserIds: string[] }[] {
+function projectsForCompanyAccess(): { companyId: string; ownerId: string; memberUserIds: string[]; additionalTeamLeadUserIds: string[] }[] {
   return db.projects.map((p) => ({
     companyId: p.companyId,
     ownerId: p.ownerId,
     memberUserIds: db.projectMembers.filter((m) => m.projectId === p.id).map((m) => m.userId),
+    additionalTeamLeadUserIds: db.projectTeamLeads.filter((tl) => tl.projectId === p.id).map((tl) => tl.userId),
   }));
 }
 

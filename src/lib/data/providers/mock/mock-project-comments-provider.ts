@@ -13,6 +13,10 @@ function memberUserIds(projectId: string): string[] {
   return db.projectMembers.filter((m) => m.projectId === projectId).map((m) => m.userId);
 }
 
+function additionalTeamLeadUserIds(projectId: string): string[] {
+  return db.projectTeamLeads.filter((tl) => tl.projectId === projectId).map((tl) => tl.userId);
+}
+
 function taskAssigneeIds(taskId: string): string[] {
   return db.taskAssignees.filter((ta) => ta.taskId === taskId).map((ta) => ta.userId);
 }
@@ -26,7 +30,12 @@ function taskContext(taskId: string) {
 function projectContext(projectId: string) {
   const project = db.projects.find((p) => p.id === projectId);
   if (!project) return null;
-  return { companyId: project.companyId, ownerId: project.ownerId, memberUserIds: memberUserIds(projectId) };
+  return {
+    companyId: project.companyId,
+    ownerId: project.ownerId,
+    memberUserIds: memberUserIds(projectId),
+    additionalTeamLeadUserIds: additionalTeamLeadUserIds(projectId),
+  };
 }
 
 function documentContext(documentId: string) {

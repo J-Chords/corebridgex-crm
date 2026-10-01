@@ -7,10 +7,11 @@ import type {
   ProjectTemplateSelection,
 } from "../projects-provider";
 import type { WorkstreamWithRelations } from "../workstreams-provider";
-import type { Project, ProjectGroup, ProjectStatus, ProjectTrashSettings, User } from "../../types";
-import { canAccessProject, canManageProjects, canManageProjectRecord, canCreateProject, isSuperadmin, isSupervisor } from "../../permissions";
+import type { Project, ProjectGroup, ProjectStatus, ProjectTeamLead, ProjectTrashSettings, User } from "../../types";
+import { canAccessProject, canManageProjects, canManageProjectRecord, canCreateProject, isEmployee, isSuperadmin, isSupervisor } from "../../permissions";
 import { INTERNAL_COMPANY_ID } from "../../constants";
 import { isTaskClosed } from "../../task-display";
+import { isProjectActiveForNewWork, projectNotActiveMessage } from "../../project-display";
 import { db } from "./mock-db";
 import { mockCompaniesProvider } from "./mock-companies-provider";
 import { mockWorkstreamsProvider } from "./mock-workstreams-provider";
@@ -21,9 +22,18 @@ function requireAdmin(viewer: User) {
   }
 }
 
-function requireManageRecord(viewer: User, project: { ownerId: string }) {
+function requireManageRecord(viewer: User, project: { ownerId: string; additionalTeamLeadUserIds: string[] }) {
   if (!canManageProjectRecord(viewer, project)) {
     throw new Error("You don't have permission to edit this project.");
+  }
+}
+
+/** Phase 4 — staffing mutations (Additional TL / Member add-remove, Service Lead/Team) require the
+ * Project to be Active, same "new operational work" boundary `create_workstream`/
+ * `applyProjectTemplates` already enforce. */
+function requireActiveForStaffing(project: { status: ProjectStatus }) {
+  if (!isProjectActiveForNewWork(project.status)) {
+    throw new Error(projectNotActiveMessage(project.status));
   }
 }
 
@@ -85,6 +95,11 @@ function memberUserIds(projectId: string): string[] {
   return db.projectMembers.filter((m) => m.projectId === projectId).map((m) => m.userId);
 }
 
+/** Phase 4 — `project_team_leads` lookup, mirroring `memberUserIds`'s own shape exactly. */
+function additionalTeamLeadUserIds(projectId: string): string[] {
+  return db.projectTeamLeads.filter((tl) => tl.projectId === projectId).map((tl) => tl.userId);
+}
+
 function taskSummaryFor(projectId: string): ProjectTaskSummary {
   const workstreamIds = db.workstreams.filter((w) => w.projectId === projectId).map((w) => w.id);
   const tasks = db.tasks.filter((t) => workstreamIds.includes(t.workstreamId));
@@ -127,6 +142,10 @@ function toProjectWithRelations(project: Project): ProjectWithRelations | null {
     })
     .filter((u): u is User & { projectRole: string | null } => u !== null);
 
+  const additionalTeamLeads = additionalTeamLeadUserIds(project.id)
+    .map((userId) => db.users.find((u) => u.id === userId))
+    .filter((u): u is User => u !== undefined);
+
   const partnerBrand = project.partnerBrandId ? (db.brands.find((b) => b.id === project.partnerBrandId) ?? null) : null;
 
   return {
@@ -138,6 +157,7 @@ function toProjectWithRelations(project: Project): ProjectWithRelations | null {
     createdBy,
     members,
     memberCount: members.length,
+    additionalTeamLeads,
     workstreamCount,
     services: servicesFor(project.id),
     tasks,
@@ -173,7 +193,18 @@ function syncMembers(projectId: string, userIds: string[]) {
 export const mockProjectsProvider: ProjectsProvider = {
   async listProjects(viewer) {
     return db.projects
-      .filter((p) => canAccessProject(viewer, { companyId: p.companyId, ownerId: p.ownerId, memberUserIds: memberUserIds(p.id) }, db.users))
+      .filter((p) =>
+        canAccessProject(
+          viewer,
+          {
+            companyId: p.companyId,
+            ownerId: p.ownerId,
+            memberUserIds: memberUserIds(p.id),
+            additionalTeamLeadUserIds: additionalTeamLeadUserIds(p.id),
+          },
+          db.users
+        )
+      )
       .map(toProjectWithRelations)
       .filter((p): p is ProjectWithRelations => p !== null)
       .sort((a, b) => a.name.localeCompare(b.name));
@@ -184,7 +215,12 @@ export const mockProjectsProvider: ProjectsProvider = {
     if (!project) return null;
     const accessible = canAccessProject(
       viewer,
-      { companyId: project.companyId, ownerId: project.ownerId, memberUserIds: memberUserIds(project.id) },
+      {
+        companyId: project.companyId,
+        ownerId: project.ownerId,
+        memberUserIds: memberUserIds(project.id),
+        additionalTeamLeadUserIds: additionalTeamLeadUserIds(project.id),
+      },
       db.users
     );
     if (!accessible) return null;
@@ -319,7 +355,7 @@ export const mockProjectsProvider: ProjectsProvider = {
   async updateProject(viewer, id, input: ProjectInput) {
     const existing = db.projects.find((p) => p.id === id);
     if (!existing) throw new Error("Project not found.");
-    requireManageRecord(viewer, existing);
+    requireManageRecord(viewer, { ...existing, additionalTeamLeadUserIds: additionalTeamLeadUserIds(id) });
     const admin = isSuperadmin(viewer);
     if (admin && !input.name.trim()) throw new Error("Title can't be empty.");
     const effectiveOwnerId = admin ? (input.ownerId ?? existing.ownerId) : existing.ownerId;
@@ -348,6 +384,15 @@ export const mockProjectsProvider: ProjectsProvider = {
     // Phase 3 (CD-208) section 29 — Team Lead must not gain new Member-staffing rights; member sync
     // stays Admin-only (unchanged from before).
     if (admin) syncMembers(id, input.memberUserIds);
+    // Phase 4 — Primary TL normalization: if Admin just changed owner_id to someone who already
+    // held an Additional TL row on this Project, that row is now redundant (Primary TL authority
+    // subsumes it) and is removed atomically. The PREVIOUS owner is never auto-converted to
+    // Additional TL — they simply lose Project-management authority unless separately re-added.
+    if (admin && effectiveOwnerId !== existing.ownerId) {
+      db.projectTeamLeads = db.projectTeamLeads.filter(
+        (tl) => !(tl.projectId === id && tl.userId === effectiveOwnerId)
+      );
+    }
 
     return toProjectWithRelations(updated)!;
   },
@@ -355,7 +400,7 @@ export const mockProjectsProvider: ProjectsProvider = {
   async applyProjectTemplates(viewer, projectId, templates) {
     const project = db.projects.find((p) => p.id === projectId);
     if (!project) throw new Error("Project not found.");
-    requireManageRecord(viewer, project);
+    requireManageRecord(viewer, { ...project, additionalTeamLeadUserIds: additionalTeamLeadUserIds(projectId) });
     return applyTemplatesInternal(viewer, projectId, templates);
   },
 
@@ -366,6 +411,79 @@ export const mockProjectsProvider: ProjectsProvider = {
     db.projectMembers = db.projectMembers.map((m) =>
       m.projectId === projectId && m.userId === userId ? { ...m, projectRole: projectRole?.trim() || null } : m
     );
+  },
+
+  // Phase 4 — incremental Project staffing. All four gated by canManageProjectRecord (Admin, or an
+  // authorized Project Team Lead — Primary or Additional) and require the Project to be Active.
+  async addProjectTeamLead(viewer, projectId, userId) {
+    const project = db.projects.find((p) => p.id === projectId);
+    if (!project) throw new Error("Project not found.");
+    requireManageRecord(viewer, { ...project, additionalTeamLeadUserIds: additionalTeamLeadUserIds(projectId) });
+    requireActiveForStaffing(project);
+    const target = db.users.find((u) => u.id === userId);
+    if (!target || !target.active || target.role !== "supervisor") {
+      throw new Error("Only an active Team Lead can be added as an Additional Team Lead.");
+    }
+    if (userId === project.ownerId) {
+      throw new Error("This user is already the Primary Team Lead.");
+    }
+    if (!db.projectTeamLeads.some((tl) => tl.projectId === projectId && tl.userId === userId)) {
+      const row: ProjectTeamLead = { projectId, userId, createdAt: new Date().toISOString(), createdById: viewer.id };
+      db.projectTeamLeads = [...db.projectTeamLeads, row];
+    }
+    return toProjectWithRelations(project)!;
+  },
+
+  async removeProjectTeamLead(viewer, projectId, userId) {
+    const project = db.projects.find((p) => p.id === projectId);
+    if (!project) throw new Error("Project not found.");
+    requireManageRecord(viewer, { ...project, additionalTeamLeadUserIds: additionalTeamLeadUserIds(projectId) });
+    requireActiveForStaffing(project);
+    if (!db.projectTeamLeads.some((tl) => tl.projectId === projectId && tl.userId === userId)) {
+      throw new Error("That user is not an Additional Team Lead on this project.");
+    }
+    // An Additional TL may remove another Additional TL, but never themselves — Admin and the
+    // Primary TL have no such restriction (and the Primary TL can never hold an Additional-TL row
+    // on their own Project in the first place, see addProjectTeamLead's own-owner guard above).
+    const callerIsPlainAdditionalTl = isSupervisor(viewer) && viewer.id !== project.ownerId;
+    if (callerIsPlainAdditionalTl && userId === viewer.id) {
+      throw new Error("You can't remove yourself as an Additional Team Lead.");
+    }
+    db.projectTeamLeads = db.projectTeamLeads.filter((tl) => !(tl.projectId === projectId && tl.userId === userId));
+    return toProjectWithRelations(project)!;
+  },
+
+  async addProjectMember(viewer, projectId, userId) {
+    const project = db.projects.find((p) => p.id === projectId);
+    if (!project) throw new Error("Project not found.");
+    requireManageRecord(viewer, { ...project, additionalTeamLeadUserIds: additionalTeamLeadUserIds(projectId) });
+    requireActiveForStaffing(project);
+    const target = db.users.find((u) => u.id === userId);
+    if (!target || !target.active || (target.role !== "employee" && target.role !== "supervisor")) {
+      throw new Error("Only an active Employee or Team Lead can be added as a Project Member.");
+    }
+    if (!db.projectMembers.some((m) => m.projectId === projectId && m.userId === userId)) {
+      db.projectMembers = [...db.projectMembers, { projectId, userId, projectRole: null }];
+    }
+    return toProjectWithRelations(project)!;
+  },
+
+  async removeProjectMember(viewer, projectId, userId) {
+    const project = db.projects.find((p) => p.id === projectId);
+    if (!project) throw new Error("Project not found.");
+    requireManageRecord(viewer, { ...project, additionalTeamLeadUserIds: additionalTeamLeadUserIds(projectId) });
+    requireActiveForStaffing(project);
+    // Removes only the project_members row — any Primary/Additional Team Lead authority the same
+    // person holds is untouched, matching project_team_leads' own independent relation.
+    db.projectMembers = db.projectMembers.filter((m) => !(m.projectId === projectId && m.userId === userId));
+    return toProjectWithRelations(project)!;
+  },
+
+  // Phase 4 QA fix — deliberately NOT assignableStaffFor (team-scoped; stays that way for its own
+  // existing uses). Every active Employee/Supervisor, unscoped by reporting line.
+  async listProjectStaffingCandidates(viewer) {
+    if (isEmployee(viewer)) return [];
+    return db.users.filter((u) => u.active && (u.role === "employee" || u.role === "supervisor"));
   },
 
   async getTrashSettings() {
