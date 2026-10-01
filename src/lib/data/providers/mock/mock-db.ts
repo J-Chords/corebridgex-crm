@@ -31,6 +31,7 @@ import type {
   Document,
   ProjectComment,
   ProjectIssue,
+  ProjectTeamLead,
   ProjectTrashSettings,
   TimeEntryCorrection,
   VisitEntry,
@@ -134,6 +135,9 @@ export const db = {
   savedViews: [...seedSavedViews],
   projects: [...seedProjects],
   projectMembers: [...seedProjectMembers],
+  // Phase 4 — no seed rows. No historical Project ever had an Additional Team Lead (a purely
+  // additive new relation); populated at runtime as people staff a Project.
+  projectTeamLeads: [] as ProjectTeamLead[],
   // No seed rows here on purpose — every row is dated "today" at creation time, and seed data is
   // all fixed past dates. Populated at runtime as people open My Day.
   dailyUpdates: [] as DailyUpdate[],

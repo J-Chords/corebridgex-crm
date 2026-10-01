@@ -78,6 +78,20 @@ export interface ProjectMember {
   projectRole: string | null;
 }
 
+/** Phase 4 — a Project's Additional Team Lead(s): the dedicated relation representing "the same
+ * normal Project-management authority as the Primary Team Lead (`Project.ownerId`), minus the
+ * ability to change `ownerId` itself." Deliberately NOT layered onto `ProjectMember`/`projectRole`
+ * (which stay descriptive-data-only, never authorization-bearing) — see `docs/domain-model.md`'s
+ * Phase 4 entry. Eligibility (active Supervisor, not already the Project's own `ownerId`) is
+ * enforced at write time (mock: `addProjectTeamLead`; hosted: the `project_team_leads` eligibility
+ * trigger + `add_project_team_lead` RPC), not just here. */
+export interface ProjectTeamLead {
+  projectId: string;
+  userId: string;
+  createdAt: string;
+  createdById: string;
+}
+
 /** Singleton row — see `set_project_trash_retention`. `retentionDays === null` means automatic
  * purge is disabled (the default); a positive number is the Admin's own explicit choice. No
  * automatic physical purge is ever scheduled by this codebase — see the architecture doc's

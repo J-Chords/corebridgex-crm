@@ -34,10 +34,22 @@ function projectMemberIds(projectId: string): string[] {
   return db.projectMembers.filter((m) => m.projectId === projectId).map((m) => m.userId);
 }
 
+function additionalTeamLeadUserIds(projectId: string): string[] {
+  return db.projectTeamLeads.filter((tl) => tl.projectId === projectId).map((tl) => tl.userId);
+}
+
+function projectContextFor(projectId: string | null): { ownerId: string; additionalTeamLeadUserIds: string[] } | null {
+  if (!projectId) return null;
+  const project = db.projects.find((p) => p.id === projectId);
+  if (!project) return null;
+  return { ownerId: project.ownerId, additionalTeamLeadUserIds: additionalTeamLeadUserIds(project.id) };
+}
+
 function requireWorkstreamAccess(viewer: User, workstream: Workstream) {
   const accessible = canAccessWorkstream(
     viewer,
     { leadUserId: workstream.leadUserId, teamUserIds: workstreamTeamIds(workstream.id), companyId: workstream.companyId },
+    projectContextFor(workstream.projectId),
     db.users
   );
   if (!accessible) throw new Error("You don't have access to that Template.");
@@ -102,7 +114,16 @@ function canExtendWorkstreamActivities(viewer: User, workstream: Workstream): bo
     if (!workstream.projectId) return false;
     const project = db.projects.find((p) => p.id === workstream.projectId);
     if (!project) return false;
-    return canAccessProject(viewer, { companyId: project.companyId, ownerId: project.ownerId, memberUserIds: projectMemberIds(project.id) }, db.users);
+    return canAccessProject(
+      viewer,
+      {
+        companyId: project.companyId,
+        ownerId: project.ownerId,
+        memberUserIds: projectMemberIds(project.id),
+        additionalTeamLeadUserIds: additionalTeamLeadUserIds(project.id),
+      },
+      db.users
+    );
   }
   return false;
 }

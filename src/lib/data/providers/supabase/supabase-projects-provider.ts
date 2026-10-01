@@ -6,7 +6,7 @@ import type {
   ClientProjectInput,
   ProjectTemplateSelection,
 } from "../projects-provider";
-import type { Project, ProjectGroup, ProjectStatus, ProjectTrashSettings } from "../../types";
+import type { Project, ProjectGroup, ProjectStatus, ProjectTrashSettings, User } from "../../types";
 import { createClient } from "@/lib/supabase/client";
 import { resolveProfileDirectory } from "./profile-directory";
 import { hydrateWorkstreamRows, type WorkstreamRow } from "./supabase-workstreams-provider";
@@ -97,22 +97,27 @@ async function hydrate(projects: Project[]): Promise<ProjectWithRelations[]> {
 
   const partnerBrandIds = Array.from(new Set(projects.map((p) => p.partnerBrandId).filter((x): x is string => x != null)));
 
-  const [companiesRes, memberLinksRes, workstreamsRes, brandsRes] = await Promise.all([
+  const [companiesRes, memberLinksRes, teamLeadLinksRes, workstreamsRes, brandsRes] = await Promise.all([
     supabase.from("companies").select("id, name, is_internal").in("id", companyIds),
     supabase.from("project_members").select("project_id, user_id, project_role").in("project_id", projectIds),
+    supabase.from("project_team_leads").select("project_id, user_id").in("project_id", projectIds),
     supabase.from("workstreams").select("id, name, project_id, service_line_id").in("project_id", projectIds),
     partnerBrandIds.length ? supabase.from("brands").select("id, name").in("id", partnerBrandIds) : Promise.resolve({ data: [], error: null }),
   ]);
   if (companiesRes.error) throw new Error(companiesRes.error.message);
   if (memberLinksRes.error) throw new Error(memberLinksRes.error.message);
+  if (teamLeadLinksRes.error) throw new Error(teamLeadLinksRes.error.message);
   if (workstreamsRes.error) throw new Error(workstreamsRes.error.message);
   if (brandsRes.error) throw new Error(brandsRes.error.message);
 
   const companies = (companiesRes.data ?? []) as { id: string; name: string; is_internal: boolean }[];
   const memberLinks = (memberLinksRes.data ?? []) as { project_id: string; user_id: string; project_role: string | null }[];
+  const teamLeadLinks = (teamLeadLinksRes.data ?? []) as { project_id: string; user_id: string }[];
   const workstreams = (workstreamsRes.data ?? []) as { id: string; name: string; project_id: string | null; service_line_id: string | null }[];
   const partnerBrands = (brandsRes.data ?? []) as { id: string; name: string }[];
-  const allProfileIds = Array.from(new Set([...ownerIds, ...creatorIds, ...memberLinks.map((m) => m.user_id)]));
+  const allProfileIds = Array.from(
+    new Set([...ownerIds, ...creatorIds, ...memberLinks.map((m) => m.user_id), ...teamLeadLinks.map((tl) => tl.user_id)])
+  );
   const profiles = await resolveProfileDirectory(allProfileIds);
 
   const workstreamIds = workstreams.map((w) => w.id);
@@ -147,6 +152,11 @@ async function hydrate(projects: Project[]): Promise<ProjectWithRelations[]> {
       })
       .filter((u): u is (typeof profiles)[number] & { projectRole: string | null } => u !== null);
 
+    const additionalTeamLeads = teamLeadLinks
+      .filter((tl) => tl.project_id === project.id)
+      .map((tl) => profiles.find((user) => user.id === tl.user_id))
+      .filter((u): u is (typeof profiles)[number] => u !== undefined);
+
     const projectWorkstreamIds = workstreamIdsByProject.get(project.id) ?? [];
     const services = workstreams
       .filter((w) => w.project_id === project.id)
@@ -177,6 +187,7 @@ async function hydrate(projects: Project[]): Promise<ProjectWithRelations[]> {
       createdBy,
       members,
       memberCount: members.length,
+      additionalTeamLeads,
       workstreamCount: projectWorkstreamIds.length,
       services,
       tasks: taskSummary,
@@ -375,5 +386,66 @@ export const supabaseProjectsProvider: ProjectsProvider = {
     const { data, error } = await supabase.rpc("create_project_group", { p_name: name });
     if (error) throw new Error(error.message);
     return data as ProjectGroup;
+  },
+
+  // Phase 4 — incremental Project staffing, routed through narrow SECURITY DEFINER RPCs (never a
+  // direct project_team_leads/project_members write from the client). Each RPC re-validates
+  // can_manage_project/Active-lifecycle/target-eligibility itself server-side; the client refetches
+  // the Project afterward rather than trusting a locally-computed shape.
+  async addProjectTeamLead(viewer, projectId, userId) {
+    const supabase = createClient();
+    const { error } = await supabase.rpc("add_project_team_lead", { p_project_id: projectId, p_user_id: userId });
+    if (error) throw new Error(error.message);
+    const refreshed = await supabaseProjectsProvider.getProject(viewer, projectId);
+    if (!refreshed) throw new Error("Project not found.");
+    return refreshed;
+  },
+
+  async removeProjectTeamLead(viewer, projectId, userId) {
+    const supabase = createClient();
+    const { error } = await supabase.rpc("remove_project_team_lead", { p_project_id: projectId, p_user_id: userId });
+    if (error) throw new Error(error.message);
+    const refreshed = await supabaseProjectsProvider.getProject(viewer, projectId);
+    if (!refreshed) throw new Error("Project not found.");
+    return refreshed;
+  },
+
+  async addProjectMember(viewer, projectId, userId) {
+    const supabase = createClient();
+    const { error } = await supabase.rpc("add_project_member", { p_project_id: projectId, p_user_id: userId });
+    if (error) throw new Error(error.message);
+    const refreshed = await supabaseProjectsProvider.getProject(viewer, projectId);
+    if (!refreshed) throw new Error("Project not found.");
+    return refreshed;
+  },
+
+  async removeProjectMember(viewer, projectId, userId) {
+    const supabase = createClient();
+    const { error } = await supabase.rpc("remove_project_member", { p_project_id: projectId, p_user_id: userId });
+    if (error) throw new Error(error.message);
+    const refreshed = await supabaseProjectsProvider.getProject(viewer, projectId);
+    if (!refreshed) throw new Error("Project not found.");
+    return refreshed;
+  },
+
+  // Phase 4 QA fix — deliberately NOT listAssignableStaff (backed by profiles' own team-scoped RLS;
+  // stays that way for its own existing uses). This RPC bypasses that scoping on purpose, returning
+  // every active Employee/Supervisor unscoped by reporting line.
+  async listProjectStaffingCandidates() {
+    const supabase = createClient();
+    const { data, error } = await supabase.rpc("list_project_staffing_candidates");
+    if (error) throw new Error(error.message);
+    return ((data ?? []) as { id: string; full_name: string; email: string; role: User["role"] }[]).map((row) => ({
+      id: row.id,
+      fullName: row.full_name,
+      email: row.email,
+      role: row.role,
+      active: true,
+      supervisorId: null,
+      assignedCompanyIds: [],
+      reportingReviewAccess: false,
+      mustChangePassword: false,
+      createdAt: "",
+    }));
   },
 };

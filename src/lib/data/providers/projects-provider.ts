@@ -61,6 +61,11 @@ export interface ProjectWithRelations extends Project {
    * own optional, Project-scoped `projectRole` label (never a global role). */
   members: (User & { projectRole: string | null })[];
   memberCount: number;
+  /** Phase 4 — this Project's Additional Team Leads (`project_team_leads`), resolved the same way
+   * as `members`/`owner`. Each one has the exact same normal Project-management authority as the
+   * Primary Team Lead (`owner`) — see `canManageProjectRecord`. Independent of `members`: a user may
+   * appear in both, neither, or either alone. */
+  additionalTeamLeads: User[];
   workstreamCount: number;
   /** Every Service (Workstream) under this Project — light name-only reference, Phase 8E's Project
    * list "Service summary" reads from this instead of re-fetching the full Services tab. */
@@ -200,6 +205,38 @@ export interface ProjectsProvider {
 
   /** Part 11 — data-only, Project-scoped label; never a global role, never an authorization input. */
   setProjectMemberRole(viewer: User, projectId: string, userId: string, projectRole: string | null): Promise<void>;
+
+  /**
+   * Phase 4 — incremental Project staffing, gated by `canManageProjectRecord`/`can_manage_project`
+   * (Admin, or an authorized Project Team Lead — Primary or Additional), never by direct-table RLS
+   * alone. Project must be Active (every method below rejects otherwise, matching the existing
+   * lifecycle-guard pattern on `create_workstream`/`apply_project_templates`). Deliberately separate
+   * from `updateProject`'s bulk `memberUserIds` replace (which stays Admin-only, unchanged) — these
+   * are the narrow, TL-usable single add/remove actions.
+   */
+  /** Target must be an active Supervisor, and must not already be this Project's own `ownerId`
+   * (enforced server-side, not just UI-side). Adding an existing Additional TL again is a safe
+   * no-op. */
+  addProjectTeamLead(viewer: User, projectId: string, userId: string): Promise<ProjectWithRelations>;
+  /** Admin or the Primary TL may remove any Additional TL; an Additional TL may remove another
+   * Additional TL but never themselves (enforced server-side). Never touches `ownerId` or any
+   * `project_members` row the same person might also hold. */
+  removeProjectTeamLead(viewer: User, projectId: string, userId: string): Promise<ProjectWithRelations>;
+  /** Target must be an active Employee or Supervisor — no direct-report restriction. Never creates a
+   * Team Lead relationship or a `projectRole` value as a side effect. */
+  addProjectMember(viewer: User, projectId: string, userId: string): Promise<ProjectWithRelations>;
+  /** Removes only the `project_members` row — any Primary/Additional Team Lead authority the same
+   * person holds is entirely unaffected. */
+  removeProjectMember(viewer: User, projectId: string, userId: string): Promise<ProjectWithRelations>;
+  /** Phase 4 QA fix — the directory for the Additional Team Lead / Project Member pickers.
+   * Deliberately NOT `assignableStaffFor`/`listAssignableStaff` (team-scoped for its own existing
+   * uses — Company staff assignment, Workstream Lead/Team — and correctly stays that way). Every
+   * active Employee/Supervisor, unscoped by reporting line, matching the locked "no direct-report
+   * restriction" requirement; the UI filters by role itself (Supervisors for the TL picker, everyone
+   * for the Member picker). Returns `[]` for an Employee caller (can never reach these pickers
+   * anyway). Read-only directory data — the actual authorization decision is independently
+   * enforced by `addProjectTeamLead`/`addProjectMember` above, not by this method. */
+  listProjectStaffingCandidates(viewer: User): Promise<User[]>;
 
   /** Part 19/20 — configurable Trash retention; automatic physical purge is never scheduled by
    * this codebase (see `ProjectTrashSettings`'s own doc comment for the dependency-audit finding). */

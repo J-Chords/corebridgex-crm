@@ -222,9 +222,35 @@ IN CODE REVIEW (implemented, hosted-verified, NOT merged):
   phase. Not merged, not deployed. See decisions.md's Phase 3 entry for full scope
   before doing anything with this branch.
 
-NEXT UP: Phase 4 (staffing/authorization redesign — Primary/Additional Team Leads,
-per-Template Lead permissions) and Phase 5 (Blocked -> Waiting status retirement) are
-not started. Template cloning (A2) also remains deferred, no ticket yet.
+VERIFIED, AWAITING PRODUCT OWNER MANUAL QA (implemented and fully verified, not yet
+reviewed/merged):
+- Phase 4 (no Jira ticket yet, deferred pending Atlassian identity verification): on
+  branch feature/phase-4-project-staffing-authorization, stacked on CD-208's
+  checkpoint commit fda0cfe (PR #11 was still open when this began). Additional Team
+  Leads (project_team_leads, dedicated relation, separate from project_members) get
+  the same Project-management authority as the Primary Team Lead (Project.ownerId),
+  except owner_id itself stays Admin-only; can_manage_project/canManageProjectRecord
+  and the READ helpers (can_access_project/company/workstream) widened accordingly;
+  new RPCs add_project_team_lead/remove_project_team_lead/add_project_member/
+  remove_project_member/update_workstream_staffing, all Active-Project-only with
+  direct-table RLS defense-in-depth (not just RPC-level); closed 2 residual gaps
+  (canConfigureWorkstreamActivities app/mock parity, workstream_members_write RLS
+  never updated since before Phase 3). Project Leadership/Members staffing UI AND a
+  narrow "Manage Staffing" Workstream Lead/Team entry point (WorkstreamFormDialog's
+  new staffingOnly mode, non-Admin TL only) are both done. THREE new local migrations.
+  tsc/ESLint/git diff --check/all 4 provider builds all pass clean. Full interactive
+  QA (Admin/Primary TL/Additional TL/non-project TL/Employee Member/lifecycle/
+  regression) and a direct provider-call security test (9/9, bypassing the UI
+  entirely) both passed — one real bug found and fixed: the Additional TL/Member
+  candidate pickers inherited listAssignableStaff's RLS-backed team-scoping, which in
+  this app's actual 2-Supervisor seed org meant neither Supervisor could ever add the
+  other as Additional TL through the UI at all; fixed with a new, unscoped directory
+  RPC (list_project_staffing_candidates). Not hosted-applied, not committed, not
+  pushed, no PR, no Jira. See decisions.md's Phase 4 entry for full scope.
+
+NEXT UP: Phase 4 (this entry) awaits Product Owner manual QA before checkpoint.
+Phase 5 (Blocked -> Waiting status retirement) is not started. Template cloning (A2)
+also remains deferred, no ticket yet.
 
 OPEN TICKETS:
 - CD-193 — Normalize local-date handling across task and dashboard date surfaces.

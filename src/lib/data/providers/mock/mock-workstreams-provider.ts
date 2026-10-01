@@ -6,6 +6,7 @@ import {
   canConfigureWorkstreamActivities,
   canCreateWorkstream,
   canCreateWorkstreamInProject,
+  canManageProjectRecord,
   canManageWorkstreams,
   isSuperadmin,
   isSupervisor,
@@ -17,11 +18,12 @@ import { isProjectActiveForNewWork, projectNotActiveMessage } from "../../projec
 import { db } from "./mock-db";
 
 /** Phase 3 (CD-208) parity fix — see `canAccessCompany`'s own doc comment. */
-function projectsForCompanyAccess(): { companyId: string; ownerId: string; memberUserIds: string[] }[] {
+function projectsForCompanyAccess(): { companyId: string; ownerId: string; memberUserIds: string[]; additionalTeamLeadUserIds: string[] }[] {
   return db.projects.map((p) => ({
     companyId: p.companyId,
     ownerId: p.ownerId,
     memberUserIds: db.projectMembers.filter((m) => m.projectId === p.id).map((m) => m.userId),
+    additionalTeamLeadUserIds: db.projectTeamLeads.filter((tl) => tl.projectId === p.id).map((tl) => tl.userId),
   }));
 }
 
@@ -139,8 +141,18 @@ function toWorkstreamWithRelations(workstream: Workstream): WorkstreamWithRelati
   };
 }
 
-function projectMemberIds(projectId: string): string[] {
-  return db.projectMembers.filter((m) => m.projectId === projectId).map((m) => m.userId);
+function additionalTeamLeadUserIds(projectId: string): string[] {
+  return db.projectTeamLeads.filter((tl) => tl.projectId === projectId).map((tl) => tl.userId);
+}
+
+/** Phase 4 — the management context for a Workstream's own Project (null for a legacy Company-only
+ * Workstream with no Project at all), passed to `canAccessWorkstream`/`canConfigureWorkstreamActivities`
+ * so a Primary/Additional Project Team Lead's authority reaches Workstreams they manage. */
+function projectContextFor(projectId: string | null): { ownerId: string; additionalTeamLeadUserIds: string[] } | null {
+  if (!projectId) return null;
+  const project = db.projects.find((p) => p.id === projectId);
+  if (!project) return null;
+  return { ownerId: project.ownerId, additionalTeamLeadUserIds: additionalTeamLeadUserIds(project.id) };
 }
 
 /**
@@ -165,6 +177,7 @@ function requireAccess(viewer: User, workstream: Workstream) {
   const accessible = canAccessWorkstream(
     viewer,
     { leadUserId: workstream.leadUserId, teamUserIds: workstreamTeamIds(workstream.id), companyId: workstream.companyId },
+    projectContextFor(workstream.projectId),
     db.users
   );
   if (!accessible) throw new Error("You don't have access to this template.");
@@ -230,6 +243,7 @@ export const mockWorkstreamsProvider: WorkstreamsProvider = {
       canAccessWorkstream(
         viewer,
         { leadUserId: e.leadUserId, teamUserIds: workstreamTeamIds(e.id), companyId: e.companyId },
+        projectContextFor(e.projectId),
         db.users
       )
     );
@@ -245,6 +259,7 @@ export const mockWorkstreamsProvider: WorkstreamsProvider = {
     const accessible = canAccessWorkstream(
       viewer,
       { leadUserId: workstream.leadUserId, teamUserIds: workstreamTeamIds(id), companyId: workstream.companyId },
+      projectContextFor(workstream.projectId),
       db.users
     );
     if (!accessible) return null;
@@ -392,12 +407,7 @@ export const mockWorkstreamsProvider: WorkstreamsProvider = {
     const workstream = db.workstreams.find((w) => w.id === workstreamId);
     if (!workstream) throw new Error("Template not found.");
     const project = workstream.projectId ? (db.projects.find((p) => p.id === workstream.projectId) ?? null) : null;
-    const allowed = canConfigureWorkstreamActivities(
-      viewer,
-      { leadUserId: workstream.leadUserId },
-      db.users,
-      project ? { companyId: project.companyId, ownerId: project.ownerId, memberUserIds: projectMemberIds(project.id) } : null
-    );
+    const allowed = canConfigureWorkstreamActivities(viewer, project ? projectContextFor(project.id) : null);
     if (!allowed) {
       throw new Error("You don't have permission to configure this template's activities.");
     }
@@ -408,6 +418,42 @@ export const mockWorkstreamsProvider: WorkstreamsProvider = {
     }
     requireActivitiesBelongToService(activityIds, workstream.serviceLineId);
     syncWorkstreamActivities(workstreamId, activityIds);
+  },
+
+  // Phase 4 — the narrow "change this Service's Lead/Team" capability. Admin, or an authorized
+  // Project Team Lead (Primary or Additional) via canManageProjectRecord; a Workstream with no
+  // Project at all can only be staffed by Admin (there's no Project-TL concept to fall back to).
+  async updateWorkstreamStaffing(viewer, workstreamId, leadUserId, teamUserIds) {
+    const existing = db.workstreams.find((w) => w.id === workstreamId);
+    if (!existing) throw new Error("Template not found.");
+    const project = existing.projectId ? (db.projects.find((p) => p.id === existing.projectId) ?? null) : null;
+    const projectContext = project ? projectContextFor(project.id) : null;
+    const allowed = isSuperadmin(viewer) || (projectContext != null && canManageProjectRecord(viewer, projectContext));
+    if (!allowed) {
+      throw new Error("You don't have permission to manage this template's staffing.");
+    }
+    if (!isProjectActiveForNewWork(project?.status ?? null)) {
+      throw new Error(projectNotActiveMessage(project?.status ?? null));
+    }
+    // Target eligibility unchanged from createWorkstream's own rule: self or an active direct
+    // report, for both Lead and Team (managesUser's own superadmin short-circuit already covers
+    // Admin's broader valid-active-profile behavior).
+    const newLead = db.users.find((u) => u.id === leadUserId);
+    if (!newLead || !managesUser(viewer, newLead)) {
+      throw new Error("You can only assign yourself or one of your own direct reports as Project Template Lead.");
+    }
+    const outsideTeam = teamUserIds.some((id) => {
+      const u = db.users.find((usr) => usr.id === id);
+      return !u || !managesUser(viewer, u);
+    });
+    if (outsideTeam) {
+      throw new Error("One of the selected team members is outside your team.");
+    }
+
+    const updated: Workstream = { ...existing, leadUserId, updatedAt: new Date().toISOString() };
+    db.workstreams = db.workstreams.map((w) => (w.id === workstreamId ? updated : w));
+    syncTeam(workstreamId, teamUserIds);
+    return toWorkstreamWithRelations(updated);
   },
 
   async createActivityForWorkstream(viewer, workstreamId, name) {

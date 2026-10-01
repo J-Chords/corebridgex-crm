@@ -2,6 +2,22 @@
 
 Verified issues encountered during this project's development. Only entries confirmed against actual code/behavior are listed here.
 
+## `assignableStaffFor`/`listAssignableStaff` is team-scoped by design — don't reuse it for an org-wide picker
+
+**Symptom** (found during CD-208 Phase 4 QA): a new "Additional Team Lead" picker appeared empty for a Supervisor who managed no other Supervisors, even though the locked requirement was "any active Supervisor, no direct-report restriction." In this app's actual seed org (exactly two Supervisors, neither managing the other), this meant **neither could ever add the other** through the UI at all — not just a narrower-than-ideal list, a complete dead end for the feature.
+
+**Root cause**: `assignableStaffFor`/`listAssignableStaff` deliberately scopes a Supervisor caller to "self + your own direct reports" — correct and load-bearing for its existing uses (Company staff assignment, Workstream Lead/Team, where that restriction is the actual product rule). On hosted Supabase this scoping is enforced by `profiles`' own RLS, not just an app-layer filter, so it can't be worked around by filtering differently client-side — the restrictive rows are never returned from the query in the first place.
+
+**Fix**: when a new picker genuinely needs an *unscoped* org directory (any active Employee/Supervisor, no reporting-line restriction), don't reuse `assignableStaffFor`/`listAssignableStaff` — add a new, narrow, purpose-specific SECURITY DEFINER RPC that deliberately bypasses `profiles` RLS for that one directory read (see `list_project_staffing_candidates`, `20261001090000_phase4_staffing_candidate_directory.sql`). The authorization decision for whatever action the picker feeds should live entirely in the RPC that performs the actual mutation, never in which candidates a listing happens to surface — a picker that's too narrow is a usability bug, not a security boundary, and conflating the two is what caused this.
+
+## `tsc`/ESLint/build failing with immediate OOM even at tiny heap sizes — check system memory first, not tooling
+
+**Symptom**: `npx tsc --noEmit` (or ESLint, or a Next.js build) crashes within 1-2 seconds with a V8 "FATAL ERROR: ... Allocation failed - JavaScript heap out of memory" or "Zone Allocation failed," even after raising `--max-old-space-size` to several GB, and even when the process had only allocated a tiny amount (well under 200MB) before crashing.
+
+**Root cause (confirmed during CD-208 Phase 4 work, 2026-09-30/10-01)**: this is a *system-level* memory exhaustion, not a TypeScript/tooling complexity problem — raising Node's own heap cap does nothing because the OS itself is refusing the allocation. Confirmed via `powershell -Command "Get-Counter '\Memory\Available MBytes' ..."` (or `systeminfo`): available physical memory was as low as ~470MB–1GB out of 16GB total, with the pagefile also nearly exhausted. The cause was the machine's own other running applications (multiple browser windows/tabs, multiple editor instances) — nothing this session's own work created or left running (explicitly checked: no orphaned dev servers or leftover QA processes at the time).
+
+**Fix / what to do**: before assuming a code change broke type-checking or blaming tooling, check available system memory directly (`Get-Counter '\Memory\Available MBytes'` or equivalent). If it's critically low (roughly ≤1GB free), do **not** keep retrying `tsc`/builds — each attempt just repeats the same immediate crash and wastes time. Report it plainly (state the actual measured available-memory number) and fall back to careful manual/static code review instead of automated verification until memory frees up — closing unrelated memory-heavy applications, or simply waiting and re-checking later, are the only real fixes; this is an environmental constraint, not something to work around by hand.
+
 ## Positive-UTC-offset date bucketing (the CD-190 timezone defect)
 
 **Symptom**: a manually-logged "Duration" mode time entry for "today" silently appeared under *yesterday* in date-scoped views (My Day's Today card, Team Activity's Time tab), for any user in a positive-UTC-offset timezone (e.g. UTC+1).

@@ -99,14 +99,33 @@ export interface WorkstreamsProvider {
    * Activity Level, Section 19 — the narrow "configure which existing catalog Activities this
    * Project Service uses" capability, deliberately separate from `updateWorkstream`: it can ONLY
    * change this Workstream's `workstream_activities` associations, never Service/Lead/Team/Schedule/
-   * Status/Project/Brand. This is what lets an Employee who is this specific Workstream's own
-   * `leadUserId` configure its Activities without being granted the broader `updateWorkstream`
-   * authority (Supervisor/Superadmin only) — mirrors the real `workstream_activities_write` RLS
-   * policy exactly: Superadmin unconditionally; Employee only if they lead this Workstream;
-   * Supervisor only if they manage the lead and can access the Project. Never creates a new global
-   * Activity — every id passed must already exist and belong to this Workstream's own service line.
+   * Status/Project/Brand. Phase 4 parity fix — mirrors the hardened `workstream_activities_write`
+   * RLS policy exactly: Superadmin unconditionally, or an authorized Project Team Lead (Primary or
+   * Additional) via `canManageProjectRecord`/`can_manage_project`; the Workstream's own lead alone,
+   * its team alone, and plain Project membership alone are all insufficient (this narrowed from an
+   * earlier Employee-as-lead/broader-Supervisor shape — see `docs/troubleshooting.md`). Also
+   * enforces the Project-must-be-Active lifecycle guard. Never creates a new global Activity — every
+   * id passed must already exist and belong to this Workstream's own service line.
    */
   setWorkstreamActivities(viewer: User, workstreamId: string, activityIds: string[]): Promise<void>;
+  /**
+   * Phase 4 — the narrow "change this Project Service's Lead and/or Team" capability, deliberately
+   * separate from `updateWorkstream` (Admin-only, full edit) so an authorized Project Team Lead
+   * (Primary or Additional) can staff a Service they manage without gaining Admin's broader
+   * Service-edit rights (name/schedule/status/brand/service line all stay untouched by this method).
+   * Authorization: Admin, or `canManageProjectRecord`/`can_manage_project` on the Workstream's own
+   * Project — never the Workstream's current Lead/Team/global Template staffing alone. Target
+   * eligibility for a Team Lead caller is unchanged from `createWorkstream`'s own rule (self or an
+   * active direct report, for both Lead and Team); Admin keeps its existing broad valid-active-
+   * profile behavior. Project must be Active. Exactly one Lead per Workstream remains — this never
+   * introduces multiple/Additional Workstream Leads.
+   */
+  updateWorkstreamStaffing(
+    viewer: User,
+    workstreamId: string,
+    leadUserId: string,
+    teamUserIds: string[]
+  ): Promise<WorkstreamWithRelations>;
   /**
    * CD-162 post-manual-QA pass — a true, permanent removal, allowed ONLY when this Workstream has
    * never had a single Task created under it (re-verified server-side, never trusted from the

@@ -50,7 +50,8 @@ function projectContext(projectId: string) {
   const project = db.projects.find((p) => p.id === projectId);
   if (!project) return null;
   const memberUserIds = db.projectMembers.filter((m) => m.projectId === projectId).map((m) => m.userId);
-  return { companyId: project.companyId, ownerId: project.ownerId, memberUserIds };
+  const additionalTeamLeadUserIds = db.projectTeamLeads.filter((tl) => tl.projectId === projectId).map((tl) => tl.userId);
+  return { companyId: project.companyId, ownerId: project.ownerId, memberUserIds, additionalTeamLeadUserIds };
 }
 
 /** Shapes a raw `Document` row into the pre-shaped context `canAccessDocumentRecord`/
