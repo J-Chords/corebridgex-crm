@@ -118,7 +118,6 @@ export function SupervisorMyDay({ user }: SupervisorMyDayProps) {
   const countByStatus: Record<TaskStatus, number> = {
     "not-started": 0,
     "in-progress": 0,
-    blocked: 0,
     waiting: 0,
     completed: 0,
     canceled: 0,

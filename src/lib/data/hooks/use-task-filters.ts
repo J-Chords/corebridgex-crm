@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import type { TaskGroupBy, TaskPriority, TaskStatus } from "@/lib/data/types";
 import type { TaskWithRelations } from "@/lib/data/providers/tasks-provider";
 import { TASK_STATUS_SELECT_ITEMS } from "@/components/tasks/task-status-badge";
+import { TASK_STATUS_ORDER, normalizeLegacyTaskFilterStatusOrAll } from "@/lib/data/task-status";
 import { workstreamDisplayHeading } from "@/lib/data/workstream-name";
 
 export interface TaskFilters {
@@ -55,12 +56,17 @@ export function filterTasks(tasks: TaskWithRelations[], filters: TaskFilters): T
   });
 }
 
+/** Phase 5 (CD-214) legacy filter compatibility — a sessionStorage entry written before Blocked's
+ * retirement may still carry `status: "blocked"`; normalize it to `"waiting"` on read so a stale
+ * persisted filter degrades to the equivalent current view rather than an impossible, permanently-
+ * empty result. Any other unrecognized status value falls back to "all" for the same reason. */
 function readPersistedFilters(storageKey: string): TaskFilters | null {
   if (typeof window === "undefined") return null;
   try {
     const raw = window.sessionStorage.getItem(storageKey);
     if (!raw) return null;
-    return { ...DEFAULT_TASK_FILTERS, ...(JSON.parse(raw) as Partial<TaskFilters>) };
+    const parsed = { ...DEFAULT_TASK_FILTERS, ...(JSON.parse(raw) as Partial<TaskFilters>) };
+    return { ...parsed, status: normalizeLegacyTaskFilterStatusOrAll(parsed.status) };
   } catch {
     return null;
   }
@@ -146,8 +152,6 @@ export interface TaskGroup {
   tasks: TaskWithRelations[];
 }
 
-const STATUS_ORDER: TaskStatus[] = ["not-started", "in-progress", "waiting", "blocked", "completed", "canceled"];
-
 /** Groups that represent "nothing" for their dimension — sorted last rather than wherever they'd alphabetically fall. */
 function isFallbackGroup(key: string) {
   return key === "none" || key === "unassigned";
@@ -198,7 +202,7 @@ export function groupTasksBy(tasks: TaskWithRelations[], groupBy: TaskGroupBy): 
 
   const result = Array.from(groups.values());
   if (groupBy === "status") {
-    return result.sort((a, b) => STATUS_ORDER.indexOf(a.key as TaskStatus) - STATUS_ORDER.indexOf(b.key as TaskStatus));
+    return result.sort((a, b) => TASK_STATUS_ORDER.indexOf(a.key as TaskStatus) - TASK_STATUS_ORDER.indexOf(b.key as TaskStatus));
   }
   return result.sort((a, b) => {
     if (isFallbackGroup(a.key) && !isFallbackGroup(b.key)) return 1;

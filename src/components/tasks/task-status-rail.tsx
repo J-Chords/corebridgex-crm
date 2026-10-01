@@ -4,16 +4,15 @@ import { useState } from "react";
 import type { TaskStatus } from "@/lib/data/types";
 import { STATUS_META, statusChipStyle } from "@/components/tasks/task-status-badge";
 import { StatusReasonDialog } from "@/components/tasks/status-reason-dialog";
+import { TASK_STATUS_ORDER, taskStatusRequiresReason } from "@/lib/data/task-status";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-
-const STATUS_ORDER: TaskStatus[] = ["not-started", "in-progress", "waiting", "blocked", "completed", "canceled"];
 
 interface TaskStatusRailProps {
   status: TaskStatus;
   /** Omit (or pass nothing) to render a read-only status — used when the viewer can't progress this
-   * Task. `statusReason` is required by the server whenever `status` is `"waiting"`/`"blocked"` —
-   * this rail collects it inline via `StatusReasonDialog` before calling through. */
+   * Task. `statusReason` is required by the server whenever `status` is `"waiting"` — this rail
+   * collects it inline via `StatusReasonDialog` before calling through. */
   onChange?: (status: TaskStatus, statusReason?: string) => void;
   disabled?: boolean;
 }
@@ -39,7 +38,7 @@ export function TaskStatusRail({ status, onChange, disabled }: TaskStatusRailPro
   }
 
   function handleSelect(next: TaskStatus) {
-    if (next === "waiting" || next === "blocked") {
+    if (taskStatusRequiresReason(next)) {
       setPendingStatus(next);
     } else {
       onChange!(next);
@@ -49,7 +48,7 @@ export function TaskStatusRail({ status, onChange, disabled }: TaskStatusRailPro
   return (
     <>
       <Select
-        items={Object.fromEntries(STATUS_ORDER.map((s) => [s, STATUS_META[s].label]))}
+        items={Object.fromEntries(TASK_STATUS_ORDER.map((s) => [s, STATUS_META[s].label]))}
         value={status}
         onValueChange={(v) => v && handleSelect(v as TaskStatus)}
         disabled={disabled}
@@ -64,7 +63,7 @@ export function TaskStatusRail({ status, onChange, disabled }: TaskStatusRailPro
             popup below-left of the trigger instead makes it read as nested under the control it
             belongs to. */}
         <SelectContent align="start" alignItemWithTrigger={false}>
-          {STATUS_ORDER.map((s) => (
+          {TASK_STATUS_ORDER.map((s) => (
             <SelectItem key={s} value={s}>
               <span className="flex items-center gap-1.5">
                 <span className="size-2 shrink-0 rounded-full" style={{ backgroundColor: statusChipStyle(s).color }} aria-hidden="true" />

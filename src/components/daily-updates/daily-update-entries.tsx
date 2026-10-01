@@ -62,7 +62,6 @@ const STATUS_ACCENT: Record<TaskStatus, string> = {
   "not-started": "border-l-muted-foreground/30",
   "in-progress": "border-l-info",
   waiting: "border-l-warning",
-  blocked: "border-l-destructive",
   completed: "border-l-success",
   canceled: "border-l-muted-foreground/30",
 };

@@ -1,5 +1,6 @@
 import type { SavedViewsProvider, SavedViewInput } from "../saved-views-provider";
 import type { SavedView, SavedViewFilters } from "../../types";
+import { normalizeLegacyTaskFilterStatusOrAll } from "@/lib/data/task-status";
 import { createClient } from "@/lib/supabase/client";
 
 /**
@@ -44,10 +45,14 @@ export const supabaseSavedViewsProvider: SavedViewsProvider = {
   async createSavedView(viewer, input: SavedViewInput) {
     const name = input.name.trim();
     if (!name) throw new Error("Give this view a name.");
+    // Phase 5 (CD-214) persistence-boundary compatibility — a caller holding stale filter state
+    // (e.g. `status: "blocked"`) never persists that legacy value; this is FILTER state being
+    // normalized to its current equivalent, not a Task write, so it's mapped rather than rejected.
+    const filters: SavedViewFilters = { ...input.filters, status: normalizeLegacyTaskFilterStatusOrAll(input.filters.status) };
     const supabase = createClient();
     const { data, error } = await supabase
       .from("saved_views")
-      .insert({ user_id: viewer.id, name, filters: input.filters })
+      .insert({ user_id: viewer.id, name, filters })
       .select("*")
       .single();
     if (error) throw new Error(error.message);

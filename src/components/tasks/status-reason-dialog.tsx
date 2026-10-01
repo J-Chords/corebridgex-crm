@@ -10,7 +10,7 @@ import { STATUS_META } from "@/components/tasks/task-status-badge";
 
 interface StatusReasonDialogProps {
   /** The status a status-change surface is about to move TO — null keeps the dialog closed. Only
-   * ever "waiting"/"blocked" in practice (the two statuses that require a reason). */
+   * ever "waiting" in practice (the one status that requires a reason). */
   pendingStatus: TaskStatus | null;
   onCancel: () => void;
   onConfirm: (statusReason: string) => void;
@@ -50,7 +50,7 @@ export function StatusReasonDialog({ pendingStatus, onCancel, onConfirm, isSubmi
             rows={3}
             value={reason}
             onChange={(e) => setReason(e.target.value)}
-            placeholder={`Describe what it's ${label.toLowerCase() === "blocked" ? "blocked by" : "waiting on"}…`}
+            placeholder="Describe what it's waiting on…"
           />
         </div>
         <DialogFooter>

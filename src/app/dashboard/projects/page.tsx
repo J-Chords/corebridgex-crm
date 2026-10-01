@@ -55,7 +55,6 @@ type RoleView = "admin" | "team-lead" | "employee";
  * (role-scoped Tasks, existing Service staffing) — never a new fetch, never an invented metric. */
 interface RoleRowStats {
   waitingCount: number;
-  blockedCount: number;
   myOpenCount: number;
   myOverdueCount: number;
   myNextDue: string | null;
@@ -205,7 +204,6 @@ export default function ProjectsPage() {
     for (const project of filtered) {
       const projectTasks = tasksByProject.get(project.id) ?? [];
       const waitingCount = projectTasks.filter((t) => t.status === "waiting").length;
-      const blockedCount = projectTasks.filter((t) => t.status === "blocked").length;
       const myTasks = user
         ? projectTasks.filter((t) => !isTaskClosed(t.status) && t.assignees.some((a) => a.id === user.id))
         : [];
@@ -223,7 +221,7 @@ export default function ProjectsPage() {
         fullName: assignableStaff.find((u) => u.id === uid)?.fullName ?? "Unknown",
       }));
 
-      map.set(project.id, { waitingCount, blockedCount, myOpenCount: myTasks.length, myOverdueCount, myNextDue, globalTeamLeads });
+      map.set(project.id, { waitingCount, myOpenCount: myTasks.length, myOverdueCount, myNextDue, globalTeamLeads });
     }
     return map;
   }, [filtered, tasksByProject, teamLeadStaffing, assignableStaff, user]);
@@ -532,7 +530,6 @@ const ROLE_COLUMNS: Record<RoleView, { key: string; label: string; width: string
     { key: "open", label: "Open Tasks", width: "100px" },
     { key: "overdue", label: "Overdue", width: "90px" },
     { key: "waiting", label: "Waiting", width: "90px" },
-    { key: "blocked", label: "Blocked", width: "90px" },
     { key: "team", label: "Team", width: "170px" },
   ],
   employee: [
@@ -658,12 +655,6 @@ function ProjectTableGroup({
                       return (
                         <span key={col.key} className="text-xs text-muted-foreground">
                           {stats?.waitingCount ?? 0}
-                        </span>
-                      );
-                    case "blocked":
-                      return (
-                        <span key={col.key} className={cn("text-xs", (stats?.blockedCount ?? 0) > 0 ? "font-medium text-destructive" : "text-muted-foreground")}>
-                          {stats?.blockedCount ?? 0}
                         </span>
                       );
                     case "myopen":

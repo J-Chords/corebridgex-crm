@@ -16,6 +16,7 @@ import {
   managesUser,
 } from "../../permissions";
 import { isProjectActiveForNewWork, projectNotActiveMessage } from "../../project-display";
+import { isTaskStatus, taskStatusRequiresReason } from "@/lib/data/task-status";
 import { db } from "./mock-db";
 
 function taskAssigneeIds(taskId: string): string[] {
@@ -256,22 +257,35 @@ const TASK_STATUS_LABELS: Record<TaskStatus, string> = {
   "not-started": "Not Started",
   "in-progress": "In Progress",
   waiting: "Waiting",
-  blocked: "Blocked",
   completed: "Completed",
   canceled: "Canceled",
 };
 
 /**
+ * Phase 5 (CD-214) — the TS `TaskStatus` union alone is not runtime enforcement once a value
+ * crosses this provider's own boundary (a raw/cast call, e.g. `status: "blocked"` or any other
+ * unrecognized string). Every mutation path that accepts a status calls this first and rejects
+ * outright — mirrors the hosted `tasks_status_check` CHECK constraint's role; never silently
+ * converts a legacy/invalid value (that's `normalizeLegacyTaskFilterStatus`'s job, and it is
+ * explicitly FILTER/READ-only, never used here).
+ */
+function requireValidTaskStatus(status: unknown): asserts status is TaskStatus {
+  if (!isTaskStatus(status)) {
+    throw new Error("Invalid Task status.");
+  }
+}
+
+/**
  * Task Level Phase 1 — mirrors `enforce_task_invariants`'s status_reason lifecycle exactly (the
  * hosted trigger applies this on every write path; the mock has no shared trigger, so every mock
- * write path below calls this instead): required (non-empty) exactly when Waiting/Blocked, force-
- * cleared to null for every other status regardless of what the caller passed.
+ * write path below calls this instead): required (non-empty) exactly when Waiting, force-cleared
+ * to null for every other status regardless of what the caller passed.
  */
 function resolveStatusReason(status: TaskStatus, statusReason: string | null | undefined): string | null {
-  if (status === "waiting" || status === "blocked") {
+  if (taskStatusRequiresReason(status)) {
     const trimmed = (statusReason ?? "").trim();
     if (!trimmed) {
-      throw new Error(`A reason is required while this Task is ${TASK_STATUS_LABELS[status]} — describe what it's waiting on or blocked by.`);
+      throw new Error(`A reason is required while this Task is ${TASK_STATUS_LABELS[status]} — describe what it's waiting on…`);
     }
     return trimmed;
   }
@@ -423,6 +437,7 @@ export const mockTasksProvider: TasksProvider = {
     requireActiveWorkstreamForTaskAssignment(workstream, null);
     resolveActivityForTaskCreation(viewer, workstream, input.activityId);
     requireActiveActivityIfNewlySelected(input.activityId, null);
+    requireValidTaskStatus(input.status);
     const statusReason = resolveStatusReason(input.status, input.statusReason);
 
     const assigneeIds =
@@ -487,6 +502,7 @@ export const mockTasksProvider: TasksProvider = {
     requireActiveWorkstreamForTaskAssignment(workstream, existing.workstreamId);
     requireActivityEnabledOnWorkstream(workstream.id, input.activityId);
     requireActiveActivityIfNewlySelected(nextActivityId, existing.activityId);
+    requireValidTaskStatus(input.status);
     const statusReason = resolveStatusReason(input.status, input.statusReason);
 
     // Captured before db.taskAssignees is overwritten below — this is the "before" set the new one
@@ -570,6 +586,7 @@ export const mockTasksProvider: TasksProvider = {
     if (!canProgressTask(viewer, { assigneeIds: taskAssigneeIds(id), companyId: existing.companyId }, db.users)) {
       throw new Error("You don't have permission to update this task's status.");
     }
+    requireValidTaskStatus(status);
     const statusReason = resolveStatusReason(status, statusReasonInput);
 
     const statusChanged = status !== existing.status;

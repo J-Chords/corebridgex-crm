@@ -23,20 +23,19 @@ import { TaskCard } from "@/components/tasks/task-card";
 import { TaskFormDialog } from "@/components/tasks/task-form-dialog";
 import { StatusReasonDialog } from "@/components/tasks/status-reason-dialog";
 import { STATUS_COLOR_VAR, TASK_STATUS_SELECT_ITEMS } from "@/components/tasks/task-status-badge";
+import { ACTIVE_TASK_STATUS_ORDER, taskStatusRequiresReason } from "@/lib/data/task-status";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 // Canceled is deliberately not a board column — it's closed/historical, not an active workflow
 // state a Kanban column tracks (same "closed work doesn't get a bucket" call as My Day's own status
 // buckets). A Canceled task simply doesn't render here; it's still fully visible/filterable in the
-// List view.
-const COLUMNS: { key: TaskStatus; label: string }[] = [
-  { key: "not-started", label: TASK_STATUS_SELECT_ITEMS["not-started"] },
-  { key: "in-progress", label: TASK_STATUS_SELECT_ITEMS["in-progress"] },
-  { key: "waiting", label: TASK_STATUS_SELECT_ITEMS.waiting },
-  { key: "blocked", label: TASK_STATUS_SELECT_ITEMS.blocked },
-  { key: "completed", label: TASK_STATUS_SELECT_ITEMS.completed },
-];
+// List view. Derived from the shared `ACTIVE_TASK_STATUS_ORDER` (not a hand-maintained literal list)
+// so a future status addition/removal can't silently miss this column set.
+const COLUMNS: { key: TaskStatus; label: string }[] = ACTIVE_TASK_STATUS_ORDER.map((key) => ({
+  key,
+  label: TASK_STATUS_SELECT_ITEMS[key],
+}));
 
 interface BoardCardProps {
   task: TaskWithRelations;
@@ -170,8 +169,8 @@ export function TaskBoard({ user, tasks, onChanged, runningTaskId = null, onOpen
   // is the right "allUsers" convenience list for this UI-only gate.
   const { assignableStaff } = useCompanyLookups();
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
-  // Section 5/6 — dragging a card into the Waiting or Blocked column requires a reason the board
-  // itself has no form field for; collect it via the same small reusable dialog TaskStatusRail uses.
+  // Section 5/6 — dragging a card into the Waiting column requires a reason the board itself has
+  // no form field for; collect it via the same small reusable dialog TaskStatusRail uses.
   const [pendingReasonChange, setPendingReasonChange] = useState<{ taskId: string; status: TaskStatus } | null>(null);
   const [reasonSubmitting, setReasonSubmitting] = useState(false);
   const [addStatus, setAddStatus] = useState<TaskStatus | null>(null);
@@ -193,7 +192,7 @@ export function TaskBoard({ user, tasks, onChanged, runningTaskId = null, onOpen
     const task = tasks.find((t) => t.id === taskId);
     if (!task || task.status === newStatus) return;
     if (!canProgressTask(user, { assigneeIds: task.assignees.map((a) => a.id), companyId: task.companyId }, assignableStaff)) return;
-    if (newStatus === "waiting" || newStatus === "blocked") {
+    if (taskStatusRequiresReason(newStatus)) {
       setPendingReasonChange({ taskId, status: newStatus });
       return;
     }

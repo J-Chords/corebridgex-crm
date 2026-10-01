@@ -1,12 +1,11 @@
 "use client";
 
 import type { TaskWithRelations } from "@/lib/data/providers/tasks-provider";
-import type { TaskStatus } from "@/lib/data/types";
 import { TaskStatusDonut } from "@/components/tasks/task-status-donut";
 import { STATUS_META, STATUS_COLOR_VAR } from "@/components/tasks/task-status-badge";
+import { TASK_STATUS_ORDER } from "@/lib/data/task-status";
 import { TaskSummaryItem } from "@/components/tasks/task-summary-item";
 
-const STATUS_ORDER: TaskStatus[] = ["not-started", "in-progress", "waiting", "blocked", "completed", "canceled"];
 const MAX_PER_STATUS = 10;
 
 interface TaskStatusFocusContentProps {
@@ -28,7 +27,7 @@ export function TaskStatusFocusContent({ tasks, onOpenTask, onEdit, onDeleted }:
   return (
     <>
       <TaskStatusDonut tasks={tasks} />
-      {STATUS_ORDER.map((status) => {
+      {TASK_STATUS_ORDER.map((status) => {
         const statusTasks = tasks.filter((t) => t.status === status);
         if (statusTasks.length === 0) return null;
         return (

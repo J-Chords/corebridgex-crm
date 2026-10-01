@@ -1,27 +1,8 @@
 import Link from "next/link";
 import type { TaskWithRelations } from "@/lib/data/providers/tasks-provider";
 import type { TaskStatus } from "@/lib/data/types";
-
-const STATUS_ORDER: TaskStatus[] = ["not-started", "in-progress", "waiting", "blocked", "completed", "canceled"];
-
-/** Mirrors TaskStatusBadge's variant choice per status, so the donut's colors never drift from the badges. */
-const STATUS_COLOR: Record<TaskStatus, string> = {
-  "not-started": "var(--muted-foreground)",
-  "in-progress": "var(--info)",
-  waiting: "var(--warning)",
-  blocked: "var(--destructive)",
-  completed: "var(--success)",
-  canceled: "var(--muted-foreground)",
-};
-
-const STATUS_LABEL: Record<TaskStatus, string> = {
-  "not-started": "Not Started",
-  "in-progress": "In Progress",
-  waiting: "Waiting",
-  blocked: "Blocked",
-  completed: "Completed",
-  canceled: "Canceled",
-};
+import { TASK_STATUS_ORDER } from "@/lib/data/task-status";
+import { STATUS_COLOR_VAR, TASK_STATUS_SELECT_ITEMS } from "@/components/tasks/task-status-badge";
 
 const RADIUS = 40;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
@@ -38,7 +19,7 @@ export function TaskStatusDonut({ tasks }: TaskStatusDonutProps) {
     return <p className="text-sm text-muted-foreground">No tasks assigned yet.</p>;
   }
 
-  const counted = STATUS_ORDER.map((status) => ({
+  const counted = TASK_STATUS_ORDER.map((status) => ({
     status,
     count: tasks.filter((t) => t.status === status).length,
   })).filter((segment) => segment.count > 0);
@@ -62,7 +43,7 @@ export function TaskStatusDonut({ tasks }: TaskStatusDonutProps) {
                 cy="50"
                 r={RADIUS}
                 fill="none"
-                stroke={STATUS_COLOR[status]}
+                stroke={STATUS_COLOR_VAR[status]}
                 strokeWidth="12"
                 strokeDasharray={`${dash} ${CIRCUMFERENCE - dash}`}
                 strokeDashoffset={-offset}
@@ -86,10 +67,10 @@ export function TaskStatusDonut({ tasks }: TaskStatusDonutProps) {
             <span className="flex items-center gap-1.5 text-muted-foreground">
               <span
                 className="size-2 shrink-0 rounded-full"
-                style={{ backgroundColor: STATUS_COLOR[status] }}
+                style={{ backgroundColor: STATUS_COLOR_VAR[status] }}
                 aria-hidden="true"
               />
-              {STATUS_LABEL[status]}
+              {TASK_STATUS_SELECT_ITEMS[status]}
             </span>
             <span className="font-medium text-foreground">{count}</span>
           </Link>

@@ -16,6 +16,7 @@ import type { TaskReuseCandidate, TaskWithRelations } from "@/lib/data/providers
 import type { DepartmentWithActivities } from "@/lib/data/providers/activity-catalog-provider";
 import { isEmployee } from "@/lib/data/permissions";
 import type { TaskPriority, TaskStatus } from "@/lib/data/types";
+import { taskStatusRequiresReason } from "@/lib/data/task-status";
 import { TaskStatusPicker } from "@/components/tasks/task-status-picker";
 import { TaskPriorityPicker } from "@/components/tasks/task-priority-picker";
 import { MultiSelect } from "@/components/ui/multi-select";
@@ -47,12 +48,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 const NO_ACTIVITY = "none";
-
-/** Task Level Phase 1, Section 5 — the only two statuses that require a `status_reason`; mirrors
- * `enforce_task_invariants`'s own server-side rule exactly. */
-function statusRequiresReason(status: TaskStatus): boolean {
-  return status === "waiting" || status === "blocked";
-}
 
 const STOPWORDS = new Set(["the", "a", "an", "and", "or", "of", "for", "to", "in", "on", "at", "by", "with", "from"]);
 
@@ -319,17 +314,17 @@ export function TaskFormDialog({
 
   // Legacy compatibility (mirrors enforce_task_invariants' own bypass, added 20260908120000) — a
   // handful of hosted Tasks were carried through the original status-rename migration already sitting
-  // at Waiting/Blocked with no recorded reason (no real reason text ever existed to backfill, and
-  // fabricating one is explicitly disallowed). Editing anything else on one of those Tasks — without
-  // touching its status or reason — must not be blocked forever by a rule that postdates the data.
-  // This can never mask a genuinely new gap: it only applies when the ORIGINAL fetched Task already
-  // had this exact status with an already-empty reason, so a real transition into Waiting/Blocked, or
-  // clearing an existing real reason, still requires one exactly as before.
+  // at Waiting (or, before Phase 5/CD-214, Blocked) with no recorded reason (no real reason text ever
+  // existed to backfill, and fabricating one is explicitly disallowed). Editing anything else on one
+  // of those Tasks — without touching its status or reason — must not be blocked forever by a rule
+  // that postdates the data. This can never mask a genuinely new gap: it only applies when the
+  // ORIGINAL fetched Task already had this exact status with an already-empty reason, so a real
+  // transition into Waiting, or clearing an existing real reason, still requires one exactly as before.
   const isLegacyReasonGap =
     mode === "edit" &&
     Boolean(task) &&
     task!.status === form.status &&
-    statusRequiresReason(form.status) &&
+    taskStatusRequiresReason(form.status) &&
     !task!.statusReason?.trim();
 
   const canSubmit =
@@ -337,7 +332,7 @@ export function TaskFormDialog({
     form.title.trim().length > 0 &&
     form.workstreamId.length > 0 &&
     (!activityRequired || form.activityId !== NO_ACTIVITY) &&
-    (!statusRequiresReason(form.status) || isLegacyReasonGap || Boolean(form.statusReason?.trim()));
+    (!taskStatusRequiresReason(form.status) || isLegacyReasonGap || Boolean(form.statusReason?.trim()));
 
   // Cmd/Ctrl+Enter submits from anywhere in the panel, guarded by the same validity check the submit
   // button itself uses. A document-level listener (not a form onKeyDown) because focus can end up on
@@ -405,7 +400,7 @@ export function TaskFormDialog({
         activityId: form.activityId === NO_ACTIVITY ? null : form.activityId,
         assigneeIds: form.assigneeIds,
         status: form.status,
-        statusReason: statusRequiresReason(form.status) ? (form.statusReason?.trim() || null) : null,
+        statusReason: taskStatusRequiresReason(form.status) ? (form.statusReason?.trim() || null) : null,
         priority: form.priority,
         startDate: form.startDate || null,
         dueDate: form.dueDate || null,
@@ -637,7 +632,7 @@ export function TaskFormDialog({
                 <TaskStatusPicker
                   value={form.status}
                   onChange={(status) =>
-                    setForm((p) => ({ ...p, status, statusReason: statusRequiresReason(status) ? p.statusReason : null }))
+                    setForm((p) => ({ ...p, status, statusReason: taskStatusRequiresReason(status) ? p.statusReason : null }))
                   }
                 />
               </FormDrawerField>
@@ -675,17 +670,15 @@ export function TaskFormDialog({
                 />
               </FormDrawerField>
             </FormDrawerPropertyGrid>
-            {statusRequiresReason(form.status) && (
+            {taskStatusRequiresReason(form.status) && (
               <div className="flex flex-col gap-1.5 pt-3">
-                <Label htmlFor="task-status-reason">
-                  Why is this {form.status === "blocked" ? "blocked" : "waiting"}?
-                </Label>
+                <Label htmlFor="task-status-reason">Why is this waiting?</Label>
                 <Textarea
                   id="task-status-reason"
                   rows={2}
                   value={form.statusReason ?? ""}
                   onChange={(e) => setForm((p) => ({ ...p, statusReason: e.target.value }))}
-                  placeholder={form.status === "blocked" ? "Describe what it's blocked by…" : "Describe what it's waiting on…"}
+                  placeholder="Describe what it's waiting on…"
                 />
                 {isLegacyReasonGap && !form.statusReason?.trim() && (
                   <p className="text-xs text-muted-foreground">

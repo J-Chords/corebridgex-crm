@@ -10,7 +10,6 @@ export const STATUS_META: Record<
   "not-started": { label: "Not Started", variant: "neutral" },
   "in-progress": { label: "In Progress", variant: "info" },
   waiting: { label: "Waiting", variant: "warning" },
-  blocked: { label: "Blocked", variant: "destructive" },
   completed: { label: "Completed", variant: "success" },
   // Task Level Phase 1 — Canceled is a new CLOSED status; reuses the same neutral/muted treatment as
   // Not Started for now (a genuinely distinct visual identity is Phase 2's "final selected status
@@ -23,7 +22,6 @@ export const STATUS_COLOR_VAR: Record<TaskStatus, string> = {
   "not-started": "var(--muted-foreground)",
   "in-progress": "var(--info)",
   waiting: "var(--warning)",
-  blocked: "var(--destructive)",
   completed: "var(--success)",
   canceled: "var(--muted-foreground)",
 };

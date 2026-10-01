@@ -7,6 +7,7 @@ import { TaskStatusRail } from "@/components/tasks/task-status-rail";
 import { TaskPriorityBadge } from "@/components/tasks/task-priority-badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { isTaskOverdue, formatDueDateShort } from "@/lib/data/task-display";
+import { taskStatusRequiresReason } from "@/lib/data/task-status";
 import { formatMinutes } from "@/lib/format-minutes";
 import { cn } from "@/lib/utils";
 
@@ -41,7 +42,7 @@ function PropertyRow({ label, children }: { label: string; children: React.React
  */
 export function TaskPropertiesRail({ task, canProgress, onStatusChange, statusPending, timer }: TaskPropertiesRailProps) {
   const overdue = isTaskOverdue(task);
-  const requiresReason = task.status === "waiting" || task.status === "blocked";
+  const requiresReason = taskStatusRequiresReason(task.status);
 
   return (
     <div className="flex flex-col divide-y">
@@ -54,7 +55,7 @@ export function TaskPropertiesRail({ task, canProgress, onStatusChange, statusPe
           />
         </div>
       </PropertyRow>
-      {/* Only while Waiting/Blocked — the current workflow reason, never a substitute for Comments. */}
+      {/* Only while Waiting — the current workflow reason, never a substitute for Comments. */}
       {requiresReason && task.statusReason && (
         <PropertyRow label="Reason">
           <span className="text-right text-sm text-foreground">{task.statusReason}</span>

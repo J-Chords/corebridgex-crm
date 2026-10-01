@@ -71,8 +71,8 @@ export interface TaskInput {
   workstreamId: string;
   assigneeIds: string[];
   status: TaskStatus;
-  /** Required exactly when `status` is `"waiting"`/`"blocked"`, ignored (server-cleared) otherwise —
-   * see `Task.statusReason`. Omit or pass null for every other status. */
+  /** Required exactly when `status` is `"waiting"`, ignored (server-cleared) otherwise — see
+   * `Task.statusReason`. Omit or pass null for every other status. */
   statusReason?: string | null;
   priority: TaskPriority;
   /** Optional planned/scheduled start date — never auto-populated or derived. */
@@ -113,8 +113,8 @@ export interface TasksProvider {
    * never silently destroys it. See `20260828100000_delete_task.sql` and its later extensions.
    */
   deleteTask(viewer: User, id: string): Promise<void>;
-  /** `statusReason` is required when `status` is `"waiting"`/`"blocked"`, and is server-cleared the
-   * moment `status` moves to anything else — never pass a stale reason expecting it to persist. */
+  /** `statusReason` is required when `status` is `"waiting"`, and is server-cleared the moment
+   * `status` moves to anything else — never pass a stale reason expecting it to persist. */
   updateTaskStatus(viewer: User, id: string, status: TaskStatus, statusReason?: string | null): Promise<TaskWithRelations>;
   toggleChecklistItem(
     viewer: User,

@@ -116,7 +116,7 @@ A catalog tag (grouped under a Department) that a Template can be configured to 
 
 ### Statuses
 
-`TaskStatus = "not-started" | "in-progress" | "waiting" | "blocked" | "completed" | "canceled"`
+`TaskStatus = "not-started" | "in-progress" | "waiting" | "completed" | "canceled"`
 
 (Single-L `canceled` here — vs. double-L `cancelled` on Project. Both intentional, both locked; don't "fix" either.)
 
@@ -125,15 +125,16 @@ A catalog tag (grouped under a Department) that a Template can be configured to 
 | `not-started` | Not Started |
 | `in-progress` | In Progress |
 | `waiting` | Waiting |
-| `blocked` | Blocked |
 | `completed` | Completed |
 | `canceled` | Canceled |
 
-**Waiting and Blocked both require a reason** (`Task.statusReason`), collected via a dedicated dialog and server-enforced (auto-cleared the instant status leaves either value). A handful of legacy pre-migration rows are exempt from the requirement on unrelated edits, but any genuinely *new* transition into Waiting/Blocked still requires one.
+Phase 5 (CD-214) retired a sixth status, `blocked`, in favor of `waiting` — see `decisions.md`'s Phase 5 entry. A legacy `blocked` value may still appear in stale client-side filter state (a bookmarked URL, sessionStorage, a Saved View); `src/lib/data/task-status.ts` normalizes it to `waiting` on read only — it is never a valid value to *write*.
+
+**Waiting requires a reason** (`Task.statusReason`), collected via a dedicated dialog and server-enforced (auto-cleared the instant status leaves it). A handful of legacy pre-migration rows are exempt from the requirement on unrelated edits, but any genuinely *new* transition into Waiting still requires one.
 
 ### Open vs. Closed / Overdue
 
-- **Closed** = `completed` or `canceled`. Everything else (including Waiting/Blocked) is **Open**.
+- **Closed** = `completed` or `canceled`. Everything else (including Waiting) is **Open**.
 - **Overdue** = not closed, has a due date, and that due date is strictly before today (a plain string comparison on `YYYY-MM-DD`, not a timezone-aware timestamp comparison — see `troubleshooting.md` for why that distinction matters).
 
 ### Checklist — the only sub-item concept, and it can drive status automatically

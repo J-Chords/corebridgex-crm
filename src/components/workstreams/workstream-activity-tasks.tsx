@@ -66,14 +66,13 @@ function ActivityTaskRows({
   );
 }
 
-/** In-progress/blocked/waiting work first — the actionable statuses — then not-started, then completed/canceled last so finished (or abandoned) work never crowds out what still needs attention. Ties broken by due date (soonest first, undated last), matching what the row itself already implies. */
+/** In-progress/waiting work first — the actionable statuses — then not-started, then completed/canceled last so finished (or abandoned) work never crowds out what still needs attention. Ties broken by due date (soonest first, undated last), matching what the row itself already implies. */
 const STATUS_PRIORITY: Record<TaskStatus, number> = {
   "in-progress": 0,
-  blocked: 1,
-  waiting: 2,
-  "not-started": 3,
-  completed: 4,
-  canceled: 5,
+  waiting: 1,
+  "not-started": 2,
+  completed: 3,
+  canceled: 4,
 };
 
 function sortActivityTasks(tasks: TaskWithRelations[]): TaskWithRelations[] {
@@ -209,7 +208,7 @@ function Section({
  *   higher-priority bucket), never duplicated across sections.
  * - Superadmin: no personal-work concept — "Active Activities" (has any tasks) then "Other Activities".
  *
- * Inside every activity, tasks are ordered by actionable status first (in-progress/blocked/waiting,
+ * Inside every activity, tasks are ordered by actionable status first (in-progress/waiting,
  * then not-started, then completed/canceled last).
  */
 export function WorkstreamActivityTasks({ departments, catalogLoading, tasks, isLoading, runningTaskId, onAddTask, onEdit, onDeleted }: WorkstreamActivityTasksProps) {

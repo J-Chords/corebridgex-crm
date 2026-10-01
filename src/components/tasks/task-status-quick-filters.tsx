@@ -3,9 +3,8 @@
 import { AlertTriangle, CalendarClock, Play } from "lucide-react";
 import type { TaskStatus } from "@/lib/data/types";
 import { STATUS_COLOR_VAR, TASK_STATUS_SELECT_ITEMS } from "@/components/tasks/task-status-badge";
+import { TASK_STATUS_ORDER } from "@/lib/data/task-status";
 import { cn } from "@/lib/utils";
-
-const STATUS_ORDER: TaskStatus[] = ["not-started", "in-progress", "waiting", "blocked", "completed", "canceled"];
 
 interface PillProps {
   label: string;
@@ -48,7 +47,6 @@ export interface TaskStatusQuickFilterCounts {
   "not-started": number;
   "in-progress": number;
   waiting: number;
-  blocked: number;
   completed: number;
   canceled: number;
   running: number;
@@ -90,7 +88,7 @@ export function TaskStatusQuickFilters({
   return (
     <div className="flex flex-wrap items-center gap-1.5">
       <Pill label="All" color="var(--muted-foreground)" selected={status === "all"} count={counts.all} onClick={() => onStatusChange("all")} />
-      {STATUS_ORDER.map((s) => (
+      {TASK_STATUS_ORDER.map((s) => (
         <Pill
           key={s}
           label={TASK_STATUS_SELECT_ITEMS[s]}

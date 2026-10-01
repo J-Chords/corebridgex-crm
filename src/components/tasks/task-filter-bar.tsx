@@ -11,10 +11,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { STATUS_COLOR_VAR, STATUS_META, TASK_STATUS_SELECT_ITEMS } from "@/components/tasks/task-status-badge";
+import { TASK_STATUS_ORDER } from "@/lib/data/task-status";
 import { TASK_PRIORITY_SELECT_ITEMS } from "@/components/tasks/task-priority-badge";
 import type { TaskStatus } from "@/lib/data/types";
-
-const STATUS_ORDER: TaskStatus[] = ["not-started", "in-progress", "waiting", "blocked", "completed", "canceled"];
 
 function StatusDot({ status }: { status: TaskStatus }) {
   return (
@@ -173,7 +172,7 @@ export function TaskFilterBar({
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All statuses</SelectItem>
-            {STATUS_ORDER.map((status) => (
+            {TASK_STATUS_ORDER.map((status) => (
               <SelectItem key={status} value={status}>
                 <StatusDot status={status} />
                 {STATUS_META[status].label}
