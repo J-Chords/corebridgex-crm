@@ -265,6 +265,46 @@ export interface ProjectsProvider {
    * (recording a SUCCESSOR period) is explicitly Phase 6B/CD-216 — not implemented here.
    */
   createInitialProjectContractPeriod(viewer: User, projectId: string, periodStart: string): Promise<ProjectContractPeriod>;
+
+  /**
+   * Phase 6B (CD-216) — Admin/superadmin-only. Renews a Project's contract by recording the
+   * successor of its current leaf period: `periodStart`/`periodEnd` are always server-derived
+   * (leaf's `periodEnd + 1 day` -> December 31 of that year), never accepted from the caller.
+   * Requires the Project to already have a recorded chain (use `createInitialProjectContractPeriod`
+   * for a Project with none) and to be renewal-eligible (`isProjectRenewalEligibleStatus` —
+   * Active or On Hold; Completed/Canceled/Archived/Trash are rejected). Does not require the leaf's
+   * own `periodEnd` to have passed — an Admin may record next year's renewal in advance (locked
+   * model section 9); the prior period remains "Current" until its own `periodEnd`. Zero effect on
+   * Templates/Services/Activities/Tasks/checklists/staffing/Partner Brand/Tags/Project Group/
+   * lifecycle status — metadata only, never creates another Project.
+   */
+  renewProjectContractPeriod(viewer: User, projectId: string): Promise<ProjectContractPeriod>;
+
+  /**
+   * Phase 6B (CD-216) — Admin/superadmin-only narrow mistake-correction: removes ONLY the current
+   * leaf period in a Project's chain (the one nothing else has renewed from — see
+   * `getLatestProjectContractPeriod`). Rejects outright if the named period has a successor (a
+   * non-leaf period can never be removed directly — remove each later leaf first); removing the
+   * sole root period of a Project is allowed. Lifecycle status never blocks this — correcting
+   * mistaken history is independent of whether the Project is currently renewal-eligible. No
+   * cascade, no other row touched.
+   */
+  deleteLatestProjectContractPeriod(viewer: User, projectId: string, periodId: string): Promise<void>;
+
+  /**
+   * Phase 6B (CD-216) — Admin/superadmin-only narrow mistake-correction: corrects the root period's
+   * `periodStart` ONLY while it is still the Project's sole recorded period (no successor exists
+   * yet). `periodEnd` is always recomputed server-side as December 31 of the corrected year;
+   * `createdAt`/`createdById` are never touched. Rejects outright once any renewal history exists —
+   * an established chain is never rewritten (use `renewProjectContractPeriod`/
+   * `deleteLatestProjectContractPeriod` instead). Never changes `Project.contractStartDate`
+   * ("Client Since") — the two are separate facts (locked model section D).
+   */
+  correctInitialProjectContractPeriodStart(
+    viewer: User,
+    projectId: string,
+    periodStart: string
+  ): Promise<ProjectContractPeriod>;
 }
 
 /** Threaded Project discussion — see `ProjectComment`. A comment's target (Project-root/Task/

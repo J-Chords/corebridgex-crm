@@ -23,6 +23,23 @@ import { projectIdForCompany } from "./project-id-for-company";
  */
 const earliestSupervisorId = seedUsers.find((u) => u.role === "supervisor")!.id;
 
+/**
+ * Phase 6B (CD-216) — fixture-only lifecycle overrides, so interactive QA can exercise renewal
+ * eligibility across every Project status without inventing new Companies. Every other seeded
+ * Project stays "active" (the pre-Phase-6B default) — see `seed-project-contract-periods.ts` for
+ * which of these also carries recorded contract-period data.
+ */
+const statusOverrideByCompanyId: Record<string, Project["status"]> = {
+  "company-5": "on-hold",
+  "company-6": "completed",
+};
+const statusReasonOverrideByCompanyId: Record<string, string> = {
+  "company-5": "Client requested a pause while they finalize next year's budget.",
+};
+const completionDateOverrideByCompanyId: Record<string, string> = {
+  "company-6": "2024-12-20",
+};
+
 function ownerFor(companyId: string): string {
   const companyWorkstreams = seedWorkstreams
     .filter((w) => w.companyId === companyId)
@@ -41,12 +58,12 @@ export const seedProjects: Project[] = seedCompanies.map((company) => {
     companyId: company.id,
     name: company.name,
     ownerId: owner,
-    status: "active",
+    status: statusOverrideByCompanyId[company.id] ?? "active",
     contractStartDate,
     contractMonths: 12,
     contractEndDate,
     description: isInternal ? "Internal operational work — not an annual client contract." : null,
-    completionDate: null,
+    completionDate: completionDateOverrideByCompanyId[company.id] ?? null,
     archivedAt: null,
     startDate: null,
     endDate: null,
@@ -56,7 +73,7 @@ export const seedProjects: Project[] = seedCompanies.map((company) => {
     // brandId — no ongoing sync after this either in the mock or in Supabase.
     partnerBrandId: company.brandId,
     tags: [],
-    statusReason: null,
+    statusReason: statusReasonOverrideByCompanyId[company.id] ?? null,
     statusChangedAt: null,
     statusChangedById: null,
     trashedAt: null,

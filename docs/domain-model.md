@@ -91,17 +91,19 @@ Both are triggered from the Project overflow ("⋯") menu, Admin-only (`canManag
 - `completionDate` — set once, the first time status transitions to `completed`; never overwritten by a later transition.
 - `archivedAt` — stamped fresh every time status transitions to `archived` (the *latest* archive date), never cleared by Reactivate — so "Previously Archived On" stays visible after returning to Active.
 
-### Contract (Phase 6A, CD-215)
+### Contract (Phase 6A/6B, CD-215/CD-216)
 
 Three distinct date facts, easy to conflate because two of them share a column name across tables — see `docs/architecture.md`'s "Contract / renewal information" section for the full table. In short:
 
 - **Company Contract Start** (`companies.contract_start_date`) — the original client relationship start, master/reference data. Admin-only to correct after creation.
 - **Project Client Since** (`projects.contract_start_date`) — the original Project/engagement start, a Project-owned fact independent of the Company's own value even though they're usually equal at creation. Admin-only to correct after creation. Displayed as "Client Since" only while Active/On Hold.
-- **Current Contract** (`project_contract_periods` rows) — the authoritative, Project-owned operational contract period, derived (never stored) as "current" via `period_start <= today <= period_end`. Every period ends December 31 of its own start year; a renewal period always starts the following January 1. Admin-only to record (`create_initial_project_contract_period`); renewal is Phase 6B/CD-216, not yet implemented.
+- **Current Contract** (`project_contract_periods` rows) — the authoritative, Project-owned operational contract period, derived (never stored) as "current" via `period_start <= today <= period_end`. Every period ends December 31 of its own start year; a renewal period always starts the following January 1. Admin-only to record the first period (`create_initial_project_contract_period`) or renew (`renew_project_contract_period`, Phase 6B — Active/On Hold lifecycle only, both dates server-derived from the current leaf).
+
+A Project's Contract History list derives each recorded period's display state the same way — **Current**, **Upcoming** (a renewal recorded before its own `period_start` arrives — the prior period stays Current until its own `period_end`), or **Past** — never a stored column. Narrow correction (Phase 6B): an Admin may remove ONLY the current leaf period (never a non-leaf, which would disconnect the chain) via `delete_latest_project_contract_period`, or correct the root period's start (`correct_initial_project_contract_period_start`) ONLY while it remains the Project's sole recorded period — both reject once the relevant precondition no longer holds, and neither is a lifecycle transition.
 
 `projects.contract_months`/`projects.contract_end_date` (the pre-Phase-6A rolling-duration pair) and `companies.renewal_date` are all preserved, unchanged, **no longer read as any Project's authoritative current contract** — do not reintroduce a fallback to them.
 
-Contract-period data is deliberately independent of Project lifecycle: no status transition (Active/On Hold/Completed/Canceled/Archived/Trash, in either direction) reads or writes `project_contract_periods`, and recording/renewing a period has zero effect on Templates/Services/Activities/Tasks/checklists/staffing/Partner Brand/Tags/Project Group.
+Contract-period data is deliberately independent of Project lifecycle: no status transition (Active/On Hold/Completed/Canceled/Archived/Trash, in either direction) reads or writes `project_contract_periods` (renewal eligibility checks the CURRENT status at call time, but a transition itself never touches contract-period rows, and Reactivation never auto-creates or restores one), and recording/renewing/correcting/removing a period has zero effect on Templates/Services/Activities/Tasks/checklists/staffing/Partner Brand/Tags/Project Group.
 
 ### What counts as "active work" on dashboards
 

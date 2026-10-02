@@ -248,18 +248,17 @@ reviewed/merged):
   RPC (list_project_staffing_candidates). Not hosted-applied, not committed, not
   pushed, no PR, no Jira. See decisions.md's Phase 4 entry for full scope.
 
-NEXT UP: Phase 3 (CD-208), Phase 4 (CD-211), and Phase 5 (CD-214, Blocked -> Waiting
-status retirement) are all merged to main (PR #11 merge commit cb3fe96, PR #12 merge
-commit 6ef8b7d, PR #13 merge commit 595af8c), Jira `pending deployment`. Phase 6A
-(CD-215, Project contract-period data foundation) is implemented, Product Owner manual
-QA APPROVED, hosted migration 20261001170000 applied and postflight-verified (zero
-drift, zero project_contract_period rows), and the Git checkpoint is done — PR #14
-(https://github.com/J-Chords/corebridgex-crm/pull/14) is OPEN against main, not yet
-merged, frontend not deployed, Jira not yet moved to Code review by this checkpoint.
-Phase 6B (CD-216, renewal action + Contract History UX) is deferred until Phase 6A
-merges — `New` in Jira, not started. See decisions.md's Phase 6 entry and
-current-state.md for the full record. Template cloning (A2) remains deferred, no ticket
-yet.
+NEXT UP: Phase 3 (CD-208), Phase 4 (CD-211), Phase 5 (CD-214, Blocked -> Waiting status
+retirement), and Phase 6A (CD-215, Project contract-period data foundation) are all
+merged to main (PR #11 merge commit cb3fe96, PR #12 merge commit 6ef8b7d, PR #13 merge
+commit 595af8c, PR #14 merge commit 56f6069), Jira `pending deployment`. Phase 6B
+(CD-216, contract renewal + Contract History UX) is implemented on
+feature/CD-216-contract-renewal-history, Product Owner manual QA APPROVED, hosted
+migration 20261002100000 applied and postflight-verified (zero drift, zero
+project_contract_periods rows, every RPC body read back from hosted byte-identical to
+the reviewed migration). Git checkpoint (commit/push/PR) in progress — not yet merged.
+See decisions.md's Phase 6 entry and current-state.md for the full record. Template
+cloning (A2) remains deferred, no ticket yet.
 
 OPEN TICKETS:
 - CD-193 — Normalize local-date handling across task and dashboard date surfaces.
@@ -298,14 +297,20 @@ isProjectActiveForNewWork() gates new-work creation; historical data always stay
 readable. Archive and Trash are two distinct lifecycle actions with different
 semantics — see docs/domain-model.md.
 
-CONTRACT MODEL (Phase 6A, CD-215): Company contractStartDate (original relationship
-start) and Project contractStartDate ("Client Since" - a distinct, independent fact on
-a distinct table despite the identical column name) never advance on renewal and are
-Admin-only to correct after creation. project_contract_periods holds the authoritative,
-derived-never-stored "Current Contract" (calendar-year periods, Dec 31-aligned).
-companies.renewal_date and projects.contractMonths/contractEndDate are preserved but no
-longer authoritative. Renewal (recording a successor period) is Phase 6B/CD-216, not yet
-built. See docs/architecture.md's "Contract / renewal information" section.
+CONTRACT MODEL (Phase 6A/6B, CD-215/CD-216): Company contractStartDate (original
+relationship start) and Project contractStartDate ("Client Since" - a distinct,
+independent fact on a distinct table despite the identical column name) never advance on
+renewal and are Admin-only to correct after creation. project_contract_periods holds the
+authoritative, derived-never-stored "Current Contract"/"Upcoming"/"Past" state
+(calendar-year periods, Dec 31-aligned). companies.renewal_date and
+projects.contractMonths/contractEndDate are preserved but no longer authoritative.
+Renewal (`renew_project_contract_period` — Admin-only, Active/On Hold lifecycle only,
+both dates server-derived) records a successor of the current leaf period; a leaf may be
+removed to correct a mistake (`delete_latest_project_contract_period` — a non-leaf can
+never be removed directly) and a sole root's start may be corrected
+(`correct_initial_project_contract_period_start` — rejected once any renewal history
+exists). None of these are a lifecycle transition and none have any operational side
+effect. See docs/architecture.md's "Contract / renewal information" section.
 
 LOCAL-DATE RULE: never use new Date().toISOString().slice(0, 10) or
 someTimestamp.slice(0, 10) to answer "what calendar day is this for the user" — that

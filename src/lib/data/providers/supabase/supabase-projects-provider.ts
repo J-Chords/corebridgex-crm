@@ -87,6 +87,30 @@ function toProject(row: ProjectRow): Project {
   };
 }
 
+/** Phase 6A/6B (CD-215/CD-216) — shared row shape for every `project_contract_periods` read,
+ * whether from a direct SELECT or an RPC's returned row. */
+interface ContractPeriodRow {
+  id: string;
+  project_id: string;
+  period_start: string;
+  period_end: string;
+  created_at: string;
+  created_by: string | null;
+  renewed_from_period_id: string | null;
+}
+
+function toContractPeriod(row: ContractPeriodRow): ProjectContractPeriod {
+  return {
+    id: row.id,
+    projectId: row.project_id,
+    periodStart: row.period_start,
+    periodEnd: row.period_end,
+    createdAt: row.created_at,
+    createdById: row.created_by,
+    renewedFromPeriodId: row.renewed_from_period_id,
+  };
+}
+
 async function hydrate(projects: Project[]): Promise<ProjectWithRelations[]> {
   if (projects.length === 0) return [];
   const supabase = createClient();
@@ -430,7 +454,7 @@ export const supabaseProjectsProvider: ProjectsProvider = {
 
   // Phase 6A (CD-215) — read-only SELECT, RLS-protected (`project_contract_periods_select`, mirrors
   // `can_access_project`). No direct authenticated write policy exists for this table — all
-  // mutation goes through the narrow RPC below.
+  // mutation goes through the narrow RPCs below.
   async listProjectContractPeriods(_viewer, projectId) {
     const supabase = createClient();
     const { data, error } = await supabase
@@ -438,23 +462,7 @@ export const supabaseProjectsProvider: ProjectsProvider = {
       .select("id, project_id, period_start, period_end, created_at, created_by, renewed_from_period_id")
       .eq("project_id", projectId);
     if (error) throw new Error(error.message);
-    return ((data ?? []) as {
-      id: string;
-      project_id: string;
-      period_start: string;
-      period_end: string;
-      created_at: string;
-      created_by: string | null;
-      renewed_from_period_id: string | null;
-    }[]).map((row) => ({
-      id: row.id,
-      projectId: row.project_id,
-      periodStart: row.period_start,
-      periodEnd: row.period_end,
-      createdAt: row.created_at,
-      createdById: row.created_by,
-      renewedFromPeriodId: row.renewed_from_period_id,
-    }));
+    return (data ?? []).map(toContractPeriod);
   },
 
   // Phase 6A (CD-215) — Admin/superadmin-only, enforced server-side by the RPC itself (never
@@ -466,24 +474,39 @@ export const supabaseProjectsProvider: ProjectsProvider = {
       p_period_start: periodStart,
     });
     if (error) throw new Error(error.message);
-    const row = data as {
-      id: string;
-      project_id: string;
-      period_start: string;
-      period_end: string;
-      created_at: string;
-      created_by: string | null;
-      renewed_from_period_id: string | null;
-    };
-    return {
-      id: row.id,
-      projectId: row.project_id,
-      periodStart: row.period_start,
-      periodEnd: row.period_end,
-      createdAt: row.created_at,
-      createdById: row.created_by,
-      renewedFromPeriodId: row.renewed_from_period_id,
-    } satisfies ProjectContractPeriod;
+    return toContractPeriod(data as ContractPeriodRow);
+  },
+
+  // Phase 6B (CD-216) — Admin/superadmin-only, enforced server-side. Successor dates are always
+  // server-derived (never accepted from the caller) by `renew_project_contract_period` itself.
+  async renewProjectContractPeriod(_viewer, projectId) {
+    const supabase = createClient();
+    const { data, error } = await supabase.rpc("renew_project_contract_period", { p_project_id: projectId });
+    if (error) throw new Error(error.message);
+    return toContractPeriod(data as ContractPeriodRow);
+  },
+
+  // Phase 6B (CD-216) — Admin/superadmin-only. `delete_latest_project_contract_period` itself
+  // rejects a non-leaf period; the caller refetches `listProjectContractPeriods` to refresh.
+  async deleteLatestProjectContractPeriod(_viewer, projectId, periodId) {
+    const supabase = createClient();
+    const { error } = await supabase.rpc("delete_latest_project_contract_period", {
+      p_project_id: projectId,
+      p_period_id: periodId,
+    });
+    if (error) throw new Error(error.message);
+  },
+
+  // Phase 6B (CD-216) — Admin/superadmin-only. `correct_initial_project_contract_period_start`
+  // itself rejects once any renewal history exists; periodEnd is always recomputed server-side.
+  async correctInitialProjectContractPeriodStart(_viewer, projectId, periodStart) {
+    const supabase = createClient();
+    const { data, error } = await supabase.rpc("correct_initial_project_contract_period_start", {
+      p_project_id: projectId,
+      p_period_start: periodStart,
+    });
+    if (error) throw new Error(error.message);
+    return toContractPeriod(data as ContractPeriodRow);
   },
 
   // Phase 4 QA fix — deliberately NOT listAssignableStaff (backed by profiles' own team-scoped RLS;
