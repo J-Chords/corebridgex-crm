@@ -256,9 +256,11 @@ commit 595af8c, PR #14 merge commit 56f6069), Jira `pending deployment`. Phase 6
 feature/CD-216-contract-renewal-history, Product Owner manual QA APPROVED, hosted
 migration 20261002100000 applied and postflight-verified (zero drift, zero
 project_contract_periods rows, every RPC body read back from hosted byte-identical to
-the reviewed migration). Git checkpoint (commit/push/PR) in progress — not yet merged.
-See decisions.md's Phase 6 entry and current-state.md for the full record. Template
-cloning (A2) remains deferred, no ticket yet.
+the reviewed migration). At the pre-merge checkpoint: PR #15
+(https://github.com/J-Chords/corebridgex-crm/pull/15) is open against main, checkpoint
+commit 938c885, not yet merged; Jira reached `Code review`. See decisions.md's Phase 6
+entry and current-state.md for the full record. Template cloning (A2) remains deferred,
+no ticket yet.
 
 OPEN TICKETS:
 - CD-193 — Normalize local-date handling across task and dashboard date surfaces.
