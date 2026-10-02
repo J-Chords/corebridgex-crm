@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth/auth-context";
 import { projectsProvider } from "@/lib/data/providers";
 import type { ProjectWithRelations } from "@/lib/data/providers/projects-provider";
-import type { ProjectGroup } from "@/lib/data/types";
+import type { ProjectContractPeriod, ProjectGroup } from "@/lib/data/types";
 
 export function useProjects() {
   const { user } = useAuth();
@@ -65,6 +65,30 @@ export function useProject(id: string) {
   }, [refresh]);
 
   return { project, isLoading, notFound, refresh };
+}
+
+/** Phase 6A (CD-215) — only this Project's own accessible recorded contract periods, never every
+ * Project's. Read-only; mutation (`createInitialProjectContractPeriod`) is called directly from the
+ * consuming component and should `refresh()` this afterward, same convention as `useProject`. */
+export function useProjectContractPeriods(projectId: string) {
+  const { user } = useAuth();
+  const [periods, setPeriods] = useState<ProjectContractPeriod[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const refresh = useCallback(async () => {
+    if (!user) return;
+    setIsLoading(true);
+    const result = await projectsProvider.listProjectContractPeriods(user, projectId);
+    setPeriods(result);
+    setIsLoading(false);
+  }, [user, projectId]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    refresh();
+  }, [refresh]);
+
+  return { periods, isLoading, refresh };
 }
 
 /** Project Level Stage C — the optional Project Group catalog (visible to any authenticated user;

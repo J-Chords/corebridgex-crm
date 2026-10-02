@@ -92,6 +92,28 @@ export interface ProjectTeamLead {
   createdById: string;
 }
 
+/**
+ * Phase 6A (CD-215) — a recorded, factual annual contract period for one Project. Represents an
+ * ACTUAL recorded business period, never a mathematically-generated guess — there is deliberately
+ * no row for every calendar year since `Project.contractStartDate`; a legacy Project's first
+ * genuinely-recorded period may start well after its own "Client Since" date (see
+ * `create_initial_project_contract_period`'s own doc comment). Every period ends December 31 of
+ * its own `periodStart` year; a renewal period's `periodStart` is always the day after its
+ * predecessor's `periodEnd` (so always January 1). "Current" is deliberately NOT a stored field —
+ * see `getCurrentProjectContractPeriod` in `src/lib/data/contract-periods.ts`, derived from
+ * `periodStart <= today <= periodEnd` each time, never a second source of truth to keep in sync.
+ */
+export interface ProjectContractPeriod {
+  id: string;
+  projectId: string;
+  periodStart: string;
+  periodEnd: string;
+  createdAt: string;
+  createdById: string | null;
+  /** Null for the first recorded period in a Project's chain. */
+  renewedFromPeriodId: string | null;
+}
+
 /** Singleton row — see `set_project_trash_retention`. `retentionDays === null` means automatic
  * purge is disabled (the default); a positive number is the Admin's own explicit choice. No
  * automatic physical purge is ever scheduled by this codebase — see the architecture doc's

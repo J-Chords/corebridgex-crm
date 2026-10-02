@@ -43,12 +43,6 @@ interface ProjectFormDialogProps {
   defaultCompanyId?: string;
 }
 
-function addMonths(dateStr: string, months: number): string {
-  const d = new Date(dateStr);
-  d.setUTCMonth(d.getUTCMonth() + months);
-  return d.toISOString().slice(0, 10);
-}
-
 function emptyForm() {
   return {
     companyId: "",
@@ -57,10 +51,13 @@ function emptyForm() {
     startDate: "",
     endDate: "",
     completionDate: "",
-    // Reused for both meanings depending on path: the Project's own mirrored contract term
-    // (attaching to an already-existing Company) OR the brand-new Company's own contract-
-    // start/renewal (the normal global flow) — the same historical "Company contract mirrors onto
-    // Project contract" precedent either way.
+    // Reused for both meanings depending on path: the Project's own "Client Since" (attaching to an
+    // already-existing Company — protected Admin-only after creation, Phase 6A section M) OR the
+    // brand-new Company's own Contract Start/Renewal Date (the normal global flow) — distinct
+    // fields on distinct tables, never conflated; see docs/architecture.md's "Contract / renewal
+    // information" section. `contractMonths`/`contractEndDate` are the Project's own legacy
+    // contract-term pair — no longer presented as the authoritative Current Contract (Phase 6A);
+    // preserved here only so an edit submit doesn't change their already-stored values.
     contractStartDate: "",
     contractMonths: "12",
     contractEndDate: "",
@@ -229,11 +226,6 @@ export function ProjectFormDialog({ open, onOpenChange, mode, project, onSaved, 
     setForm((p) => ({ ...p, name: selectedCompany.name }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCompany?.name, nameTouched, mode]);
-
-  const suggestedEnd =
-    form.contractStartDate && form.contractMonths
-      ? addMonths(form.contractStartDate, Number(form.contractMonths) || 12)
-      : null;
 
   // Title is the only required PROJECT ATTRIBUTE. Company is structural context, resolved either by
   // creating a brand-new one automatically (isGlobalCreate — nothing to require upfront) or by
@@ -425,7 +417,7 @@ export function ProjectFormDialog({ open, onOpenChange, mode, project, onSaved, 
                 description={
                   isGlobalCreate
                     ? "Partner Brand, contact, contract/renewal."
-                    : "Contract term."
+                    : "Client Since."
                 }
                 expanded={expandedSections.has("administrative")}
                 onToggle={() => toggleSection("administrative")}
@@ -666,51 +658,22 @@ export function ProjectFormDialog({ open, onOpenChange, mode, project, onSaved, 
                 </div>
 
                 {!isGlobalCreate && (
-                  <div className="flex flex-col gap-3 border-t pt-3">
-                    <span className="font-mono text-[10px] tracking-wider text-muted-foreground uppercase">
-                      Contract term (annual client contract, not this Project&apos;s own work dates)
-                    </span>
-                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-                      <div className="flex flex-col gap-1.5">
-                        <Label htmlFor="project-contract-start">Contract start</Label>
-                        <Input
-                          id="project-contract-start"
-                          type="date"
-                          value={form.contractStartDate}
-                          onChange={(e) => setForm((p) => ({ ...p, contractStartDate: e.target.value }))}
-                        />
-                      </div>
-                      <div className="flex flex-col gap-1.5">
-                        <Label htmlFor="project-contract-months">Duration (months)</Label>
-                        <Input
-                          id="project-contract-months"
-                          type="number"
-                          min="1"
-                          value={form.contractMonths}
-                          onChange={(e) => setForm((p) => ({ ...p, contractMonths: e.target.value }))}
-                        />
-                      </div>
-                      <div className="flex flex-col gap-1.5">
-                        <Label htmlFor="project-contract-end">Contract end</Label>
-                        <Input
-                          id="project-contract-end"
-                          type="date"
-                          value={form.contractEndDate}
-                          onChange={(e) => setForm((p) => ({ ...p, contractEndDate: e.target.value }))}
-                        />
-                        {suggestedEnd && suggestedEnd !== form.contractEndDate && (
-                          <button
-                            type="button"
-                            onClick={() => setForm((p) => ({ ...p, contractEndDate: suggestedEnd }))}
-                            className="w-fit text-left text-xs text-primary hover:underline"
-                          >
-                            Use suggested: {suggestedEnd}
-                          </button>
-                        )}
-                      </div>
-                    </div>
+                  <div className="flex flex-col gap-1.5 border-t pt-3">
+                    <Label htmlFor="project-client-since">Client Since</Label>
+                    <Input
+                      id="project-client-since"
+                      type="date"
+                      value={form.contractStartDate}
+                      disabled={!canEditProtectedFields}
+                      onChange={(e) => setForm((p) => ({ ...p, contractStartDate: e.target.value }))}
+                    />
+                    {!canEditProtectedFields && (
+                      <p className="text-xs text-muted-foreground">Only an Admin can correct Client Since.</p>
+                    )}
                     <p className="text-xs text-muted-foreground">
-                      The client&apos;s own contract/renewal term — never this Project&apos;s own work timeline above.
+                      The original Project/engagement start — distinct from this Project&apos;s own Start/End work
+                      dates. Never advances on annual renewal; see the Project Overview&apos;s own Current Contract
+                      for the operational contract period.
                     </p>
                   </div>
                 )}

@@ -122,6 +122,17 @@ export const mockCompaniesProvider: CompaniesProvider = {
     const existing = db.companies.find((c) => c.id === id);
     if (!existing) throw new Error("Company not found.");
 
+    // Phase 6A (CD-215), locked model section M — post-creation correction of the Company's
+    // original-relationship Contract Start (and the preserved-for-compatibility Renewal Date) is
+    // Admin-only. A Supervisor (who otherwise passes `canManageCompanies`) attempting to change
+    // either is rejected outright, never silently kept at the old value.
+    if (
+      !isSuperadmin(viewer) &&
+      (input.contractStartDate !== existing.contractStartDate || input.renewalDate !== existing.renewalDate)
+    ) {
+      throw new Error("Only an admin can change this company's contract start or renewal date.");
+    }
+
     const updated: Company = {
       ...existing,
       name: input.name,

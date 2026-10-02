@@ -2,6 +2,7 @@ import type {
   Brand,
   Project,
   ProjectComment,
+  ProjectContractPeriod,
   ProjectGroup,
   ProjectIssue,
   ProjectStatus,
@@ -126,8 +127,10 @@ export interface ClientProjectInput {
    * default, never an ongoing sync). */
   partnerBrandId: string | null;
   /** Company master contract/renewal fields — distinct from the Project's own `startDate`/
-   * `endDate`/`completionDate` below, never conflated (see docs/project-level-product-
-   * architecture.md's "Contract/renewal information" section). */
+   * `endDate`/`completionDate` below, never conflated (see docs/architecture.md's "Contract /
+   * renewal information" section). Phase 6A (CD-215) — this is the Company's original-relationship
+   * record only; the Project's own operational "Current Contract" lives entirely in
+   * `project_contract_periods`, never derived from these two fields. */
   contractStartDate: string | null;
   renewalDate: string | null;
   /** A single optional primary contact, created alongside the Company when given. Deeper
@@ -150,14 +153,17 @@ export interface ClientProjectInput {
 
 /**
  * Contract every provider (mock, Supabase, future AWS) must implement. Phase 8A was a read-only
- * surface; Phase 8E added Superadmin-only creation, editing, and annual renewal. Product Owner
- * Final Lifecycle Integrity correction — "Renew Project" (creating a new Project each year for the
- * same Company) is a rejected product capability: Project IS the ongoing Client/Company workspace,
- * never re-created annually. `renewProject`/`ProjectRenewalInput` and their one UI consumer
+ * surface; Phase 8E added Superadmin-only creation and editing. Product Owner Final Lifecycle
+ * Integrity correction — "Renew Project" (creating a new Project each year for the same Company)
+ * is a rejected product capability: Project IS the ongoing Client/Company workspace, never
+ * re-created annually. `renewProject`/`ProjectRenewalInput` and their one UI consumer
  * (`project-renewal-dialog.tsx`, never actually imported/rendered anywhere) were removed — an
- * exhaustive search found zero other callers. The corresponding hosted RPC is left in place,
- * dormant/unreachable (no migration to drop it — nothing calls it, so nothing requires one); no
- * historical Project ever created by it was touched.
+ * exhaustive search found zero other callers. The corresponding hosted `renew_project` RPC was
+ * later dropped outright (`20260908140000_project_lifecycle_authoritative_hardening.sql`) — it does
+ * NOT exist on hosted Supabase; do not assume otherwise from older comments. This locked invariant
+ * ("never duplicate a Project to represent another contract year") carries forward unchanged into
+ * Phase 6A/6B's contract-period model below — `listProjectContractPeriods`/
+ * `createInitialProjectContractPeriod` record metadata on the SAME Project, never create a new one.
  */
 export interface ProjectsProvider {
   listProjects(viewer: User): Promise<ProjectWithRelations[]>;
@@ -242,6 +248,23 @@ export interface ProjectsProvider {
    * this codebase (see `ProjectTrashSettings`'s own doc comment for the dependency-audit finding). */
   getTrashSettings(viewer: User): Promise<ProjectTrashSettings>;
   setTrashRetentionDays(viewer: User, days: number | null): Promise<ProjectTrashSettings>;
+
+  /** Phase 6A (CD-215) — every accessible (`can_access_project`) recorded contract period for this
+   * Project, in no particular guaranteed order (callers needing "current" should use
+   * `getCurrentProjectContractPeriod` from `src/lib/data/contract-periods.ts`, never re-derive it
+   * inline). Read-only; never widens Project visibility beyond the existing boundary. */
+  listProjectContractPeriods(viewer: User, projectId: string): Promise<ProjectContractPeriod[]>;
+  /**
+   * Phase 6A (CD-215) — Admin/superadmin-only. Records the FIRST period known to the new
+   * contract-history subsystem for a Project that doesn't already have one — never a proof that
+   * this was the client's historically-first-ever contract (a legacy Project's "Client Since" may
+   * be years earlier than its first truthfully-recorded period; that gap is intentional, never
+   * fabricated). `periodEnd` is always computed server-side as December 31 of `periodStart`'s
+   * year — never accepted from the caller. Zero effect on Templates/Services/Activities/Tasks/
+   * checklists/staffing/Partner Brand/Tags/Project Group/lifecycle status — metadata only. Renewal
+   * (recording a SUCCESSOR period) is explicitly Phase 6B/CD-216 — not implemented here.
+   */
+  createInitialProjectContractPeriod(viewer: User, projectId: string, periodStart: string): Promise<ProjectContractPeriod>;
 }
 
 /** Threaded Project discussion — see `ProjectComment`. A comment's target (Project-root/Task/

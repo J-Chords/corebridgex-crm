@@ -248,15 +248,15 @@ reviewed/merged):
   RPC (list_project_staffing_candidates). Not hosted-applied, not committed, not
   pushed, no PR, no Jira. See decisions.md's Phase 4 entry for full scope.
 
-NEXT UP: Phase 3 (CD-208) and Phase 4 (CD-211) are both merged to main (PR #11 merge
-commit cb3fe96, PR #12 merge commit 6ef8b7d), Jira `pending deployment`. Phase 5
-(CD-214, Blocked -> Waiting status retirement) is implemented on
-feature/CD-214-retire-blocked-task-status, Product Owner manual QA approved, hosted
-migration applied and postflight-verified (zero drift, zero row-count regressions,
-direct hosted probe confirms blocked writes rejected). Checkpoint (commit/push/PR) in
-progress — not yet merged, Jira not yet updated. See decisions.md's Phase 5 entry and
-current-state.md for the full record. Template cloning (A2) remains deferred, no ticket
-yet.
+NEXT UP: Phase 3 (CD-208), Phase 4 (CD-211), and Phase 5 (CD-214, Blocked -> Waiting
+status retirement) are all merged to main (PR #11 merge commit cb3fe96, PR #12 merge
+commit 6ef8b7d, PR #13 merge commit 595af8c), Jira `pending deployment`. Phase 6A
+(CD-215, Project contract-period data foundation) is implemented on
+feature/CD-215-contract-data-foundation, awaiting Product Owner manual QA before the
+hosted-migration-apply/checkpoint sequence. Phase 6B (CD-216, renewal action + Contract
+History UX) is deferred until the 6A foundation is checked in — `New` in Jira, not
+started. See decisions.md's Phase 6 entry and current-state.md for the full record.
+Template cloning (A2) remains deferred, no ticket yet.
 
 OPEN TICKETS:
 - CD-193 — Normalize local-date handling across task and dashboard date surfaces.
@@ -294,6 +294,15 @@ PROJECT MODEL: statuses active/on-hold/completed/cancelled (double-L)/archived/t
 isProjectActiveForNewWork() gates new-work creation; historical data always stays
 readable. Archive and Trash are two distinct lifecycle actions with different
 semantics — see docs/domain-model.md.
+
+CONTRACT MODEL (Phase 6A, CD-215): Company contractStartDate (original relationship
+start) and Project contractStartDate ("Client Since" - a distinct, independent fact on
+a distinct table despite the identical column name) never advance on renewal and are
+Admin-only to correct after creation. project_contract_periods holds the authoritative,
+derived-never-stored "Current Contract" (calendar-year periods, Dec 31-aligned).
+companies.renewal_date and projects.contractMonths/contractEndDate are preserved but no
+longer authoritative. Renewal (recording a successor period) is Phase 6B/CD-216, not yet
+built. See docs/architecture.md's "Contract / renewal information" section.
 
 LOCAL-DATE RULE: never use new Date().toISOString().slice(0, 10) or
 someTimestamp.slice(0, 10) to answer "what calendar day is this for the user" — that

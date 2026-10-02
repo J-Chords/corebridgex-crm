@@ -86,6 +86,24 @@ No other call site needs to change — every screen imports the provider by its 
 
 Why this matters and what happens when it's skipped: see `troubleshooting.md`'s writeup of the CD-190 timezone defect.
 
+## Contract / renewal information
+
+Phase 6A (CD-215) locked the operational contract model. Three distinct concepts, on two tables, must never be conflated merely because two of them share a column name:
+
+| Concept | Table.column | Meaning | Mutates on renewal? | Post-creation edit |
+|---|---|---|---|---|
+| Company Contract Start | `companies.contract_start_date` | The original client relationship start — master/reference data | Never | Admin-only |
+| Company Renewal Date | `companies.renewal_date` | Preserved for compatibility only — **not** read as any Project's current contract | Never (no longer written by any renewal flow) | Admin-only |
+| Project Client Since | `projects.contract_start_date` | The original Project/engagement start — a Project-owned fact, independent of the Company's own Contract Start even though they're often equal at creation | Never | Admin-only |
+| Project legacy contract term | `projects.contract_months` / `projects.contract_end_date` | Pre-Phase-6A rolling-duration fields — preserved, not dropped, **no longer the authoritative current contract** | N/A — dormant | Admin-only (same guard as Client Since) |
+| Current Contract | `project_contract_periods` rows | The authoritative, Project-owned annual contract period | Yes — Phase 6B records a new row per renewal | Admin-only (`create_initial_project_contract_period`; a successor/renewal RPC is Phase 6B/CD-216) |
+
+**Ownership**: contracts belong to **Project**, never Company — a Company may have several genuinely distinct Projects/engagements over time, but annual renewal is never the reason a second Project exists (the retired `renew_project` RPC — see `data-and-supabase.md` — enforced exactly this before being dropped; `project_contract_periods` is the modern replacement, operating on the SAME Project, never creating another one).
+
+**Period model**: every recorded period ends December 31 of its own start year (`2026-05-04 → 2026-12-31`; `2026-01-01 → 2026-12-31`). A renewal period always starts January 1, exactly one day after its predecessor's `period_end`. "Current" is never stored — `src/lib/data/contract-periods.ts`'s `getCurrentProjectContractPeriod` derives it fresh (`period_start <= today <= period_end`) every time, using `planner-dates.ts`'s date-only primitives, never `.toISOString().slice(0, 10)`.
+
+**Truthfulness**: `project_contract_periods` rows represent actual recorded business periods, never mathematically-generated guesses from an old `contractStartDate`. The Phase 6A migration backfills zero rows for this reason — see `data-and-supabase.md`'s migration entry and `decisions.md`'s Phase 6 entry.
+
 ## Routes
 
 Every authenticated route lives under `/dashboard`, because `src/app/dashboard/layout.tsx` is the single auth-guarded shell (sidebar + topbar) — anything nested under it inherits the guard for free.
