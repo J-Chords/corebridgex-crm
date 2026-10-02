@@ -251,12 +251,15 @@ reviewed/merged):
 NEXT UP: Phase 3 (CD-208), Phase 4 (CD-211), and Phase 5 (CD-214, Blocked -> Waiting
 status retirement) are all merged to main (PR #11 merge commit cb3fe96, PR #12 merge
 commit 6ef8b7d, PR #13 merge commit 595af8c), Jira `pending deployment`. Phase 6A
-(CD-215, Project contract-period data foundation) is implemented on
-feature/CD-215-contract-data-foundation, awaiting Product Owner manual QA before the
-hosted-migration-apply/checkpoint sequence. Phase 6B (CD-216, renewal action + Contract
-History UX) is deferred until the 6A foundation is checked in — `New` in Jira, not
-started. See decisions.md's Phase 6 entry and current-state.md for the full record.
-Template cloning (A2) remains deferred, no ticket yet.
+(CD-215, Project contract-period data foundation) is implemented, Product Owner manual
+QA APPROVED, hosted migration 20261001170000 applied and postflight-verified (zero
+drift, zero project_contract_period rows), and the Git checkpoint is done — PR #14
+(https://github.com/J-Chords/corebridgex-crm/pull/14) is OPEN against main, not yet
+merged, frontend not deployed, Jira not yet moved to Code review by this checkpoint.
+Phase 6B (CD-216, renewal action + Contract History UX) is deferred until Phase 6A
+merges — `New` in Jira, not started. See decisions.md's Phase 6 entry and
+current-state.md for the full record. Template cloning (A2) remains deferred, no ticket
+yet.
 
 OPEN TICKETS:
 - CD-193 — Normalize local-date handling across task and dashboard date surfaces.
