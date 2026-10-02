@@ -15,7 +15,8 @@ import {
   SlidersHorizontal,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth/auth-context";
-import { useProject, useProjectGroups } from "@/lib/data/hooks/use-projects";
+import { useProject, useProjectGroups, useProjectContractPeriods } from "@/lib/data/hooks/use-projects";
+import { getCurrentProjectContractPeriod } from "@/lib/data/contract-periods";
 import { useWorkstreams } from "@/lib/data/hooks/use-workstreams";
 import { useTasks } from "@/lib/data/hooks/use-tasks";
 import { useCompany, useCompanyLookups } from "@/lib/data/hooks/use-companies";
@@ -43,7 +44,7 @@ import type { CompanyWithRelations } from "@/lib/data/providers/companies-provid
 import { workstreamDisplayHeading } from "@/lib/data/workstream-name";
 import { SafeMarkdown } from "@/lib/markdown-lite";
 import { ROLE_LABELS } from "@/lib/data/role-labels";
-import type { ClientContact, ProjectIssue, TaskStatus } from "@/lib/data/types";
+import type { ClientContact, ProjectContractPeriod, ProjectIssue, TaskStatus } from "@/lib/data/types";
 import type { TaskWithRelations } from "@/lib/data/providers/tasks-provider";
 import { cn } from "@/lib/utils";
 import { todayDateOnly, parseDateOnly, formatDateOnly, startOfWeekMonday, startOfMonth, addDays } from "@/lib/planner-dates";
@@ -307,6 +308,7 @@ function AdministrativeDetailsCard({
   projectGroups,
   company,
   clientContacts,
+  currentContractPeriod,
   canEdit,
   onEditCompany,
   onAddContact,
@@ -316,6 +318,10 @@ function AdministrativeDetailsCard({
   projectGroups: { id: string; name: string }[];
   company: CompanyWithRelations | null;
   clientContacts: ClientContact[];
+  /** Phase 6A (CD-215) — the one recorded period containing today, or null. Derived entirely from
+   * `project_contract_periods`; never a fallback to Client Since/Company Renewal Date/the legacy
+   * contractMonths/contractEndDate pair. */
+  currentContractPeriod: ProjectContractPeriod | null;
   canEdit: boolean;
   onEditCompany: () => void;
   onAddContact: () => void;
@@ -361,6 +367,17 @@ function AdministrativeDetailsCard({
             <span className="font-mono text-[10px] tracking-wide text-muted-foreground uppercase">Owner</span>
             <span className="text-sm">{project.owner.fullName}</span>
           </div>
+          <div className="flex flex-col gap-0.5">
+            <span className="font-mono text-[10px] tracking-wide text-muted-foreground uppercase">Current Contract</span>
+            {/* Phase 6A (CD-215) — derived ONLY from project_contract_periods; never a fallback to
+                Client Since, Company Renewal Date, or the legacy contractMonths/contractEndDate
+                pair. "Not recorded" is a real, honest state, not an error. */}
+            <span className="text-sm">
+              {currentContractPeriod
+                ? `${formatDate(currentContractPeriod.periodStart)} – ${formatDate(currentContractPeriod.periodEnd)}`
+                : "Not recorded"}
+            </span>
+          </div>
           {detailItems.map((item) => (
             <div key={item.label} className="flex flex-col gap-0.5">
               <span className="font-mono text-[10px] tracking-wide text-muted-foreground uppercase">{item.label}</span>
@@ -393,14 +410,6 @@ function AdministrativeDetailsCard({
                 <span className="font-mono text-[10px] tracking-wide text-muted-foreground uppercase">Partner Brand</span>
                 {/* Phase 3 (CD-208) — Project-specific, independent of the Company's own Brand. */}
                 <span className="text-sm">{project.partnerBrand?.name ?? "No brand set"}</span>
-              </div>
-              <div className="flex flex-col gap-0.5">
-                <span className="font-mono text-[10px] tracking-wide text-muted-foreground uppercase">Contract Start</span>
-                <span className="text-sm">{formatDate(company.contractStartDate)}</span>
-              </div>
-              <div className="flex flex-col gap-0.5">
-                <span className="font-mono text-[10px] tracking-wide text-muted-foreground uppercase">Renewal Date</span>
-                <span className="text-sm">{formatDate(company.renewalDate)}</span>
               </div>
             </div>
 
@@ -535,6 +544,9 @@ function LoadedProjectDetailPage({
   const { workstreams, isLoading: workstreamsLoading, refresh: refreshWorkstreams } = useWorkstreams({ projectId: project.id });
   const { tasks, isLoading: tasksLoading, refresh: refreshTasks } = useTasks({ workstreamIds: workstreams.map((w) => w.id) });
   const { company, contacts: clientContacts, refresh: refreshCompany } = useCompany(project.companyId);
+  // Phase 6A (CD-215) — this Project's own recorded contract periods only; never every Project's.
+  const { periods: contractPeriods } = useProjectContractPeriods(project.id);
+  const currentContractPeriod = getCurrentProjectContractPeriod(contractPeriods);
   const [editCompanyOpen, setEditCompanyOpen] = useState(false);
   const [editContact, setEditContact] = useState<ClientContact | "new" | null>(null);
   const { notes } = useCompanyNotes(project.companyId);
@@ -965,6 +977,7 @@ function LoadedProjectDetailPage({
             projectGroups={projectGroups}
             company={company}
             clientContacts={clientContacts}
+            currentContractPeriod={currentContractPeriod}
             canEdit={canManageProjectRecord(user, projectForManage)}
             onEditCompany={() => setEditCompanyOpen(true)}
             onAddContact={() => setEditContact("new")}

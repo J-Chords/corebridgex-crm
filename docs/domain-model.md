@@ -91,6 +91,18 @@ Both are triggered from the Project overflow ("⋯") menu, Admin-only (`canManag
 - `completionDate` — set once, the first time status transitions to `completed`; never overwritten by a later transition.
 - `archivedAt` — stamped fresh every time status transitions to `archived` (the *latest* archive date), never cleared by Reactivate — so "Previously Archived On" stays visible after returning to Active.
 
+### Contract (Phase 6A, CD-215)
+
+Three distinct date facts, easy to conflate because two of them share a column name across tables — see `docs/architecture.md`'s "Contract / renewal information" section for the full table. In short:
+
+- **Company Contract Start** (`companies.contract_start_date`) — the original client relationship start, master/reference data. Admin-only to correct after creation.
+- **Project Client Since** (`projects.contract_start_date`) — the original Project/engagement start, a Project-owned fact independent of the Company's own value even though they're usually equal at creation. Admin-only to correct after creation. Displayed as "Client Since" only while Active/On Hold.
+- **Current Contract** (`project_contract_periods` rows) — the authoritative, Project-owned operational contract period, derived (never stored) as "current" via `period_start <= today <= period_end`. Every period ends December 31 of its own start year; a renewal period always starts the following January 1. Admin-only to record (`create_initial_project_contract_period`); renewal is Phase 6B/CD-216, not yet implemented.
+
+`projects.contract_months`/`projects.contract_end_date` (the pre-Phase-6A rolling-duration pair) and `companies.renewal_date` are all preserved, unchanged, **no longer read as any Project's authoritative current contract** — do not reintroduce a fallback to them.
+
+Contract-period data is deliberately independent of Project lifecycle: no status transition (Active/On Hold/Completed/Canceled/Archived/Trash, in either direction) reads or writes `project_contract_periods`, and recording/renewing a period has zero effect on Templates/Services/Activities/Tasks/checklists/staffing/Partner Brand/Tags/Project Group.
+
 ### What counts as "active work" on dashboards
 
 Two related but distinct filters:

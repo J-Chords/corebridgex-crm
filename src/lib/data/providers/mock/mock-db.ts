@@ -24,6 +24,7 @@ import { seedSavedViews } from "./seed-saved-views";
 import { seedProjects } from "./seed-projects";
 import { seedProjectMembers } from "./seed-project-members";
 import { seedProjectGroups } from "./seed-project-groups";
+import { seedProjectContractPeriods } from "./seed-project-contract-periods";
 import type {
   ClientReport,
   ClientReportSchedule,
@@ -138,6 +139,10 @@ export const db = {
   // Phase 4 — no seed rows. No historical Project ever had an Additional Team Lead (a purely
   // additive new relation); populated at runtime as people staff a Project.
   projectTeamLeads: [] as ProjectTeamLead[],
+  // Phase 6A (CD-215) — fictional demo fixture data only (see seed-project-contract-periods.ts's
+  // own doc comment); never a mathematically-generated backfill, matching the real hosted
+  // migration's own "zero fabricated rows" rule.
+  projectContractPeriods: [...seedProjectContractPeriods],
   // No seed rows here on purpose — every row is dated "today" at creation time, and seed data is
   // all fixed past dates. Populated at runtime as people open My Day.
   dailyUpdates: [] as DailyUpdate[],

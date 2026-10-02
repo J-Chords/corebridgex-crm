@@ -6,7 +6,7 @@ import type {
   ClientProjectInput,
   ProjectTemplateSelection,
 } from "../projects-provider";
-import type { Project, ProjectGroup, ProjectStatus, ProjectTrashSettings, User } from "../../types";
+import type { Project, ProjectContractPeriod, ProjectGroup, ProjectStatus, ProjectTrashSettings, User } from "../../types";
 import { createClient } from "@/lib/supabase/client";
 import { resolveProfileDirectory } from "./profile-directory";
 import { hydrateWorkstreamRows, type WorkstreamRow } from "./supabase-workstreams-provider";
@@ -426,6 +426,64 @@ export const supabaseProjectsProvider: ProjectsProvider = {
     const refreshed = await supabaseProjectsProvider.getProject(viewer, projectId);
     if (!refreshed) throw new Error("Project not found.");
     return refreshed;
+  },
+
+  // Phase 6A (CD-215) — read-only SELECT, RLS-protected (`project_contract_periods_select`, mirrors
+  // `can_access_project`). No direct authenticated write policy exists for this table — all
+  // mutation goes through the narrow RPC below.
+  async listProjectContractPeriods(_viewer, projectId) {
+    const supabase = createClient();
+    const { data, error } = await supabase
+      .from("project_contract_periods")
+      .select("id, project_id, period_start, period_end, created_at, created_by, renewed_from_period_id")
+      .eq("project_id", projectId);
+    if (error) throw new Error(error.message);
+    return ((data ?? []) as {
+      id: string;
+      project_id: string;
+      period_start: string;
+      period_end: string;
+      created_at: string;
+      created_by: string | null;
+      renewed_from_period_id: string | null;
+    }[]).map((row) => ({
+      id: row.id,
+      projectId: row.project_id,
+      periodStart: row.period_start,
+      periodEnd: row.period_end,
+      createdAt: row.created_at,
+      createdById: row.created_by,
+      renewedFromPeriodId: row.renewed_from_period_id,
+    }));
+  },
+
+  // Phase 6A (CD-215) — Admin/superadmin-only, enforced server-side by the RPC itself (never
+  // trust the client). periodEnd is always computed server-side.
+  async createInitialProjectContractPeriod(_viewer, projectId, periodStart) {
+    const supabase = createClient();
+    const { data, error } = await supabase.rpc("create_initial_project_contract_period", {
+      p_project_id: projectId,
+      p_period_start: periodStart,
+    });
+    if (error) throw new Error(error.message);
+    const row = data as {
+      id: string;
+      project_id: string;
+      period_start: string;
+      period_end: string;
+      created_at: string;
+      created_by: string | null;
+      renewed_from_period_id: string | null;
+    };
+    return {
+      id: row.id,
+      projectId: row.project_id,
+      periodStart: row.period_start,
+      periodEnd: row.period_end,
+      createdAt: row.created_at,
+      createdById: row.created_by,
+      renewedFromPeriodId: row.renewed_from_period_id,
+    } satisfies ProjectContractPeriod;
   },
 
   // Phase 4 QA fix — deliberately NOT listAssignableStaff (backed by profiles' own team-scoped RLS;

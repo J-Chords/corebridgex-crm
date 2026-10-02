@@ -7,11 +7,12 @@ import type {
   ProjectTemplateSelection,
 } from "../projects-provider";
 import type { WorkstreamWithRelations } from "../workstreams-provider";
-import type { Project, ProjectGroup, ProjectStatus, ProjectTeamLead, ProjectTrashSettings, User } from "../../types";
+import type { Project, ProjectContractPeriod, ProjectGroup, ProjectStatus, ProjectTeamLead, ProjectTrashSettings, User } from "../../types";
 import { canAccessProject, canManageProjects, canManageProjectRecord, canCreateProject, isEmployee, isSuperadmin, isSupervisor } from "../../permissions";
 import { INTERNAL_COMPANY_ID } from "../../constants";
 import { isTaskClosed } from "../../task-display";
 import { isProjectActiveForNewWork, projectNotActiveMessage } from "../../project-display";
+import { periodEndForStart } from "../../contract-periods";
 import { db } from "./mock-db";
 import { mockCompaniesProvider } from "./mock-companies-provider";
 import { mockWorkstreamsProvider } from "./mock-workstreams-provider";
@@ -364,6 +365,20 @@ export const mockProjectsProvider: ProjectsProvider = {
       throw new Error("Project Group not found.");
     }
 
+    // Phase 6A (CD-215), locked model section M — post-creation correction of the Project's
+    // original engagement date and legacy contract-term fields is Admin-only. A non-admin caller
+    // attempting to change any of the three is rejected outright (never silently kept at the old
+    // value while pretending to succeed), matching `update_project_record`'s own hosted behavior —
+    // never trust a disabled input alone.
+    if (
+      !admin &&
+      (input.contractStartDate !== existing.contractStartDate ||
+        input.contractMonths !== existing.contractMonths ||
+        input.contractEndDate !== existing.contractEndDate)
+    ) {
+      throw new Error("Only an admin can change this project's contract dates.");
+    }
+
     const updated: Project = {
       ...existing,
       name: admin ? input.name.trim() : existing.name,
@@ -484,6 +499,52 @@ export const mockProjectsProvider: ProjectsProvider = {
   async listProjectStaffingCandidates(viewer) {
     if (isEmployee(viewer)) return [];
     return db.users.filter((u) => u.active && (u.role === "employee" || u.role === "supervisor"));
+  },
+
+  // Phase 6A (CD-215) — read-only; never widens Project visibility beyond the existing
+  // can_manage_project/getProject access boundary already enforced by requiring the Project to be
+  // reachable first.
+  async listProjectContractPeriods(viewer, projectId) {
+    const project = db.projects.find((p) => p.id === projectId);
+    if (!project) throw new Error("Project not found.");
+    const accessible = canAccessProject(
+      viewer,
+      {
+        companyId: project.companyId,
+        ownerId: project.ownerId,
+        memberUserIds: memberUserIds(project.id),
+        additionalTeamLeadUserIds: additionalTeamLeadUserIds(project.id),
+      },
+      db.users
+    );
+    if (!accessible) throw new Error("You don't have access to this project.");
+    return db.projectContractPeriods.filter((p) => p.projectId === projectId);
+  },
+
+  // Phase 6A (CD-215) — Admin/superadmin-only; records the first period for a Project with no
+  // existing chain. Never duplicates the Project, never touches Services/Activities/Tasks/
+  // checklists/staffing/Partner Brand/Tags/Project Group/lifecycle status — metadata only.
+  async createInitialProjectContractPeriod(viewer, projectId, periodStart) {
+    requireAdmin(viewer);
+    const project = db.projects.find((p) => p.id === projectId);
+    if (!project) throw new Error("Project not found.");
+    if (!periodStart || Number.isNaN(Date.parse(periodStart)) || !/^\d{4}-\d{2}-\d{2}$/.test(periodStart)) {
+      throw new Error("Enter a valid date.");
+    }
+    if (db.projectContractPeriods.some((p) => p.projectId === projectId)) {
+      throw new Error("This project already has a recorded contract period.");
+    }
+    const period: ProjectContractPeriod = {
+      id: crypto.randomUUID(),
+      projectId,
+      periodStart,
+      periodEnd: periodEndForStart(periodStart),
+      createdAt: new Date().toISOString(),
+      createdById: viewer.id,
+      renewedFromPeriodId: null,
+    };
+    db.projectContractPeriods = [...db.projectContractPeriods, period];
+    return period;
   },
 
   async getTrashSettings() {

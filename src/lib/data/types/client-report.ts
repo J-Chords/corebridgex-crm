@@ -97,12 +97,15 @@ export interface ClientReportHistoryEvent {
 export interface ClientReport {
   id: string;
   /**
-   * The annual/contract Project this report is scoped to — the real reporting-period boundary
-   * (Phase 9B). A Company can have several Projects over time (e.g. "Alderleaf Manufacturing
-   * 2025-2026" and "...2026-2027"); Task/time evidence for a report is gathered by Project, never
-   * by Company alone, so two overlapping annual contracts can never have their work mixed into one
-   * report. `null` only on a legacy report generated before Phase 9B (Company-only at the time) —
-   * that historical snapshot is never retroactively reassigned to a guessed Project.
+   * The Project this report is scoped to — the real reporting-period boundary (Phase 9B). A
+   * Company can have several genuinely distinct Projects/engagements (e.g. two separate service
+   * lines, or a later unrelated engagement after an earlier one ended) — Phase 6A confirms annual
+   * renewal is never the reason for this (a Project's contract is renewed in place via
+   * `project_contract_periods`, never by creating a second Project for the next year). Task/time
+   * evidence for a report is gathered by Project, never by Company alone, so two distinct Projects'
+   * work can never be mixed into one report. `null` only on a legacy report generated before
+   * Phase 9B (Company-only at the time) — that historical snapshot is never retroactively
+   * reassigned to a guessed Project.
    */
   projectId: string | null;
   companyId: string;
