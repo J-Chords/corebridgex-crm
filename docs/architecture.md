@@ -88,7 +88,7 @@ Why this matters and what happens when it's skipped: see `troubleshooting.md`'s 
 
 ## Contract / renewal information
 
-Phase 6A (CD-215) locked the operational contract model. Three distinct concepts, on two tables, must never be conflated merely because two of them share a column name:
+Phase 6A/6B (CD-215/CD-216) locked the operational contract model. Three distinct concepts, on two tables, must never be conflated merely because two of them share a column name:
 
 | Concept | Table.column | Meaning | Mutates on renewal? | Post-creation edit |
 |---|---|---|---|---|
@@ -96,13 +96,17 @@ Phase 6A (CD-215) locked the operational contract model. Three distinct concepts
 | Company Renewal Date | `companies.renewal_date` | Preserved for compatibility only — **not** read as any Project's current contract | Never (no longer written by any renewal flow) | Admin-only |
 | Project Client Since | `projects.contract_start_date` | The original Project/engagement start — a Project-owned fact, independent of the Company's own Contract Start even though they're often equal at creation | Never | Admin-only |
 | Project legacy contract term | `projects.contract_months` / `projects.contract_end_date` | Pre-Phase-6A rolling-duration fields — preserved, not dropped, **no longer the authoritative current contract** | N/A — dormant | Admin-only (same guard as Client Since) |
-| Current Contract | `project_contract_periods` rows | The authoritative, Project-owned annual contract period | Yes — Phase 6B records a new row per renewal | Admin-only (`create_initial_project_contract_period`; a successor/renewal RPC is Phase 6B/CD-216) |
+| Current Contract | `project_contract_periods` rows | The authoritative, Project-owned annual contract period | Yes — `renew_project_contract_period` (Phase 6B) records the successor of the current leaf, both dates server-derived | Admin-only (`create_initial_project_contract_period` for the first period; `correct_initial_project_contract_period_start`/`delete_latest_project_contract_period` for narrow mistake-correction — see below) |
 
 **Ownership**: contracts belong to **Project**, never Company — a Company may have several genuinely distinct Projects/engagements over time, but annual renewal is never the reason a second Project exists (the retired `renew_project` RPC — see `data-and-supabase.md` — enforced exactly this before being dropped; `project_contract_periods` is the modern replacement, operating on the SAME Project, never creating another one).
 
-**Period model**: every recorded period ends December 31 of its own start year (`2026-05-04 → 2026-12-31`; `2026-01-01 → 2026-12-31`). A renewal period always starts January 1, exactly one day after its predecessor's `period_end`. "Current" is never stored — `src/lib/data/contract-periods.ts`'s `getCurrentProjectContractPeriod` derives it fresh (`period_start <= today <= period_end`) every time, using `planner-dates.ts`'s date-only primitives, never `.toISOString().slice(0, 10)`.
+**Period model**: every recorded period ends December 31 of its own start year (`2026-05-04 → 2026-12-31`; `2026-01-01 → 2026-12-31`). A renewal period always starts January 1, exactly one day after its predecessor's `period_end`. "Current" is never stored — `src/lib/data/contract-periods.ts`'s `getCurrentProjectContractPeriod` derives it fresh (`period_start <= today <= period_end`) every time, using `planner-dates.ts`'s date-only primitives, never `.toISOString().slice(0, 10)`. The same module's `getProjectContractPeriodDisplayState` derives Past/Current/Upcoming for the Contract History list — also never stored. An Admin may record a renewal before the current period has expired (e.g. recording 2027 in October 2026); the prior period stays "Current" until its own `period_end`, and the new one renders "Upcoming" until its own `period_start`.
 
-**Truthfulness**: `project_contract_periods` rows represent actual recorded business periods, never mathematically-generated guesses from an old `contractStartDate`. The Phase 6A migration backfills zero rows for this reason — see `data-and-supabase.md`'s migration entry and `decisions.md`'s Phase 6 entry.
+**Renewal (Phase 6B, CD-216)**: `renew_project_contract_period(p_project_id)` — Admin/superadmin-only, requires the Project's lifecycle to be Active or On Hold (Completed/Canceled/Archived/Trash are rejected) and an existing recorded chain; both dates are always server-derived from the current leaf (the one period nothing else has renewed from), never accepted from the caller. Locks the Project row for the duration of the call so two concurrent renewal attempts on the same Project serialize rather than race.
+
+**Narrow mistake-correction (Phase 6B, CD-216)**: `delete_latest_project_contract_period` removes ONLY the current leaf period (a period with a successor can never be removed directly — remove each later leaf first, one at a time, so the chain is never left disconnected); removing a Project's sole root period is allowed. `correct_initial_project_contract_period_start` corrects the root period's `period_start` ONLY while it remains the Project's sole recorded period (`period_end` always recomputed server-side; `created_at`/`created_by` untouched) — rejected outright once any renewal history exists. Neither is a lifecycle transition; lifecycle status never blocks either one.
+
+**Truthfulness**: `project_contract_periods` rows represent actual recorded business periods, never mathematically-generated guesses from an old `contractStartDate`. The Phase 6A migration backfilled zero rows for this reason — see `data-and-supabase.md`'s migration entry and `decisions.md`'s Phase 6 entry.
 
 ## Routes
 

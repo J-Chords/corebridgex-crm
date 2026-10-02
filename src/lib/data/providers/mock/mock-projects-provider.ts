@@ -12,7 +12,13 @@ import { canAccessProject, canManageProjects, canManageProjectRecord, canCreateP
 import { INTERNAL_COMPANY_ID } from "../../constants";
 import { isTaskClosed } from "../../task-display";
 import { isProjectActiveForNewWork, projectNotActiveMessage } from "../../project-display";
-import { periodEndForStart } from "../../contract-periods";
+import {
+  periodEndForStart,
+  getLatestProjectContractPeriod,
+  nextContractPeriodFrom,
+  isProjectRenewalEligibleStatus,
+  projectRenewalNotEligibleMessage,
+} from "../../contract-periods";
 import { db } from "./mock-db";
 import { mockCompaniesProvider } from "./mock-companies-provider";
 import { mockWorkstreamsProvider } from "./mock-workstreams-provider";
@@ -545,6 +551,78 @@ export const mockProjectsProvider: ProjectsProvider = {
     };
     db.projectContractPeriods = [...db.projectContractPeriods, period];
     return period;
+  },
+
+  // Phase 6B (CD-216) — Admin/superadmin-only. Mirrors `renew_project_contract_period`'s hosted
+  // rules exactly: renewal-eligible lifecycle (Active/On Hold only), a recorded chain must already
+  // exist, and the successor's dates are always server-derived from the current leaf — never
+  // accepted from the caller. Zero operational side effects.
+  async renewProjectContractPeriod(viewer, projectId) {
+    requireAdmin(viewer);
+    const project = db.projects.find((p) => p.id === projectId);
+    if (!project) throw new Error("Project not found.");
+    if (!isProjectRenewalEligibleStatus(project.status)) {
+      throw new Error(projectRenewalNotEligibleMessage(project.status));
+    }
+    const periods = db.projectContractPeriods.filter((p) => p.projectId === projectId);
+    const leaf = getLatestProjectContractPeriod(periods);
+    if (!leaf) throw new Error("This project has no recorded contract period to renew from.");
+    const { periodStart, periodEnd } = nextContractPeriodFrom(leaf);
+    const period: ProjectContractPeriod = {
+      id: crypto.randomUUID(),
+      projectId,
+      periodStart,
+      periodEnd,
+      createdAt: new Date().toISOString(),
+      createdById: viewer.id,
+      renewedFromPeriodId: leaf.id,
+    };
+    db.projectContractPeriods = [...db.projectContractPeriods, period];
+    return period;
+  },
+
+  // Phase 6B (CD-216) — Admin/superadmin-only. Removes ONLY the current leaf period; lifecycle
+  // status never blocks this (correcting mistaken history is independent of renewal eligibility).
+  async deleteLatestProjectContractPeriod(viewer, projectId, periodId) {
+    requireAdmin(viewer);
+    const project = db.projects.find((p) => p.id === projectId);
+    if (!project) throw new Error("Project not found.");
+    const period = db.projectContractPeriods.find((p) => p.id === periodId);
+    if (!period) throw new Error("Contract period not found.");
+    if (period.projectId !== projectId) throw new Error("That contract period does not belong to this project.");
+    const hasSuccessor = db.projectContractPeriods.some((p) => p.renewedFromPeriodId === periodId);
+    if (hasSuccessor) {
+      throw new Error("Only the latest recorded period can be removed — this period has already been renewed.");
+    }
+    db.projectContractPeriods = db.projectContractPeriods.filter((p) => p.id !== periodId);
+  },
+
+  // Phase 6B (CD-216) — Admin/superadmin-only. Corrects the root period's start ONLY while it is
+  // still the Project's sole recorded period; `createdAt`/`createdById` are untouched, `periodEnd`
+  // is always recomputed server-side.
+  async correctInitialProjectContractPeriodStart(viewer, projectId, periodStart) {
+    requireAdmin(viewer);
+    const project = db.projects.find((p) => p.id === projectId);
+    if (!project) throw new Error("Project not found.");
+    const periods = db.projectContractPeriods.filter((p) => p.projectId === projectId);
+    if (periods.length === 0) throw new Error("This project has no recorded contract period to correct.");
+    if (periods.length > 1) {
+      throw new Error("This project already has a renewal history — the initial period can no longer be corrected.");
+    }
+    const [period] = periods;
+    if (period.renewedFromPeriodId !== null) {
+      throw new Error("Only the root (first-recorded) period can be corrected.");
+    }
+    if (!periodStart || Number.isNaN(Date.parse(periodStart)) || !/^\d{4}-\d{2}-\d{2}$/.test(periodStart)) {
+      throw new Error("Enter a valid date.");
+    }
+    const updated: ProjectContractPeriod = {
+      ...period,
+      periodStart,
+      periodEnd: periodEndForStart(periodStart),
+    };
+    db.projectContractPeriods = db.projectContractPeriods.map((p) => (p.id === period.id ? updated : p));
+    return updated;
   },
 
   async getTrashSettings() {

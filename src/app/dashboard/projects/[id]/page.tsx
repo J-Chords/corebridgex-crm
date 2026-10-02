@@ -64,6 +64,7 @@ import { AddProjectServiceDialog } from "@/components/projects/add-project-servi
 import { WorkstreamFormDialog } from "@/components/workstreams/workstream-form-dialog";
 import { WorkstreamLifecycleMenu } from "@/components/workstreams/workstream-lifecycle-menu";
 import { ProjectFormDialog } from "@/components/projects/project-form-dialog";
+import { ContractHistoryCard } from "@/components/projects/contract-history-card";
 import { ProjectStatusControl, ProjectLifecycleMenu } from "@/components/projects/project-status-control";
 import { ProjectCommentsSection } from "@/components/projects/project-comments-section";
 import { ProjectIssuesSection } from "@/components/projects/project-issues-section";
@@ -544,8 +545,13 @@ function LoadedProjectDetailPage({
   const { workstreams, isLoading: workstreamsLoading, refresh: refreshWorkstreams } = useWorkstreams({ projectId: project.id });
   const { tasks, isLoading: tasksLoading, refresh: refreshTasks } = useTasks({ workstreamIds: workstreams.map((w) => w.id) });
   const { company, contacts: clientContacts, refresh: refreshCompany } = useCompany(project.companyId);
-  // Phase 6A (CD-215) — this Project's own recorded contract periods only; never every Project's.
-  const { periods: contractPeriods } = useProjectContractPeriods(project.id);
+  // Phase 6A/6B (CD-215/CD-216) — this Project's own recorded contract periods only; never every
+  // Project's.
+  const {
+    periods: contractPeriods,
+    isLoading: contractPeriodsLoading,
+    refresh: refreshContractPeriods,
+  } = useProjectContractPeriods(project.id);
   const currentContractPeriod = getCurrentProjectContractPeriod(contractPeriods);
   const [editCompanyOpen, setEditCompanyOpen] = useState(false);
   const [editContact, setEditContact] = useState<ClientContact | "new" | null>(null);
@@ -982,6 +988,17 @@ function LoadedProjectDetailPage({
             onEditCompany={() => setEditCompanyOpen(true)}
             onAddContact={() => setEditContact("new")}
             onEditContact={(contact) => setEditContact(contact)}
+          />
+
+          {/* Phase 6B (CD-216) — visible to every legitimate Project reader; only its mutation
+              affordances (Renew/Record, the per-period overflow menu) are Admin-only. */}
+          <ContractHistoryCard
+            projectId={project.id}
+            projectStatus={project.status}
+            periods={contractPeriods}
+            isLoading={contractPeriodsLoading}
+            canMutate={canManageProjects(user)}
+            onChanged={refreshContractPeriods}
           />
         </div>
       )}
