@@ -249,18 +249,38 @@ reviewed/merged):
   pushed, no PR, no Jira. See decisions.md's Phase 4 entry for full scope.
 
 NEXT UP: Phase 3 (CD-208), Phase 4 (CD-211), Phase 5 (CD-214, Blocked -> Waiting status
-retirement), and Phase 6A (CD-215, Project contract-period data foundation) are all
-merged to main (PR #11 merge commit cb3fe96, PR #12 merge commit 6ef8b7d, PR #13 merge
-commit 595af8c, PR #14 merge commit 56f6069), Jira `pending deployment`. Phase 6B
-(CD-216, contract renewal + Contract History UX) is implemented on
-feature/CD-216-contract-renewal-history, Product Owner manual QA APPROVED, hosted
-migration 20261002100000 applied and postflight-verified (zero drift, zero
-project_contract_periods rows, every RPC body read back from hosted byte-identical to
-the reviewed migration). At the pre-merge checkpoint: PR #15
-(https://github.com/J-Chords/corebridgex-crm/pull/15) is open against main, checkpoint
-commit 938c885, not yet merged; Jira reached `Code review`. See decisions.md's Phase 6
-entry and current-state.md for the full record. Template cloning (A2) remains deferred,
-no ticket yet.
+retirement), Phase 6A (CD-215, Project contract-period data foundation), and Phase 6B
+(CD-216, contract renewal + Contract History UX) are all merged to main (PR #11 merge
+commit cb3fe96, PR #12 merge commit 6ef8b7d, PR #13 merge commit 595af8c, PR #14 merge
+commit 56f6069, PR #15 merge commit 703ac94), Jira `pending deployment`. Current main is
+703ac94e8c20e85d2ccc8361a45d047eaaa63f7e. Template cloning (A2) remains deferred, no
+ticket yet. See decisions.md's Phase 6 entry and current-state.md for the full record.
+
+AT THE PRE-MERGE CHECKPOINT: CD-217 (Bug, outside the numbered phase series) — two
+corrections. (A) System B's materialize_template_tasks() inserted new Tasks with the
+stale literal status = 'todo' (never valid since Phase 1's status rename,
+flagged-but-declined by Phase 5/CD-214) — fixed to 'not-started' (the canonical initial
+status, proven from TASK_STATUS_ORDER[0]/the mock's own already-correct implementation/
+the Task-create form default). (B) Product Owner locked Admin + a Project-authorized
+Team Lead (never "any Team Lead") may Apply an existing System-B Template from the
+Project workspace's Templates tab (Company-level Apply Template stays Admin-only,
+unchanged — a brief attempt to widen it was tried and reverted once the Company-detail
+page's own page-level Superadmin-only redirect proved Team Lead could never reach it
+there). Building that feature found apply_service_template_to_project's merge-into-an-
+existing-Service branch had NO authorization check at all (only the create branch was
+protected) — closed by adding can_manage_project(p_project_id)/canManageProjectRecord
+before the merge/create split, in both mock and hosted. On branch
+feature/CD-217-fix-system-b-template-task-status (fresh from origin/main at 703ac94).
+Migration 20261002150000_fix_system_b_template_task_status.sql — APPLIED to hosted
+Supabase and postflight-verified (0 drift, 0 operational row changes, both function
+bodies read back byte-identical apart from the intended changes, a live transactional
+probe confirming the new merge-branch guard rejects an unauthorized call in production).
+tsc/ESLint/git diff --check/all 4 provider builds clean; direct mock-provider QA (50/50)
+and Playwright interactive QA (29/29, covering Admin/authorized-TL/unrelated-TL/Employee
+and the Company-level regression) both passed. Product Owner manually tested and
+approved. At the pre-merge checkpoint: PR open against main, Jira reached `Code review`.
+Global Template administration remains Admin-only throughout, untouched. See
+decisions.md's CD-217 entries and current-state.md for the full record.
 
 OPEN TICKETS:
 - CD-193 — Normalize local-date handling across task and dashboard date surfaces.

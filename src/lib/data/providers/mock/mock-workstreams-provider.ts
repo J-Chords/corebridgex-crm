@@ -5,7 +5,6 @@ import {
   canAccessWorkstream,
   canConfigureWorkstreamActivities,
   canCreateWorkstream,
-  canCreateWorkstreamInProject,
   canManageProjectRecord,
   canManageWorkstreams,
   isSuperadmin,
@@ -274,7 +273,15 @@ export const mockWorkstreamsProvider: WorkstreamsProvider = {
     const project = db.projects.find((p) => p.id === resolved.projectId)!;
 
     if (input.projectId) {
-      if (!canCreateWorkstreamInProject(viewer)) {
+      // CD-217 parity fix — mirrors the hosted create_workstream RPC's own Supervisor branch
+      // exactly (can_manage_project(p_project_id), not a blanket is_supervisor()): Project-aware
+      // Service creation requires actual Project-management authority (owner or an Additional Team
+      // Lead), not just "any Team Lead." canCreateWorkstreamInProject never checked ownership and
+      // was broader than hosted here — unreachable via the one existing UI caller (Add Template on
+      // the Project Services tab, already gated by canManageProjectRecord on its own button), but a
+      // real gap for a direct call, and this ticket's own new Project-level Apply Template reuses
+      // this exact path and requires an unrelated Team Lead to be rejected.
+      if (!canManageProjectRecord(viewer, projectContextFor(project.id)!)) {
         throw new Error("You don't have access to create a template in that project.");
       }
     } else if (!canCreateWorkstream(viewer)) {
