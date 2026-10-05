@@ -39,6 +39,16 @@ interface ApplyTemplateDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   company: CompanyWithRelations;
+  /**
+   * CD-217 — when given, applies the Template to this existing Project instead of the legacy
+   * Company-only path (same component, no second template engine): routes through
+   * `applyServiceTemplateToProject`/`apply_service_template_to_project`, which reuses
+   * `create_workstream`'s own Project-aware authorization (Admin, or the Project's owner/an
+   * Additional Team Lead) rather than the looser Company-only Supervisor-or-Superadmin check the
+   * legacy path still uses. The caller (Project page) is responsible for only ever rendering this
+   * dialog when the viewer already satisfies that same boundary (`canManageProjectRecord`).
+   */
+  project?: { id: string; name: string } | null;
   onApplied: () => void;
 }
 
@@ -65,11 +75,12 @@ function emptyForm(defaultLeadId: string) {
   };
 }
 
-export function ApplyTemplateDialog({ open, onOpenChange, company, onApplied }: ApplyTemplateDialogProps) {
+export function ApplyTemplateDialog({ open, onOpenChange, company, project, onApplied }: ApplyTemplateDialogProps) {
   const { user } = useAuth();
   const { templates } = useTemplates();
   const { assignableStaff } = useCompanyLookups();
   const router = useRouter();
+  const isProjectMode = Boolean(project);
 
   const [step, setStep] = useState<"form" | "preview">("form");
   const [form, setForm] = useState(() => emptyForm(user?.id ?? ""));
@@ -95,7 +106,9 @@ export function ApplyTemplateDialog({ open, onOpenChange, company, onApplied }: 
     setForm((p) => ({
       ...p,
       templateId,
-      name: !nameTouched && next ? suggestWorkstreamName(next, company, p.startDate) : p.name,
+      // Project-aware apply always uses the Template's own name server-side (ApplyTemplateInput's
+      // `name` is ignored once `projectId` is given) — nothing to suggest/edit in that mode.
+      name: !isProjectMode && !nameTouched && next ? suggestWorkstreamName(next, company, p.startDate) : p.name,
     }));
   }
 
@@ -103,7 +116,7 @@ export function ApplyTemplateDialog({ open, onOpenChange, company, onApplied }: 
     setForm((p) => ({
       ...p,
       startDate,
-      name: !nameTouched && template ? suggestWorkstreamName(template, company, startDate) : p.name,
+      name: !isProjectMode && !nameTouched && template ? suggestWorkstreamName(template, company, startDate) : p.name,
     }));
   }
 
@@ -128,6 +141,8 @@ export function ApplyTemplateDialog({ open, onOpenChange, company, onApplied }: 
         leadUserId: form.leadUserId,
         teamUserIds: form.teamUserIds,
         startDate: form.startDate,
+        projectId: project?.id,
+        activityIds: isProjectMode ? [] : undefined,
       });
 
       onApplied();
@@ -140,7 +155,7 @@ export function ApplyTemplateDialog({ open, onOpenChange, company, onApplied }: 
     }
   }
 
-  const canPreview = Boolean(form.templateId && form.name.trim() && form.leadUserId && form.startDate);
+  const canPreview = Boolean(form.templateId && (isProjectMode || form.name.trim()) && form.leadUserId && form.startDate);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -149,7 +164,9 @@ export function ApplyTemplateDialog({ open, onOpenChange, company, onApplied }: 
           <DialogTitle>Apply template</DialogTitle>
           <DialogDescription>
             {step === "form"
-              ? `Create a new service for ${company.name} from a standard template.`
+              ? isProjectMode
+                ? `Apply an existing Template to ${company.name} / ${project!.name}.`
+                : `Create a new service for ${company.name} from a standard template.`
               : "Review what this will create before it commits."}
           </DialogDescription>
         </DialogHeader>
@@ -183,15 +200,17 @@ export function ApplyTemplateDialog({ open, onOpenChange, company, onApplied }: 
                 )}
               </div>
 
-              <FloatingLabelInput
-                label="Service name"
-                required
-                value={form.name}
-                onChange={(e) => {
-                  setNameTouched(true);
-                  setForm((p) => ({ ...p, name: e.target.value }));
-                }}
-              />
+              {!isProjectMode && (
+                <FloatingLabelInput
+                  label="Service name"
+                  required
+                  value={form.name}
+                  onChange={(e) => {
+                    setNameTouched(true);
+                    setForm((p) => ({ ...p, name: e.target.value }));
+                  }}
+                />
+              )}
 
               <div className="grid grid-cols-2 gap-3">
                 <div className="flex flex-col gap-1.5">
@@ -258,10 +277,10 @@ export function ApplyTemplateDialog({ open, onOpenChange, company, onApplied }: 
             <>
               <div className="flex max-h-[65vh] flex-col gap-4 overflow-y-auto pr-1">
                 <div className="rounded-lg border p-3">
-                  <p className="text-sm font-medium">{form.name}</p>
+                  <p className="text-sm font-medium">{isProjectMode ? template.name : form.name}</p>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    {company.name} · {template.serviceLine?.name ?? "No service line"} · Starts{" "}
-                    {formatDate(form.startDate)}
+                    {isProjectMode ? `${company.name} / ${project!.name}` : company.name} ·{" "}
+                    {template.serviceLine?.name ?? "No service line"} · Starts {formatDate(form.startDate)}
                   </p>
                   <p className="mt-1 text-xs text-muted-foreground">
                     Lead: {assignableStaff.find((s) => s.id === form.leadUserId)?.fullName ?? "—"}

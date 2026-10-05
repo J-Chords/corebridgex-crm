@@ -4,6 +4,7 @@ import { db } from "./mock-db";
 import { mockWorkstreamsProvider } from "./mock-workstreams-provider";
 import { mockTasksProvider } from "./mock-tasks-provider";
 import { addDaysToDateString } from "../../recurrence";
+import { canManageProjectRecord } from "../../permissions";
 
 function toTemplateWithTasks(template: Template): TemplateWithTasks {
   const serviceLine = template.serviceLineId
@@ -93,6 +94,19 @@ export async function applyServiceTemplateToProject(
   }
   const project = db.projects.find((p) => p.id === projectId);
   if (!project) throw new Error("Project not found.");
+
+  // CD-217 — the create-a-new-Workstream branch below has always been protected (it delegates to
+  // mockWorkstreamsProvider.createWorkstream, which enforces canManageProjectRecord for a
+  // Supervisor caller), but the merge-into-an-existing-Workstream branch had NO authorization check
+  // at all — any viewer (including Employee) could silently add Activities to an existing Project
+  // Service merely by naming its Project/Template. Closed by checking the same canonical boundary
+  // up front, before either branch runs, so both share one authorization gate instead of one being
+  // implicit and the other absent. Mirrors the hosted `apply_service_template_to_project` RPC's own
+  // matching fix exactly.
+  const additionalTeamLeadUserIds = db.projectTeamLeads.filter((tl) => tl.projectId === project.id).map((tl) => tl.userId);
+  if (!canManageProjectRecord(viewer, { ownerId: project.ownerId, additionalTeamLeadUserIds })) {
+    throw new Error("You don't have permission to add a Service to that project.");
+  }
 
   const existing = db.workstreams.find((w) => w.projectId === projectId && w.serviceLineId === template.serviceLineId);
   if (existing) {

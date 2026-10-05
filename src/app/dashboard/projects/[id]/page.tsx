@@ -13,6 +13,7 @@ import {
   Plus,
   Search,
   SlidersHorizontal,
+  Sparkles,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth/auth-context";
 import { useProject, useProjectGroups, useProjectContractPeriods } from "@/lib/data/hooks/use-projects";
@@ -61,6 +62,7 @@ import { ContactFormDialog } from "@/components/companies/contact-form-dialog";
 import { WorkstreamStatusBadge } from "@/components/workstreams/workstream-status-badge";
 import { ServiceAvatar } from "@/components/workstreams/service-avatar";
 import { AddProjectServiceDialog } from "@/components/projects/add-project-service-dialog";
+import { ApplyTemplateDialog } from "@/components/templates/apply-template-dialog";
 import { WorkstreamFormDialog } from "@/components/workstreams/workstream-form-dialog";
 import { WorkstreamLifecycleMenu } from "@/components/workstreams/workstream-lifecycle-menu";
 import { ProjectFormDialog } from "@/components/projects/project-form-dialog";
@@ -621,6 +623,7 @@ function LoadedProjectDetailPage({
     router.push(`${pathname}?${params.toString()}`, { scroll: false });
   }
   const [addServiceOpen, setAddServiceOpen] = useState(false);
+  const [applyTemplateOpen, setApplyTemplateOpen] = useState(false);
   const [generateReportOpen, setGenerateReportOpen] = useState(false);
   // Project Final Integration Correction — "Configure Activities" on an already-attached Service
   // reuses the existing `AddServiceActivitiesDialog` (previously only reachable from the Task form's
@@ -1087,9 +1090,21 @@ function LoadedProjectDetailPage({
             ) : (
               canAddService &&
               company && (
-                <Button size="sm" onClick={() => setAddServiceOpen(true)}>
-                  <Plus /> Add Template
-                </Button>
+                <>
+                  {/* CD-217 — applies an existing System-B Template recipe (Tasks + checklists
+                      materialized from template_tasks/template_checklist_items via
+                      apply_service_template_to_project) — distinct from "Add Template" below, which
+                      just attaches a bare Service Line + chosen Activities with no Tasks. Same
+                      canManageProjectRecord boundary as every other operational Project-management
+                      action on this page (Admin, or this Project's owner/an Additional Team Lead) —
+                      never a blanket "any Team Lead" check. */}
+                  <Button size="sm" variant="outline" onClick={() => setApplyTemplateOpen(true)}>
+                    <Sparkles /> Apply Template
+                  </Button>
+                  <Button size="sm" onClick={() => setAddServiceOpen(true)}>
+                    <Plus /> Add Template
+                  </Button>
+                </>
               )
             )}
           </div>
@@ -1389,6 +1404,18 @@ function LoadedProjectDetailPage({
           onSaved={() => {
             refreshWorkstreams();
             refreshProject();
+          }}
+        />
+      )}
+      {company && (
+        <ApplyTemplateDialog
+          open={applyTemplateOpen}
+          onOpenChange={setApplyTemplateOpen}
+          company={company}
+          project={{ id: project.id, name: project.name }}
+          onApplied={() => {
+            refreshWorkstreams();
+            refreshTasks();
           }}
         />
       )}
