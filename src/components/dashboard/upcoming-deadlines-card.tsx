@@ -9,12 +9,9 @@ import { CardExpandButton } from "@/components/dashboard/card-expand-button";
 import { DashboardWidgetFocusDialog } from "@/components/dashboard/dashboard-widget-focus-dialog";
 import { STAGGER_ITEM_CLASS, staggerDelay } from "@/lib/stagger";
 import { cn } from "@/lib/utils";
+import { todayDateOnly } from "@/lib/planner-dates";
 
 const MAX_ROWS = 6;
-
-function todayDateString() {
-  return new Date().toISOString().slice(0, 10);
-}
 
 /** Days-from-start offset -> an actual calendar date, in local date parts to avoid UTC-shift surprises. */
 function addDays(dateStr: string, days: number): string {
@@ -52,7 +49,7 @@ interface UpcomingDeadlinesCardProps {
 /** Lightweight "what's coming up" list, grouped Today/This week/Later — not a calendar, just upcoming due dates ordered by time. */
 export function UpcomingDeadlinesCard({ tasks, title = "Upcoming", className, style }: UpcomingDeadlinesCardProps) {
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const today = todayDateString();
+  const today = todayDateOnly();
   const weekEnd = addDays(today, 6);
 
   const upcoming = tasks

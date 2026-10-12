@@ -21,12 +21,9 @@ import { TaskStatusFocusContent } from "@/components/dashboard/task-status-focus
 import { CardExpandButton } from "@/components/dashboard/card-expand-button";
 import { DashboardWidgetFocusDialog } from "@/components/dashboard/dashboard-widget-focus-dialog";
 import { STAGGER_ITEM_CLASS, staggerDelay } from "@/lib/stagger";
+import { todayDateOnly } from "@/lib/planner-dates";
 
 const MAX_WORKSTREAMS_PREVIEW = 6;
-
-function todayDateString() {
-  return new Date().toISOString().slice(0, 10);
-}
 
 /**
  * MVP Simplification Pass (boss feedback) — Dashboard stays summary-oriented (counts, a status
@@ -49,7 +46,7 @@ export function EmployeeDashboard() {
 
   const runningEntry = entries.find((e) => e.durationMinutes === null) ?? null;
 
-  const today = todayDateString();
+  const today = todayDateOnly();
   const sevenDaysAgoIso = new Date(new Date().getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
 
   const activeWorkstreams = workstreams.filter((w) => w.status === "active");

@@ -20,6 +20,7 @@ import {
   projectRenewalNotEligibleMessage,
 } from "../../contract-periods";
 import { db } from "./mock-db";
+import { todayDateOnly } from "@/lib/planner-dates";
 import { mockCompaniesProvider } from "./mock-companies-provider";
 import { mockWorkstreamsProvider } from "./mock-workstreams-provider";
 
@@ -110,7 +111,7 @@ function additionalTeamLeadUserIds(projectId: string): string[] {
 function taskSummaryFor(projectId: string): ProjectTaskSummary {
   const workstreamIds = db.workstreams.filter((w) => w.projectId === projectId).map((w) => w.id);
   const tasks = db.tasks.filter((t) => workstreamIds.includes(t.workstreamId));
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayDateOnly();
   const doneCount = tasks.filter((t) => t.status === "completed").length;
   const closedCount = tasks.filter((t) => isTaskClosed(t.status)).length;
   const overdueCount = tasks.filter((t) => !isTaskClosed(t.status) && t.dueDate != null && t.dueDate < today).length;
@@ -664,7 +665,7 @@ export const mockProjectsProvider: ProjectsProvider = {
       // Archive/Cancel/re-Active); archivedAt is the Archive lifecycle's own date, always updated to
       // the latest Archive (so a later re-Archive correctly reflects the newest date) and never
       // touched by Reactivate (so "Previously Archived On" survives it).
-      completionDate: status === "completed" && !existing.completionDate ? new Date().toISOString().slice(0, 10) : existing.completionDate,
+      completionDate: status === "completed" && !existing.completionDate ? todayDateOnly() : existing.completionDate,
       archivedAt: status === "archived" ? new Date().toISOString() : existing.archivedAt,
       updatedAt: new Date().toISOString(),
     };

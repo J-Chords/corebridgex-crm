@@ -27,6 +27,7 @@ import { FloatingLabelInput } from "@/components/ui/floating-label-input";
 import { Alert, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { todayDateOnly } from "@/lib/planner-dates";
 import {
   Select,
   SelectContent,
@@ -52,10 +53,6 @@ interface ApplyTemplateDialogProps {
   onApplied: () => void;
 }
 
-function todayDateString() {
-  return new Date().toISOString().slice(0, 10);
-}
-
 function formatDate(dateStr: string) {
   const [y, m, d] = dateStr.split("-").map(Number);
   return new Date(y, m - 1, d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
@@ -71,7 +68,7 @@ function emptyForm(defaultLeadId: string) {
     name: "",
     leadUserId: defaultLeadId,
     teamUserIds: [] as string[],
-    startDate: todayDateString(),
+    startDate: todayDateOnly(),
   };
 }
 

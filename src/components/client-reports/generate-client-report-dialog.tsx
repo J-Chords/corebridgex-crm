@@ -20,6 +20,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Alert, AlertTitle } from "@/components/ui/alert";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { todayDateOnly } from "@/lib/planner-dates";
 
 interface GenerateClientReportDialogProps {
   open: boolean;
@@ -28,10 +29,6 @@ interface GenerateClientReportDialogProps {
    * pre-scope (and lock) generation to that Project/Client instead of asking the user to re-pick it;
    * omitted entirely on the global Reports page, whose own Client-first flow is unchanged. */
   defaultProjectId?: string;
-}
-
-function todayDateString() {
-  return new Date().toISOString().slice(0, 10);
 }
 
 /** Monday-Sunday of the current week, in local date parts to avoid UTC-shift surprises — same helper as the internal report's own generate dialog. */
@@ -57,8 +54,8 @@ function emptyForm(defaultCompanyId?: string, defaultProjectId?: string) {
     companyId: defaultCompanyId ?? "",
     projectId: defaultProjectId ?? "",
     rangeLabel: "this-week" as ReportRangeLabel,
-    customStart: todayDateString(),
-    customEnd: todayDateString(),
+    customStart: todayDateOnly(),
+    customEnd: todayDateOnly(),
   };
 }
 
@@ -132,7 +129,7 @@ export function GenerateClientReportDialog({ open, onOpenChange, defaultProjectI
 
   const { rangeStart, rangeEnd } = (() => {
     if (form.rangeLabel === "today") {
-      const d = todayDateString();
+      const d = todayDateOnly();
       return { rangeStart: d, rangeEnd: d };
     }
     if (form.rangeLabel === "this-week") {

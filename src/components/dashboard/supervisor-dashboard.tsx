@@ -31,10 +31,7 @@ import { CardExpandButton } from "@/components/dashboard/card-expand-button";
 import { DashboardWidgetFocusDialog } from "@/components/dashboard/dashboard-widget-focus-dialog";
 import { STAGGER_ITEM_CLASS, staggerDelay } from "@/lib/stagger";
 import { cn } from "@/lib/utils";
-
-function todayDateString() {
-  return new Date().toISOString().slice(0, 10);
-}
+import { todayDateOnly } from "@/lib/planner-dates";
 
 /** Matches `ClientHealthBadge`'s own label text, for the "Clients needing attention" KPI's preview subtitle. */
 const HEALTH_LABEL: Record<string, string> = {
@@ -62,7 +59,7 @@ export function SupervisorDashboard({ user }: { user: User }) {
 
   const teamMembers = assignableStaff.filter((u) => u.id !== user.id);
 
-  const today = todayDateString();
+  const today = todayDateOnly();
   const sevenDaysAgoIso = new Date(new Date().getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
 
   const openTasks = tasks.filter((t) => isTaskActiveWork(t));

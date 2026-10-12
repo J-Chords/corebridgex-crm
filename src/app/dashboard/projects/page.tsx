@@ -13,6 +13,7 @@ import type { ProjectWithRelations } from "@/lib/data/providers/projects-provide
 import type { TaskWithRelations } from "@/lib/data/providers/tasks-provider";
 import { isSuperadmin, canCreateProject } from "@/lib/data/permissions";
 import { isTaskClosed } from "@/lib/data/task-display";
+import { todayDateOnly } from "@/lib/planner-dates";
 import type { ProjectStatus } from "@/lib/data/types";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -200,7 +201,7 @@ export default function ProjectsPage() {
   const roleView: RoleView = superadmin ? "admin" : user?.role === "supervisor" ? "team-lead" : "employee";
   const rowStats = useMemo(() => {
     const map = new Map<string, RoleRowStats>();
-    const today = new Date().toISOString().slice(0, 10);
+    const today = todayDateOnly();
     for (const project of filtered) {
       const projectTasks = tasksByProject.get(project.id) ?? [];
       const waitingCount = projectTasks.filter((t) => t.status === "waiting").length;

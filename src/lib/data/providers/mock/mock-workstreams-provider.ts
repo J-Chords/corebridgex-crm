@@ -15,6 +15,7 @@ import { computeWorkstreamBudget } from "../../time-budget";
 import { computeWorkstreamRecurrence } from "../../recurrence";
 import { isProjectActiveForNewWork, projectNotActiveMessage } from "../../project-display";
 import { db } from "./mock-db";
+import { todayDateOnly } from "@/lib/planner-dates";
 
 /** Phase 3 (CD-208) parity fix — see `canAccessCompany`'s own doc comment. */
 function projectsForCompanyAccess(): { companyId: string; ownerId: string; memberUserIds: string[]; additionalTeamLeadUserIds: string[] }[] {
@@ -24,10 +25,6 @@ function projectsForCompanyAccess(): { companyId: string; ownerId: string; membe
     memberUserIds: db.projectMembers.filter((m) => m.projectId === p.id).map((m) => m.userId),
     additionalTeamLeadUserIds: db.projectTeamLeads.filter((tl) => tl.projectId === p.id).map((tl) => tl.userId),
   }));
-}
-
-function todayDateString(): string {
-  return new Date().toISOString().slice(0, 10);
 }
 
 function workstreamTeamIds(workstreamId: string): string[] {
@@ -114,13 +111,13 @@ function toWorkstreamWithRelations(workstream: Workstream): WorkstreamWithRelati
     workstream.recurrenceFrequency
       ? {
           frequency: workstream.recurrenceFrequency,
-          anchorDate: workstream.recurrenceAnchorDate ?? workstream.startDate ?? todayDateString(),
+          anchorDate: workstream.recurrenceAnchorDate ?? workstream.startDate ?? todayDateOnly(),
           customIntervalDays: workstream.recurrenceCustomIntervalDays,
         }
       : null,
     workstream.startDate,
     hasSuccessor,
-    todayDateString()
+    todayDateOnly()
   );
 
   return {

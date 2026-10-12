@@ -26,14 +26,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { todayDateOnly } from "@/lib/planner-dates";
 
 interface GenerateReportDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-}
-
-function todayDateString() {
-  return new Date().toISOString().slice(0, 10);
 }
 
 /** Monday-Sunday of the current week, in local date parts to avoid UTC-shift surprises. */
@@ -60,8 +57,8 @@ function emptyForm() {
     /** Only meaningful for kind === "client" — a person report is always about yourself. */
     companyId: "",
     rangeLabel: "this-week" as ReportRangeLabel,
-    customStart: todayDateString(),
-    customEnd: todayDateString(),
+    customStart: todayDateOnly(),
+    customEnd: todayDateOnly(),
   };
 }
 
@@ -85,7 +82,7 @@ export function GenerateReportDialog({ open, onOpenChange }: GenerateReportDialo
 
   const { rangeStart, rangeEnd } = (() => {
     if (form.rangeLabel === "today") {
-      const d = todayDateString();
+      const d = todayDateOnly();
       return { rangeStart: d, rangeEnd: d };
     }
     if (form.rangeLabel === "this-week") {

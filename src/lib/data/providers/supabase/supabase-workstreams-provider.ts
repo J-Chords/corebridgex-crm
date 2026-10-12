@@ -4,6 +4,7 @@ import { computeWorkstreamBudget } from "../../time-budget";
 import { computeWorkstreamRecurrence } from "../../recurrence";
 import { createClient } from "@/lib/supabase/client";
 import { resolveProfileDirectory } from "./profile-directory";
+import { todayDateOnly } from "@/lib/planner-dates";
 
 /**
  * Real Supabase Workstreams provider (Phase 7). RLS (`workstreams_select`/`_insert`/`_update`,
@@ -107,10 +108,6 @@ function toWorkstream(row: WorkstreamRow): Workstream {
   };
 }
 
-function todayDateString(): string {
-  return new Date().toISOString().slice(0, 10);
-}
-
 /** Phase 3 (CD-208) — exported for `supabase-projects-provider.ts`'s `applyProjectTemplates`,
  * which needs to hydrate the raw `workstreams` rows `apply_project_templates` returns into full
  * `WorkstreamWithRelations` the same way every other read path here does, without duplicating
@@ -179,7 +176,7 @@ async function hydrate(workstreams: Workstream[]): Promise<WorkstreamWithRelatio
   const entries = (entriesRes.data ?? timeEntriesRes.data ?? []) as { task_id: string; duration_minutes: number | null; billable: boolean }[];
   const successors = (successorsRes.data ?? []) as { previous_occurrence_workstream_id: string | null }[];
 
-  const today = todayDateString();
+  const today = todayDateOnly();
 
   return workstreams.map((workstream) => {
     const companyRow = companies.find((c) => c.id === workstream.companyId);
