@@ -1,6 +1,7 @@
 import type { TaskWithRelations } from "@/lib/data/providers/tasks-provider";
 import { workstreamDisplayHeading } from "@/lib/data/workstream-name";
 import { isProjectActiveForNewWork } from "@/lib/data/project-display";
+import { parseDateOnly, todayDateOnly } from "@/lib/planner-dates";
 
 /**
  * Phase 12B — pure presentation helpers pulled out of `TaskGridCard`/`TaskSummaryItem`/
@@ -16,7 +17,7 @@ export function isTaskClosed(status: Pick<TaskWithRelations, "status">["status"]
 }
 
 export function isTaskOverdue(task: Pick<TaskWithRelations, "status" | "dueDate">): boolean {
-  return !isTaskClosed(task.status) && task.dueDate != null && task.dueDate < new Date().toISOString().slice(0, 10);
+  return !isTaskClosed(task.status) && task.dueDate != null && task.dueDate < todayDateOnly();
 }
 
 /**
@@ -43,7 +44,7 @@ export function isTaskActiveWork(task: Pick<TaskWithRelations, "status" | "works
 }
 
 export function formatDueDateShort(value: string): string {
-  return new Date(value).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  return parseDateOnly(value).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
 /** Task Level Phase 2, Section 19 — the global Service name is always primary; falls back to the

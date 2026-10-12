@@ -30,7 +30,7 @@ import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { CompanyProjectAvatar } from "@/components/companies/company-project-avatar";
 import { TaskStatusAvatar } from "@/components/tasks/task-status-avatar";
-import { formatDueDateShort, isTaskClosed } from "@/lib/data/task-display";
+import { formatDueDateShort, isTaskOverdue } from "@/lib/data/task-display";
 import { isLikelyInternalTask } from "@/lib/data/identity-color";
 
 import { getInitials as initials } from "@/lib/initials";
@@ -150,7 +150,7 @@ function LoadedTaskQuickView({
               {task.startDate ? formatDueDateShort(task.startDate) : "—"}
             </DetailDrawerPropertyRow>
             <DetailDrawerPropertyRow label="Due">
-              <span className={task.dueDate && !isTaskClosed(task.status) && task.dueDate < new Date().toISOString().slice(0, 10) ? "font-medium text-warning" : undefined}>
+              <span className={isTaskOverdue(task) ? "font-medium text-warning" : undefined}>
                 {task.dueDate ? formatDueDateShort(task.dueDate) : "—"}
               </span>
             </DetailDrawerPropertyRow>

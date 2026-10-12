@@ -289,9 +289,45 @@ System-B application actions are labeled "Apply Reusable Template" (visible copy
 — ApplyTemplateDialog/apply_template/apply_service_template_to_project keep their
 names). Global Reusable Template administration remains Admin-only throughout.
 
-OPEN TICKETS:
-- CD-193 — Normalize local-date handling across task and dashboard date surfaces.
-  Status "New," not started. Do not implement unless explicitly asked to.
+AT THE CODE-REVIEW CHECKPOINT (commit/push/PR/Jira Code-review in progress this same
+session — STOP BEFORE MERGE, a separate later Product Owner decision): CD-193 (Task,
+out-of-phase) — normalize local-date handling across Task and Dashboard date surfaces.
+CD-190 fixed one instance (time-entry
+bucketing) and tracked ~20 other known UTC-slice call sites as this ticket; a full
+repository-wide audit (every toISOString().slice(0,10)-style call site, classified
+A-local-bug/B-true-timestamp/C-already-correct/D-ambiguous BEFORE any code changed)
+confirmed 20 real local-calendar-date bugs, all now fixed by reusing the EXISTING
+todayDateOnly()/parseDateOnly() from planner-dates.ts — no new parallel date helper
+introduced. Highest-leverage fix: task-display.ts's shared isTaskOverdue/
+formatDueDateShort (used by 7+ Task surfaces: List/Board/Grid/Row/Properties-rail/
+Summary-item/Drawer) plus the Task Center's own Overdue/Due-Today quick filters. Also
+fixed: 3 Dashboard/My Day "today" helpers (2 files had already imported the correct
+todayDateOnly for ONE purpose while keeping a broken local duplicate for another — a
+real partial-fix-left-a-twin bug found by the audit), the Attention KPI and Upcoming
+Deadlines card, both report-generation dialogs' default date range, Apply Template's
+default start date, and 4 provider-layer "default to today" sites (Project task-summary
+overdue counts + Workstream recurrence-anchor-date defaults, mock and Supabase sides
+each, fixed symmetrically). One deliberately-separate true-timestamp system
+(client-report-schedule-timing.ts — a schedule's own admin-configured timezone, read in
+full and confirmed genuinely unrelated to "what day is it for the viewer") was
+correctly left untouched. A Project completionDate mock-provider stamp was fixed
+narrowly (same local-date bug) WITHOUT touching the separate, pre-existing mock-vs-
+hosted architecture divergence in how that field gets stamped — that broader
+Project/contract provider-parity question stays exactly as open as before, reported not
+resolved. On branch fix/CD-193-local-date-normalization (fresh from origin/main at
+625dd827, PR #18's merge commit). tsc/ESLint/git diff --check/all 4 provider builds
+clean (isolated copy D:\cbx-qa-cd193). Deterministic timezone QA (42/42 — separate
+spawned processes with TZ set at spawn time: America/Los_Angeles, Pacific/Kiritimati,
+and a DST-transition day in America/New_York) and a Playwright browser QA script (24/24
+— page.clock.setFixedTime pinning the exact same UTC instant across two timezoneId
+contexts, proving the identical Task due-date value is correctly classified Due Today
+in one zone and correctly neither-due-nor-overdue in the other, directly in the live
+Task Center quick filters and Task detail page styling; Team Lead/Employee regression
+clean) both passed. Product Owner manual QA: APPROVED. Git/Jira checkpoint
+(commit/push/PR/Code-review transition) in progress this same session — STOP BEFORE
+MERGE, a separate later Product Owner decision. See decisions.md's CD-193 entry,
+testing.md (the two QA techniques are now the canonical pattern for any future
+date-touching change), and troubleshooting.md's closed-out tracking note.
 
 DOMAIN HIERARCHY (locked): Project → Template → Activity → Task → Checklist. Visible
 term changed from "Service" to "Template" in Phase 1 (CD-206) — internal persistence
@@ -389,7 +425,9 @@ anything that may have changed since this snapshot, then docs/domain-model.md an
 docs/authorization.md before touching product logic or permissions.
 
 IMMEDIATE NEXT MILESTONE: a hosting-provider decision + first deployment + production
-verification (docs/deployment.md has the audit and a smoke-test checklist), OR
-starting CD-193 if that's what's being asked for. Do not deploy, transition Jira past
-"pending deployment," or start CD-193 unless explicitly instructed to.
+verification (docs/deployment.md has the audit and a smoke-test checklist), OR a
+Product Owner merge decision for CD-193 (implemented, local-QA'd, Product-Owner
+manual-QA APPROVED, Git/Jira checkpoint in progress this session — see above). Do not
+deploy, transition Jira past "Code review," or merge CD-193's PR unless explicitly
+instructed to.
 ```

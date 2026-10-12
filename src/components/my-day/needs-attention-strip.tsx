@@ -9,6 +9,7 @@ import type { TaskWithRelations } from "@/lib/data/providers/tasks-provider";
 import type { CompanyWithRelations } from "@/lib/data/providers/companies-provider";
 import { projectHrefForCompany } from "@/lib/data/project-display";
 import { isTaskClosed, isTaskInActiveProject } from "@/lib/data/task-display";
+import { todayDateOnly } from "@/lib/planner-dates";
 import { badgeVariants } from "@/components/ui/badge";
 import { ContainedIcon } from "@/components/ui/contained-icon";
 import { STAGGER_ITEM_CLASS, staggerDelay } from "@/lib/stagger";
@@ -24,10 +25,6 @@ const TONE_BADGE_VARIANT: Record<AttentionTone, "destructive" | "warning" | "neu
   warning: "warning",
   neutral: "neutral",
 };
-
-function todayDateString() {
-  return new Date().toISOString().slice(0, 10);
-}
 
 interface AttentionItem {
   id: string;
@@ -66,7 +63,7 @@ function buildAtRiskCategory(
 }
 
 function buildStaffCategory(teamMembers: User[], teamTasks: TaskWithRelations[]): AttentionCategory | null {
-  const today = todayDateString();
+  const today = todayDateOnly();
   // Phase 5 (CD-214), Decision 2 — Attention is UNIQUE Tasks that are overdue OR Waiting; a Task
   // that is both counts once in the total, never twice. `isOverdue` is reused for both the
   // explanatory "N overdue" count and the deduplicated total's own single filter pass.

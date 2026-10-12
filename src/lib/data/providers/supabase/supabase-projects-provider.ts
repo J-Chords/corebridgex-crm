@@ -11,6 +11,7 @@ import { createClient } from "@/lib/supabase/client";
 import { resolveProfileDirectory } from "./profile-directory";
 import { hydrateWorkstreamRows, type WorkstreamRow } from "./supabase-workstreams-provider";
 import { isSuperadmin } from "../../permissions";
+import { todayDateOnly } from "@/lib/planner-dates";
 
 /** Phase 3 (CD-208) — the shape `create_project`/`create_client_project`/`apply_project_templates`
  * expect for their `p_templates jsonb` parameter. See `ProjectTemplateSelection`. */
@@ -159,7 +160,7 @@ async function hydrate(projects: Project[]): Promise<ProjectWithRelations[]> {
     workstreamIdsByProject.set(w.project_id, list);
   }
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayDateOnly();
 
   return projects.map((project) => {
     const companyRow = companies.find((c) => c.id === project.companyId);

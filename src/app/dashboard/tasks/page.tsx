@@ -18,6 +18,7 @@ import {
 } from "@/lib/data/hooks/use-task-filters";
 import { isEmployee } from "@/lib/data/permissions";
 import { isAssigneeColumnRedundantForViewer, isTaskActiveWork } from "@/lib/data/task-display";
+import { todayDateOnly } from "@/lib/planner-dates";
 import { normalizeLegacyTaskFilterStatus } from "@/lib/data/task-status";
 import type { TaskStatus } from "@/lib/data/types";
 import type { TaskWithRelations } from "@/lib/data/providers/tasks-provider";
@@ -35,10 +36,6 @@ import { TaskBoard } from "@/components/tasks/task-board";
 import { TaskListSection, FlatTaskList } from "@/components/tasks/task-list-section";
 import { TaskTimeline } from "@/components/tasks/task-timeline";
 import { TaskFormDialog } from "@/components/tasks/task-form-dialog";
-
-function todayDateString() {
-  return new Date().toISOString().slice(0, 10);
-}
 
 type TaskView = "board" | "list" | "timeline";
 
@@ -127,7 +124,7 @@ function TasksPageContent() {
   // as before. Running/Overdue are the Task Center's own quick-filter toggles (Section 6/7):
   // genuinely derived state (active timer, due date), never new stored statuses.
   const activeOnly = searchParams.get("active") === "1";
-  const today = todayDateString();
+  const today = todayDateOnly();
   const runningTaskId = runningTimer?.taskId ?? null;
 
   const beforeStatusFilter = useMemo(() => filterTasks(tasks, { ...filters, status: "all" }), [tasks, filters]);

@@ -37,10 +37,6 @@ import { PlannerMonthView } from "@/components/planner/planner-month-view";
 import { PlannerUnscheduledPanel } from "@/components/planner/planner-unscheduled-panel";
 import { STAGGER_ITEM_CLASS, staggerDelay } from "@/lib/stagger";
 
-function todayDateString() {
-  return new Date().toISOString().slice(0, 10);
-}
-
 type MyDayView = "today" | "week" | "month";
 const VIEW_TABS: { key: MyDayView; label: string; icon: typeof CalendarDays }[] = [
   { key: "today", label: "Today", icon: CalendarDays },
@@ -111,7 +107,7 @@ export function SuperadminMyDay({ user }: SuperadminMyDayProps) {
     if (date === todayDateOnly()) handleViewChange("today");
   }
 
-  const today = todayDateString();
+  const today = todayDateOnly();
 
   // The status buckets are this page's primary organizing control — ignore any `status` a saved
   // view might carry (search/company/workstream/priority still apply) so the two mechanisms never
