@@ -2,13 +2,16 @@
 
 import { use, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Pencil, Trash2 } from "lucide-react";
+import { Pencil, Plus, Trash2 } from "lucide-react";
 import { useAuth } from "@/lib/auth/auth-context";
 import { useServiceStaffing } from "@/lib/data/hooks/use-service-membership";
 import { useServiceLineCatalog } from "@/lib/data/hooks/use-service-lines";
 import { useAdminUsers } from "@/lib/data/hooks/use-admin-users";
+import { useTemplates } from "@/lib/data/hooks/use-templates";
 import { canManageAdminUsers } from "@/lib/data/permissions";
-import { serviceMembershipProvider } from "@/lib/data/providers";
+import { serviceMembershipProvider, templatesProvider } from "@/lib/data/providers";
+import type { TemplateWithTasks } from "@/lib/data/providers/templates-provider";
+import { FREQUENCY_LABEL } from "@/lib/data/recurrence";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -20,6 +23,7 @@ import { TruncatedText } from "@/components/ui/truncated-text";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { ServiceLineFormDialog } from "@/components/admin/service-line-form-dialog";
 import { ManageServiceActivitiesDialog } from "@/components/admin/manage-service-activities-dialog";
+import { ReusableTemplateBuilderDialog } from "@/components/admin/reusable-template-builder-dialog";
 import { serviceLinesProvider } from "@/lib/data/providers";
 
 /**
@@ -35,6 +39,10 @@ export default function AdminTemplateDetailPage({ params }: { params: Promise<{ 
   const { staffing, refresh: refreshStaffing } = useServiceStaffing();
   const { users } = useAdminUsers();
   const { serviceLines, refresh: refreshCatalog } = useServiceLineCatalog();
+  // CD-218 — Reusable Templates (System B's Task/Checklist bundle) that belong to THIS parent
+  // Template only; includeInactive so Deactivated ones still show here, per the locked product
+  // decision ("remain visible to Admin under the parent Template").
+  const { templates: allTemplates, refresh: refreshTemplates } = useTemplates({ includeInactive: true });
   const toastManager = useToastManager();
 
   const [pendingStaffing, setPendingStaffing] = useState(false);
@@ -42,6 +50,9 @@ export default function AdminTemplateDetailPage({ params }: { params: Promise<{ 
   const [editOpen, setEditOpen] = useState(false);
   const [activitiesOpen, setActivitiesOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [reusableBuilderOpen, setReusableBuilderOpen] = useState(false);
+  const [editingReusableTemplate, setEditingReusableTemplate] = useState<TemplateWithTasks | null>(null);
+  const [pendingReusableId, setPendingReusableId] = useState<string | null>(null);
 
   useEffect(() => {
     if (user && !canManageAdminUsers(user)) {
@@ -51,6 +62,7 @@ export default function AdminTemplateDetailPage({ params }: { params: Promise<{ 
 
   const serviceLine = serviceLines.find((sl) => sl.id === id);
   const row = staffing.find((s) => s.serviceLineId === id);
+  const reusableTemplates = allTemplates.filter((t) => t.serviceLineId === id);
 
   const teamLeadOptions = useMemo(
     () =>
@@ -133,6 +145,19 @@ export default function AdminTemplateDetailPage({ params }: { params: Promise<{ 
     ? (users.find((u) => u.id === serviceLine.createdById)?.fullName ?? "Unknown")
     : "Legacy — not recorded";
 
+  async function handleToggleReusableActive(reusable: TemplateWithTasks) {
+    if (!user) return;
+    setPendingReusableId(reusable.id);
+    try {
+      await templatesProvider.setTemplateActive(user, reusable.id, !reusable.isActive);
+      await refreshTemplates();
+    } catch (err) {
+      toastManager.add({ description: err instanceof Error ? err.message : "Couldn't update this Reusable Template." });
+    } finally {
+      setPendingReusableId(null);
+    }
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <Breadcrumb items={[{ label: "Templates", href: "/dashboard/admin/templates" }, { label: serviceLine.name }]} />
@@ -214,7 +239,90 @@ export default function AdminTemplateDetailPage({ params }: { params: Promise<{ 
         </div>
       </Card>
 
+      <Card className="flex flex-col gap-3 p-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-col gap-1">
+            <span className="text-sm font-medium">Reusable Templates</span>
+            <span className="text-xs text-muted-foreground">
+              Reusable workflows containing predefined Tasks and Checklist Items that can be applied to Projects.
+            </span>
+          </div>
+          <Button
+            type="button"
+            size="sm"
+            onClick={() => {
+              setEditingReusableTemplate(null);
+              setReusableBuilderOpen(true);
+            }}
+          >
+            <Plus /> New Reusable Template
+          </Button>
+        </div>
+
+        {reusableTemplates.length === 0 ? (
+          <p className="rounded-lg border border-dashed p-4 text-center text-sm text-muted-foreground">
+            No Reusable Templates for {serviceLine.name} yet.
+          </p>
+        ) : (
+          <div className="flex flex-col divide-y">
+            {reusableTemplates.map((reusable) => {
+              const checklistCount = reusable.tasks.reduce((sum, t) => sum + t.checklistItems.length, 0);
+              const busy = pendingReusableId === reusable.id;
+              return (
+                <div key={reusable.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
+                  <div className="flex min-w-0 flex-col gap-0.5">
+                    <div className="flex items-center gap-2">
+                      <span className="truncate text-sm font-medium">{reusable.name}</span>
+                      <Badge variant={reusable.isActive ? "success" : "secondary"}>
+                        {reusable.isActive ? "Active" : "Inactive"}
+                      </Badge>
+                    </div>
+                    <span className="text-xs text-muted-foreground">
+                      {reusable.tasks.length} Task{reusable.tasks.length === 1 ? "" : "s"} · {checklistCount} Checklist item
+                      {checklistCount === 1 ? "" : "s"}
+                      {reusable.recurrenceFrequency && ` · ${FREQUENCY_LABEL[reusable.recurrenceFrequency]}`}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      aria-label={`Edit ${reusable.name}`}
+                      onClick={() => {
+                        setEditingReusableTemplate(reusable);
+                        setReusableBuilderOpen(true);
+                      }}
+                    >
+                      <Pencil />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      disabled={busy}
+                      onClick={() => void handleToggleReusableActive(reusable)}
+                    >
+                      {reusable.isActive ? "Deactivate" : "Reactivate"}
+                    </Button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </Card>
+
       <ServiceLineFormDialog open={editOpen} onOpenChange={setEditOpen} serviceLine={serviceLine} onSaved={refreshCatalog} />
+      <ReusableTemplateBuilderDialog
+        open={reusableBuilderOpen}
+        onOpenChange={setReusableBuilderOpen}
+        serviceLine={serviceLine}
+        template={editingReusableTemplate ?? undefined}
+        onSaved={() => {
+          refreshTemplates();
+        }}
+      />
       {activitiesOpen && (
         <ManageServiceActivitiesDialog open={activitiesOpen} onOpenChange={setActivitiesOpen} serviceLine={serviceLine} />
       )}

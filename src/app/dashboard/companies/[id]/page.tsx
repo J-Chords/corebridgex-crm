@@ -224,7 +224,7 @@ export default function CompanyDetailPage({ params }: { params: Promise<{ id: st
             canManageWorkstreams(user) && (
               <div className="flex items-center gap-2">
                 <Button size="sm" variant="outline" onClick={() => setApplyTemplateOpen(true)}>
-                  <Sparkles /> Apply template
+                  <Sparkles /> Apply Reusable Template
                 </Button>
                 <Button size="sm" variant="outline" onClick={() => setWorkstreamDialogOpen(true)}>
                   <Plus /> Add Template

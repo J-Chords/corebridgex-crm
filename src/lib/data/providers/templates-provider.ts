@@ -1,4 +1,4 @@
-import type { ServiceLine, Template, TemplateChecklistItem, TemplateTask, User } from "../types";
+import type { RecurrenceFrequency, Role, ServiceLine, Template, TemplateChecklistItem, TemplateTask, User } from "../types";
 
 export interface TemplateTaskWithChecklist extends TemplateTask {
   checklistItems: TemplateChecklistItem[];
@@ -9,6 +9,40 @@ export interface TemplateWithTasks extends Template {
   serviceLine: ServiceLine | null;
   /** Ordered by position. */
   tasks: TemplateTaskWithChecklist[];
+}
+
+/** CD-218 (Reusable Template authoring) — one Checklist item inside a bundle create/update payload. `id` is
+ * omitted/null for a brand-new item; a real id on an update reconciles (updates in place) rather
+ * than recreating, preserving that row's own identity. */
+export interface TemplateChecklistItemBundleInput {
+  id?: string | null;
+  description: string;
+}
+
+/** CD-218 — one Task inside a bundle create/update payload. Array order is canonical: the backend
+ * always renormalizes `position` from this order, never from a client-supplied position field.
+ * Same `id`-reconciliation rule as the Checklist item above. */
+export interface TemplateTaskBundleInput {
+  id?: string | null;
+  title: string;
+  description: string;
+  defaultOwnerRole: Role | null;
+  dueDaysAfterStart: number | null;
+  expectedMinutes: number | null;
+  checklistItems: TemplateChecklistItemBundleInput[];
+}
+
+/** CD-218 — the whole-Reusable-Template create/update payload. Shared shape for both create (every
+ * `id` omitted) and update (retained rows carry their real id) — one atomic RPC per direction
+ * reconciles rather than blindly recreating, so an unmodified Task's `tasks.template_id` lineage on
+ * any already-materialized real Task is never disturbed by an edit elsewhere in the same bundle. */
+export interface TemplateBundleInput {
+  name: string;
+  description: string | null;
+  serviceLineId: string;
+  recurrenceFrequency: RecurrenceFrequency | null;
+  recurrenceCustomIntervalDays: number | null;
+  tasks: TemplateTaskBundleInput[];
 }
 
 export interface ApplyTemplateInput {
@@ -54,7 +88,11 @@ export interface ApplyTemplateResult {
  * a later phase scopes templates (e.g. per brand).
  */
 export interface TemplatesProvider {
-  listTemplates(viewer: User): Promise<TemplateWithTasks[]>;
+  /** Defaults to Active Reusable Templates only (matching `apply_template`/
+   * `apply_service_template_to_project`'s own rejection of an inactive one) — every existing
+   * Apply-Template caller gets this safely for free. Pass `includeInactive: true` only for Admin
+   * Reusable-Template-management surfaces that need to see and manage deactivated ones too. */
+  listTemplates(viewer: User, options?: { includeInactive?: boolean }): Promise<TemplateWithTasks[]>;
   getTemplate(viewer: User, id: string): Promise<TemplateWithTasks | null>;
   /**
    * Creates (or, Project-aware, reuses) the workstream, its team, every template task, and each
@@ -62,4 +100,16 @@ export interface TemplatesProvider {
    * concept of their own beyond what `activityIds` explicitly enables for this one application.
    */
   applyTemplate(viewer: User, input: ApplyTemplateInput): Promise<ApplyTemplateResult>;
+  /** CD-218 (Reusable Template authoring) — Admin-only. Authors a brand-new Reusable Template
+   * (Template + Tasks + Checklist Items) under a given parent Service Line, as one atomic bundle;
+   * any validation failure persists nothing. */
+  createTemplateBundle(viewer: User, input: TemplateBundleInput): Promise<TemplateWithTasks>;
+  /** CD-218 — Admin-only. Reconciles an existing Reusable Template's full bundle against `input`
+   * (update retained rows in place by id, insert new rows, delete rows no longer present) as one
+   * atomic operation. Never affects any already-materialized real Task — see `TemplateBundleInput`. */
+  updateTemplateBundle(viewer: User, templateId: string, input: TemplateBundleInput): Promise<TemplateWithTasks>;
+  /** CD-218 — Admin-only. Deactivating stops the Reusable Template being offered for new
+   * application (enforced in `applyTemplate` itself, not just by hiding it from a picker) without
+   * touching its own rows or any historical lineage. No hard-delete exists in V1. */
+  setTemplateActive(viewer: User, templateId: string, isActive: boolean): Promise<TemplateWithTasks>;
 }
