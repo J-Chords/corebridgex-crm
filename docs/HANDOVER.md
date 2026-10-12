@@ -260,72 +260,34 @@ to main (PR #11 merge commit cb3fe96, PR #12 merge commit 6ef8b7d, PR #13 merge 
 22d95d584289dcd0eab6fe445f06283ea4800c6e. Template cloning (A2) remains deferred, no
 ticket yet. See decisions.md's CD-217 entries and current-state.md for the full record.
 
-AT THE HOSTED + CODE-REVIEW CHECKPOINT (hosted-applied, commit/push/PR/Jira
-Code-review in progress this same session — STOP BEFORE MERGE, a separate later
-Product Owner decision): CD-218 (Story, outside the numbered phase series) —
-Reusable Template authoring, the first authoring path for System-B's templates/
-template_tasks/template_checklist_items (previously genuinely "seed-only" — hosted
-`authenticated` grants were SELECT-only on all three tables; CD-217's own audit found
-this). User-facing term "Reusable Template," authored FROM INSIDE the existing Template
+CD-218 (Story, outside the numbered phase series) — Reusable Template authoring, the
+first authoring path for System-B's templates/template_tasks/template_checklist_items
+(previously genuinely "seed-only" — hosted `authenticated` grants were SELECT-only on
+all three tables; CD-217's own audit found this) — is merged to main (PR #17 merge
+commit 84197a6), Jira `pending deployment`. Current main is
+84197a623c69de4fe8e27a4e5147f1742e2971c7. Hosted migration
+20261006090000_recipe_builder_authoring.sql applied and postflight-verified (0 drift,
+every grant/RPC/count confirmed). Product Owner functional QA and final
+builder-layout UI both APPROVED. See decisions.md's CD-218 entries and current-state.md
+for the full implementation/QA/postflight/merge record.
+
+User-facing term "Reusable Template," authored FROM INSIDE the existing Template
 detail page (/dashboard/admin/templates/[id]'s own new "Reusable Templates" section) —
 NOT a separate top-level admin surface. **An earlier draft of this ticket built it as a
 separate "Admin → Recipes" area (/dashboard/admin/recipes, user-facing term "Recipe");
 the Product Owner reviewed and reversed that before it was ever committed. DO NOT
 REINTRODUCE A SEPARATE "ADMIN → RECIPES" NAV ITEM OR ROUTE.** A Template
 (service_lines row) can have 0..many Reusable Templates, linked via the pre-existing
-templates.service_line_id (no schema change needed for that relationship); each
-Reusable Template is 0..many Template Tasks, each 0..many Checklist Items; V1 is
-Create/Edit/Active/Inactive, NO hard delete, no move-to-a-different-parent action; the
-builder's own Step 1 never asks for a Service — the parent Template is always already
-known from the page it was opened from. Preview performs zero writes; Create/Save is
-one atomic RPC (admin_create_template_bundle/admin_update_template_bundle,
-reconciliation-by-id so an edit never disturbs an already-materialized real Task's
-lineage) plus admin_set_template_active. CD-217's own
-apply_template/apply_service_template_to_project each gained one inactive-check (the
-Reusable Template's own is_active only — neither ever consults the parent Service
-Line's is_active; audited and confirmed no cascade either direction). Activities stay
-explicitly outside a Reusable Template's own definition (apply-time only, per CD-217) —
-not added here. The Project-level/Company-level System-B application actions are now
-labeled "Apply Reusable Template" (visible copy only — ApplyTemplateDialog/
-apply_template/apply_service_template_to_project keep their names). On branch
-feature/CD-218-recipe-builder (fresh from origin/main at 22d95d58, CD-217's merge
-commit; branch name unchanged by the terminology correction). Migration
-20261006090000_recipe_builder_authoring.sql (filename unchanged) — APPLIED to hosted
-and postflight-verified (2026-10-12): migration list shows local=remote, 0 drift;
-templates.is_active live (boolean not null default true); the one existing Template
-row still is_active=true; all 3 new RPCs and the 2 modified apply RPCs read back
-directly from hosted and confirmed byte-identical to the migration (admin gate first,
-inactive-guard the only new line in each apply RPC, can_manage_project/
-materialize_template_tasks's 'not-started' preserved); direct table grants unchanged
-(authenticated: SELECT-only); 3 unauthenticated-caller probes (create/update/
-active-toggle) all rejected before any mutation; operational row counts unchanged
-across every table. tsc/ESLint/git diff --check/all 4 provider builds clean (isolated
-copy D:\cbx-qa-cd218 — the later builder-layout correction below was presentation-only
-and did not require a build re-run); direct mock-provider QA (67/67) and Playwright
-interactive QA (64/64, covering the embedded Template-detail-page UX, the full Create/
-Edit/Deactivate-Reactivate wizard with no Service selector, multiple Reusable Templates
-under one parent plus cross-parent isolation, the new Reusable Template consumed by
-CD-217's existing Project-level "Apply Reusable Template" engine, Admin/Team-Lead/
-unrelated-Team-Lead/Employee, confirmation that /dashboard/admin/recipes is a genuine
-404 with no surviving nav link, and the existing /dashboard/admin/templates page's own
-regression-free behavior) both passed. **Product Owner functional QA: APPROVED.**
-
-BUILDER LAYOUT CORRECTION (after functional approval, before this checkpoint): the
-builder's own container moved from a narrow right-edge Sheet (sm:max-w-2xl, 672px) to
-a centered Dialog via the project's existing FormDialog shell (~960px desktop,
-max-h-[85vh], calc(100%-2rem) mobile margins — the same shell already used for the
-Task/Service editors, built for this exact "drawer -> centered dialog" migration).
-Presentation-only; every behavior (Details/Tasks/Checklists/Move Up-Down/Preview/Back/
-Cancel/Create-Save/parent context/zero-write Preview/validation/edit hydration/
-Active-Inactive) unchanged. Verified via a dedicated 27/27 Playwright layout QA
-(desktop/medium/mobile centering, no horizontal overflow, Task metadata grid no
-longer cramped) plus full regression. **Product Owner final builder-layout UI:
-APPROVED.**
-
-Global Reusable Template administration remains Admin-only throughout. Git/Jira
-checkpoint (commit/push/PR/Code-review transition) in progress this same session —
-STOP BEFORE MERGE, a separate later Product Owner decision. See decisions.md's CD-218
-entries and current-state.md for the full record.
+templates.service_line_id; each Reusable Template is 0..many Template Tasks, each
+0..many Checklist Items; V1 is Create/Edit/Active/Inactive, NO hard delete, no
+move-to-a-different-parent action; the builder's own Step 1 never asks for a Service —
+the parent Template is always already known from the page it was opened from. The
+builder's own container is a centered Dialog (the project's existing FormDialog shell,
+~960px desktop) — not a right-edge Sheet; a first draft used a narrow drawer and the
+Product Owner corrected it before this checkpoint. The Project-level/Company-level
+System-B application actions are labeled "Apply Reusable Template" (visible copy only
+— ApplyTemplateDialog/apply_template/apply_service_template_to_project keep their
+names). Global Reusable Template administration remains Admin-only throughout.
 
 OPEN TICKETS:
 - CD-193 — Normalize local-date handling across task and dashboard date surfaces.
