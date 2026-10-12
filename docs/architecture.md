@@ -129,7 +129,7 @@ Every authenticated route lives under `/dashboard`, because `src/app/dashboard/l
 | `/dashboard/reports/client`, `/dashboard/reports/client/[id]` | Client Report list/detail (name-free, client-facing) | Team Lead/Admin |
 | `/dashboard/settings` | Profile / Appearance / Notifications / Workspace (Admin-only) / About | All roles, tab-gated |
 | `/dashboard/admin/users` | User administration — create/edit/deactivate, global Template staffing, password reset | Admin only |
-| `/dashboard/admin/templates`, `/dashboard/admin/templates/[id]` | Global Template catalog admin (list + Phase 1's new per-Template detail page — name/description/Activities/compact staffing); internal `service_lines`/`ServiceLine` persistence unrenamed | Admin only |
+| `/dashboard/admin/templates`, `/dashboard/admin/templates/[id]` | Global Template catalog admin (list + Phase 1's per-Template detail page — name/description/Activities/compact staffing — plus CD-218's own "Reusable Templates" section on the detail page, authoring System B's reusable Task/Checklist bundle, `templates`/`template_tasks`/`template_checklist_items`); internal `service_lines`/`ServiceLine` persistence unrenamed. **No separate "Admin → Recipes" route exists or should be added** — see domain-model.md's "Reusable Template" subsection | Admin only |
 | `/dashboard/admin/services` | 307 redirect → `/dashboard/admin/templates` | Legacy bookmark compatibility only |
 
 Not planned: any client-facing/public route. Client Contacts never authenticate — there is no portal.

@@ -1099,7 +1099,7 @@ function LoadedProjectDetailPage({
                       action on this page (Admin, or this Project's owner/an Additional Team Lead) —
                       never a blanket "any Team Lead" check. */}
                   <Button size="sm" variant="outline" onClick={() => setApplyTemplateOpen(true)}>
-                    <Sparkles /> Apply Template
+                    <Sparkles /> Apply Reusable Template
                   </Button>
                   <Button size="sm" onClick={() => setAddServiceOpen(true)}>
                     <Plus /> Add Template

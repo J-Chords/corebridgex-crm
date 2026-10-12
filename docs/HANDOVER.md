@@ -249,38 +249,83 @@ reviewed/merged):
   pushed, no PR, no Jira. See decisions.md's Phase 4 entry for full scope.
 
 NEXT UP: Phase 3 (CD-208), Phase 4 (CD-211), Phase 5 (CD-214, Blocked -> Waiting status
-retirement), Phase 6A (CD-215, Project contract-period data foundation), and Phase 6B
-(CD-216, contract renewal + Contract History UX) are all merged to main (PR #11 merge
-commit cb3fe96, PR #12 merge commit 6ef8b7d, PR #13 merge commit 595af8c, PR #14 merge
-commit 56f6069, PR #15 merge commit 703ac94), Jira `pending deployment`. Current main is
-703ac94e8c20e85d2ccc8361a45d047eaaa63f7e. Template cloning (A2) remains deferred, no
-ticket yet. See decisions.md's Phase 6 entry and current-state.md for the full record.
+retirement), Phase 6A (CD-215, Project contract-period data foundation), Phase 6B
+(CD-216, contract renewal + Contract History UX), and CD-217 (Bug, out-of-phase —
+System-B materialize_template_tasks() stale 'todo' status fixed to 'not-started', plus
+Project-level Apply Template for Admin + Project-authorized Team Lead, plus an
+apply_service_template_to_project merge-branch authorization gap closed) are all merged
+to main (PR #11 merge commit cb3fe96, PR #12 merge commit 6ef8b7d, PR #13 merge commit
+595af8c, PR #14 merge commit 56f6069, PR #15 merge commit 703ac94, PR #16 merge commit
+22d95d58), Jira `pending deployment`. Current main is
+22d95d584289dcd0eab6fe445f06283ea4800c6e. Template cloning (A2) remains deferred, no
+ticket yet. See decisions.md's CD-217 entries and current-state.md for the full record.
 
-AT THE PRE-MERGE CHECKPOINT: CD-217 (Bug, outside the numbered phase series) — two
-corrections. (A) System B's materialize_template_tasks() inserted new Tasks with the
-stale literal status = 'todo' (never valid since Phase 1's status rename,
-flagged-but-declined by Phase 5/CD-214) — fixed to 'not-started' (the canonical initial
-status, proven from TASK_STATUS_ORDER[0]/the mock's own already-correct implementation/
-the Task-create form default). (B) Product Owner locked Admin + a Project-authorized
-Team Lead (never "any Team Lead") may Apply an existing System-B Template from the
-Project workspace's Templates tab (Company-level Apply Template stays Admin-only,
-unchanged — a brief attempt to widen it was tried and reverted once the Company-detail
-page's own page-level Superadmin-only redirect proved Team Lead could never reach it
-there). Building that feature found apply_service_template_to_project's merge-into-an-
-existing-Service branch had NO authorization check at all (only the create branch was
-protected) — closed by adding can_manage_project(p_project_id)/canManageProjectRecord
-before the merge/create split, in both mock and hosted. On branch
-feature/CD-217-fix-system-b-template-task-status (fresh from origin/main at 703ac94).
-Migration 20261002150000_fix_system_b_template_task_status.sql — APPLIED to hosted
-Supabase and postflight-verified (0 drift, 0 operational row changes, both function
-bodies read back byte-identical apart from the intended changes, a live transactional
-probe confirming the new merge-branch guard rejects an unauthorized call in production).
-tsc/ESLint/git diff --check/all 4 provider builds clean; direct mock-provider QA (50/50)
-and Playwright interactive QA (29/29, covering Admin/authorized-TL/unrelated-TL/Employee
-and the Company-level regression) both passed. Product Owner manually tested and
-approved. At the pre-merge checkpoint: PR open against main, Jira reached `Code review`.
-Global Template administration remains Admin-only throughout, untouched. See
-decisions.md's CD-217 entries and current-state.md for the full record.
+AT THE HOSTED + CODE-REVIEW CHECKPOINT (hosted-applied, commit/push/PR/Jira
+Code-review in progress this same session — STOP BEFORE MERGE, a separate later
+Product Owner decision): CD-218 (Story, outside the numbered phase series) —
+Reusable Template authoring, the first authoring path for System-B's templates/
+template_tasks/template_checklist_items (previously genuinely "seed-only" — hosted
+`authenticated` grants were SELECT-only on all three tables; CD-217's own audit found
+this). User-facing term "Reusable Template," authored FROM INSIDE the existing Template
+detail page (/dashboard/admin/templates/[id]'s own new "Reusable Templates" section) —
+NOT a separate top-level admin surface. **An earlier draft of this ticket built it as a
+separate "Admin → Recipes" area (/dashboard/admin/recipes, user-facing term "Recipe");
+the Product Owner reviewed and reversed that before it was ever committed. DO NOT
+REINTRODUCE A SEPARATE "ADMIN → RECIPES" NAV ITEM OR ROUTE.** A Template
+(service_lines row) can have 0..many Reusable Templates, linked via the pre-existing
+templates.service_line_id (no schema change needed for that relationship); each
+Reusable Template is 0..many Template Tasks, each 0..many Checklist Items; V1 is
+Create/Edit/Active/Inactive, NO hard delete, no move-to-a-different-parent action; the
+builder's own Step 1 never asks for a Service — the parent Template is always already
+known from the page it was opened from. Preview performs zero writes; Create/Save is
+one atomic RPC (admin_create_template_bundle/admin_update_template_bundle,
+reconciliation-by-id so an edit never disturbs an already-materialized real Task's
+lineage) plus admin_set_template_active. CD-217's own
+apply_template/apply_service_template_to_project each gained one inactive-check (the
+Reusable Template's own is_active only — neither ever consults the parent Service
+Line's is_active; audited and confirmed no cascade either direction). Activities stay
+explicitly outside a Reusable Template's own definition (apply-time only, per CD-217) —
+not added here. The Project-level/Company-level System-B application actions are now
+labeled "Apply Reusable Template" (visible copy only — ApplyTemplateDialog/
+apply_template/apply_service_template_to_project keep their names). On branch
+feature/CD-218-recipe-builder (fresh from origin/main at 22d95d58, CD-217's merge
+commit; branch name unchanged by the terminology correction). Migration
+20261006090000_recipe_builder_authoring.sql (filename unchanged) — APPLIED to hosted
+and postflight-verified (2026-10-12): migration list shows local=remote, 0 drift;
+templates.is_active live (boolean not null default true); the one existing Template
+row still is_active=true; all 3 new RPCs and the 2 modified apply RPCs read back
+directly from hosted and confirmed byte-identical to the migration (admin gate first,
+inactive-guard the only new line in each apply RPC, can_manage_project/
+materialize_template_tasks's 'not-started' preserved); direct table grants unchanged
+(authenticated: SELECT-only); 3 unauthenticated-caller probes (create/update/
+active-toggle) all rejected before any mutation; operational row counts unchanged
+across every table. tsc/ESLint/git diff --check/all 4 provider builds clean (isolated
+copy D:\cbx-qa-cd218 — the later builder-layout correction below was presentation-only
+and did not require a build re-run); direct mock-provider QA (67/67) and Playwright
+interactive QA (64/64, covering the embedded Template-detail-page UX, the full Create/
+Edit/Deactivate-Reactivate wizard with no Service selector, multiple Reusable Templates
+under one parent plus cross-parent isolation, the new Reusable Template consumed by
+CD-217's existing Project-level "Apply Reusable Template" engine, Admin/Team-Lead/
+unrelated-Team-Lead/Employee, confirmation that /dashboard/admin/recipes is a genuine
+404 with no surviving nav link, and the existing /dashboard/admin/templates page's own
+regression-free behavior) both passed. **Product Owner functional QA: APPROVED.**
+
+BUILDER LAYOUT CORRECTION (after functional approval, before this checkpoint): the
+builder's own container moved from a narrow right-edge Sheet (sm:max-w-2xl, 672px) to
+a centered Dialog via the project's existing FormDialog shell (~960px desktop,
+max-h-[85vh], calc(100%-2rem) mobile margins — the same shell already used for the
+Task/Service editors, built for this exact "drawer -> centered dialog" migration).
+Presentation-only; every behavior (Details/Tasks/Checklists/Move Up-Down/Preview/Back/
+Cancel/Create-Save/parent context/zero-write Preview/validation/edit hydration/
+Active-Inactive) unchanged. Verified via a dedicated 27/27 Playwright layout QA
+(desktop/medium/mobile centering, no horizontal overflow, Task metadata grid no
+longer cramped) plus full regression. **Product Owner final builder-layout UI:
+APPROVED.**
+
+Global Reusable Template administration remains Admin-only throughout. Git/Jira
+checkpoint (commit/push/PR/Code-review transition) in progress this same session —
+STOP BEFORE MERGE, a separate later Product Owner decision. See decisions.md's CD-218
+entries and current-state.md for the full record.
 
 OPEN TICKETS:
 - CD-193 — Normalize local-date handling across task and dashboard date surfaces.
@@ -293,6 +338,18 @@ user reads on screen changed. See domain-model.md.
 No Subtask level exists — it was built, then deliberately fully removed. "Template" is
 the only user-facing term; "Workstream"/"Service Line" are the internal/code names only (types, table
 names, routes) — never write "Workstream" in UI copy.
+
+"Reusable Template" (CD-218) is a SEPARATE user-facing term for System B's reusable
+Task/Checklist bundle (templates/template_tasks/template_checklist_items) — never
+confuse it with "Template" above. Admin -> Templates (/dashboard/admin/templates) is
+the service_lines catalog; a Reusable Template is authored FROM INSIDE a specific
+Template's own detail page (/dashboard/admin/templates/[id]'s "Reusable Templates"
+section) — there is NO separate "Admin -> Recipes" surface and NO
+/dashboard/admin/recipes route. An earlier draft tried that separate-surface shape; the
+Product Owner reversed it. DO NOT REINTRODUCE IT. One Template can have 0..many
+Reusable Templates (e.g. "Payroll" can have both "Payroll Client Onboarding" and
+"Monthly Payroll Processing"), linked via templates.service_line_id. See
+domain-model.md's "Reusable Template" subsection.
 
 ROLES: Employee / Team Lead (code: "supervisor") / Admin (code: "superadmin"). Pattern:
 Admin sees everything org-wide; Team Lead sees self + direct reports only (via

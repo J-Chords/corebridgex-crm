@@ -161,12 +161,12 @@ export function ApplyTemplateDialog({ open, onOpenChange, company, project, onAp
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Apply template</DialogTitle>
+          <DialogTitle>Apply Reusable Template</DialogTitle>
           <DialogDescription>
             {step === "form"
               ? isProjectMode
-                ? `Apply an existing Template to ${company.name} / ${project!.name}.`
-                : `Create a new service for ${company.name} from a standard template.`
+                ? `Apply an existing Reusable Template to ${company.name} / ${project!.name}.`
+                : `Create a new service for ${company.name} from an existing Reusable Template.`
               : "Review what this will create before it commits."}
           </DialogDescription>
         </DialogHeader>
@@ -175,14 +175,14 @@ export function ApplyTemplateDialog({ open, onOpenChange, company, project, onAp
           <>
             <div className="flex max-h-[65vh] flex-col gap-4 overflow-y-auto pr-1">
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="apply-template-select">Template</Label>
+                <Label htmlFor="apply-template-select">Reusable Template</Label>
                 <Select
                   items={Object.fromEntries(templates.map((t) => [t.id, t.name]))}
                   value={form.templateId}
                   onValueChange={(v) => selectTemplate(v ?? "")}
                 >
                   <SelectTrigger id="apply-template-select" className="w-full">
-                    <SelectValue placeholder="Select a template" />
+                    <SelectValue placeholder="Select a Reusable Template" />
                   </SelectTrigger>
                   <SelectContent>
                     {templates.map((t) => (

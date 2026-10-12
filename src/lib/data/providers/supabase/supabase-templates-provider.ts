@@ -4,6 +4,7 @@ import type {
   TemplateTaskWithChecklist,
   ApplyTemplateInput,
   ApplyTemplateResult,
+  TemplateBundleInput,
 } from "../templates-provider";
 import type { Template, TemplateTask, TemplateChecklistItem, ServiceLine, RecurrenceFrequency, Role } from "../../types";
 import { createClient } from "@/lib/supabase/client";
@@ -22,6 +23,7 @@ interface TemplateRow {
   service_line_id: string | null;
   recurrence_frequency: RecurrenceFrequency | null;
   recurrence_custom_interval_days: number | null;
+  is_active: boolean;
   created_by: string;
   created_at: string;
   updated_at: string;
@@ -35,10 +37,26 @@ function toTemplate(row: TemplateRow): Template {
     serviceLineId: row.service_line_id,
     recurrenceFrequency: row.recurrence_frequency,
     recurrenceCustomIntervalDays: row.recurrence_custom_interval_days,
+    isActive: row.is_active,
     createdById: row.created_by,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
+}
+
+/** CD-218 — serializes a `TemplateBundleInput` into the jsonb shape
+ * `admin_create_template_bundle`/`admin_update_template_bundle` both expect. `id` is passed through
+ * as-is (undefined/null for a new row, a real id to reconcile an existing one on update). */
+function toTasksPayload(tasks: TemplateBundleInput["tasks"]) {
+  return tasks.map((task) => ({
+    id: task.id ?? null,
+    title: task.title,
+    description: task.description,
+    defaultOwnerRole: task.defaultOwnerRole,
+    dueDaysAfterStart: task.dueDaysAfterStart,
+    expectedMinutes: task.expectedMinutes,
+    checklistItems: task.checklistItems.map((ci) => ({ id: ci.id ?? null, description: ci.description })),
+  }));
 }
 
 async function hydrate(templates: Template[]): Promise<TemplateWithTasks[]> {
@@ -104,9 +122,13 @@ async function hydrate(templates: Template[]): Promise<TemplateWithTasks[]> {
 }
 
 export const supabaseTemplatesProvider: TemplatesProvider = {
-  async listTemplates() {
+  async listTemplates(_viewer, options) {
     const supabase = createClient();
-    const { data, error } = await supabase.from("templates").select("*").order("name");
+    let query = supabase.from("templates").select("*").order("name");
+    if (!options?.includeInactive) {
+      query = query.eq("is_active", true);
+    }
+    const { data, error } = await query;
     if (error) throw new Error(error.message);
     return hydrate((data ?? []).map(toTemplate));
   },
@@ -150,5 +172,50 @@ export const supabaseTemplatesProvider: TemplatesProvider = {
     });
     if (error) throw new Error(error.message);
     return { workstreamId: data as string, status: "created" };
+  },
+
+  async createTemplateBundle(_viewer, input: TemplateBundleInput) {
+    const supabase = createClient();
+    const { data, error } = await supabase.rpc("admin_create_template_bundle", {
+      p_name: input.name,
+      p_description: input.description,
+      p_service_line_id: input.serviceLineId,
+      p_recurrence_frequency: input.recurrenceFrequency,
+      p_recurrence_custom_interval_days: input.recurrenceCustomIntervalDays,
+      p_tasks: toTasksPayload(input.tasks),
+    });
+    if (error) throw new Error(error.message);
+    const [hydrated] = await hydrate([toTemplate(data as TemplateRow)]);
+    if (!hydrated) throw new Error("Reusable Template not found after create.");
+    return hydrated;
+  },
+
+  async updateTemplateBundle(_viewer, templateId, input: TemplateBundleInput) {
+    const supabase = createClient();
+    const { data, error } = await supabase.rpc("admin_update_template_bundle", {
+      p_template_id: templateId,
+      p_name: input.name,
+      p_description: input.description,
+      p_service_line_id: input.serviceLineId,
+      p_recurrence_frequency: input.recurrenceFrequency,
+      p_recurrence_custom_interval_days: input.recurrenceCustomIntervalDays,
+      p_tasks: toTasksPayload(input.tasks),
+    });
+    if (error) throw new Error(error.message);
+    const [hydrated] = await hydrate([toTemplate(data as TemplateRow)]);
+    if (!hydrated) throw new Error("Reusable Template not found after update.");
+    return hydrated;
+  },
+
+  async setTemplateActive(_viewer, templateId, isActive) {
+    const supabase = createClient();
+    const { data, error } = await supabase.rpc("admin_set_template_active", {
+      p_id: templateId,
+      p_is_active: isActive,
+    });
+    if (error) throw new Error(error.message);
+    const [hydrated] = await hydrate([toTemplate(data as TemplateRow)]);
+    if (!hydrated) throw new Error("Reusable Template not found after activation change.");
+    return hydrated;
   },
 };

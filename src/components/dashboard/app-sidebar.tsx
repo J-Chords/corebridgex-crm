@@ -101,6 +101,8 @@ export function AppSidebar() {
   ];
   const adminItems: NavItem[] = [
     ...(user && isSuperadmin(user) ? [{ href: "/dashboard/admin/users", label: "Users", icon: UsersRound }] : []),
+    // CD-218 — Reusable Templates (System B's Task/Checklist bundle authoring) live INSIDE a
+    // Template's own detail page now, not a separate nav entry — see docs/domain-model.md.
     ...(user && isSuperadmin(user) ? [{ href: "/dashboard/admin/templates", label: "Templates", icon: ShieldCheck }] : []),
   ];
   const groups: NavGroup[] = [
