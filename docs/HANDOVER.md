@@ -34,11 +34,17 @@ Re-verify with `git rev-parse origin/main` — this file goes stale the moment a
 
 ## 5. Open ticket(s)
 
-- **CD-193** — Normalize local-date handling across task and dashboard date surfaces. Status `New`, not started, no branch created. See `decisions.md` and `troubleshooting.md` for exactly what this covers and what it deliberately excludes (CD-190 already fixed the time-entry-specific instance of this bug class).
+None tracked as open at this snapshot — this section of the document predates several
+later tickets (CD-211 through CD-218, CD-193) and has not been kept fully current; see
+`current-state.md` for the live picture. CD-193 (local-date normalization across task
+and dashboard date surfaces) is no longer open — merged, see the full record further
+below in this file and in `current-state.md`/`decisions.md`.
 
 ## 6. Current Jira states
 
-CD-162, CD-190, CD-196, CD-205, CD-206, and CD-207: `pending deployment` (merged + validated, awaiting a hosting decision — see `current-state.md` for each ticket's exact status). CD-194: `Sign-off`. CD-193: `New`. CD-208: `In Progress` (implemented and validated, awaiting Product Owner manual review — not merged). Full workflow state list and the reasoning behind each transition: `current-state.md`.
+This section is stale (predates CD-211 onward) — see `current-state.md`'s own "Jira
+workflow states" section for the live picture. CD-193 specifically: `pending
+deployment` (merged — see below), not `New`.
 
 ## 7. Current deployment state
 
@@ -117,9 +123,9 @@ Full list: `troubleshooting.md`. Read it before touching: date/time handling, th
 
 ## 19. Next recommended work
 
-1. **A hosting decision** for the frontend, followed by a first real deployment and production verification (`deployment.md` has the smoke test). This is the actual current bottleneck — both merged tickets are otherwise done.
-2. **CD-193** (local-date normalization for the remaining UTC-slice call sites) — well-scoped, already has its audit boundaries written down in the ticket and in `decisions.md`/`troubleshooting.md`.
-3. Two smaller, non-urgent items surfaced during recent audits, worth a look whenever someone's in that area: the `Project.status === "completed"` code/comment disagreement, and the `canConfigureWorkstreamActivities` app-layer/RLS parity gap (both in `troubleshooting.md`).
+1. **A hosting decision** for the frontend, followed by a first real deployment and production verification (`deployment.md` has the smoke test). This is the actual current bottleneck — every merged ticket is otherwise done, including CD-193 (local-date normalization, merged — see `current-state.md`/`decisions.md`).
+2. Two smaller, non-urgent items surfaced during recent audits, worth a look whenever someone's in that area: the `Project.status === "completed"` code/comment disagreement, and the `canConfigureWorkstreamActivities` app-layer/RLS parity gap (both in `troubleshooting.md`).
+3. Project/contract-date provider parity (the mock-vs-hosted architecture divergence CD-193's own audit found and deliberately did not expand into) remains a genuinely open, not-yet-scoped question.
 
 ## 20. If you are a new developer, start here — checklist
 
@@ -289,9 +295,9 @@ System-B application actions are labeled "Apply Reusable Template" (visible copy
 — ApplyTemplateDialog/apply_template/apply_service_template_to_project keep their
 names). Global Reusable Template administration remains Admin-only throughout.
 
-AT THE CODE-REVIEW CHECKPOINT (commit/push/PR/Jira Code-review in progress this same
-session — STOP BEFORE MERGE, a separate later Product Owner decision): CD-193 (Task,
-out-of-phase) — normalize local-date handling across Task and Dashboard date surfaces.
+CD-193 (Task, out-of-phase) — normalize local-date handling across Task and Dashboard
+date surfaces — is merged to main (PR #19 merge commit 6692e980), Jira `pending
+deployment`. Current main is 6692e98018d540894a6b648e02630b4f75f56b44.
 CD-190 fixed one instance (time-entry
 bucketing) and tracked ~20 other known UTC-slice call sites as this ticket; a full
 repository-wide audit (every toISOString().slice(0,10)-style call site, classified
@@ -314,8 +320,9 @@ correctly left untouched. A Project completionDate mock-provider stamp was fixed
 narrowly (same local-date bug) WITHOUT touching the separate, pre-existing mock-vs-
 hosted architecture divergence in how that field gets stamped — that broader
 Project/contract provider-parity question stays exactly as open as before, reported not
-resolved. On branch fix/CD-193-local-date-normalization (fresh from origin/main at
-625dd827, PR #18's merge commit). tsc/ESLint/git diff --check/all 4 provider builds
+resolved. Implemented on branch fix/CD-193-local-date-normalization (fresh from
+origin/main at 625dd827, PR #18's merge commit; branch retained after merge, per
+standard convention — not deleted). tsc/ESLint/git diff --check/all 4 provider builds
 clean (isolated copy D:\cbx-qa-cd193). Deterministic timezone QA (42/42 — separate
 spawned processes with TZ set at spawn time: America/Los_Angeles, Pacific/Kiritimati,
 and a DST-transition day in America/New_York) and a Playwright browser QA script (24/24
@@ -323,10 +330,12 @@ and a DST-transition day in America/New_York) and a Playwright browser QA script
 contexts, proving the identical Task due-date value is correctly classified Due Today
 in one zone and correctly neither-due-nor-overdue in the other, directly in the live
 Task Center quick filters and Task detail page styling; Team Lead/Employee regression
-clean) both passed. Product Owner manual QA: APPROVED. Git/Jira checkpoint
-(commit/push/PR/Code-review transition) in progress this same session — STOP BEFORE
-MERGE, a separate later Product Owner decision. See decisions.md's CD-193 entry,
-testing.md (the two QA techniques are now the canonical pattern for any future
+clean) both passed. Product Owner manual QA: APPROVED. Merged via a normal merge
+commit (6692e98018d540894a6b648e02630b4f75f56b44, 2 parents: previous main
+625dd8276dce0b9a3d23ddbf9658836795c33c30 and feature head
+61ef9036c13a568ff9ade8cce752c42a0136f1db, independently verified as an ancestor of
+main). Jira transitioned Code review → pending deployment. See decisions.md's CD-193
+entry, testing.md (the two QA techniques are now the canonical pattern for any future
 date-touching change), and troubleshooting.md's closed-out tracking note.
 
 DOMAIN HIERARCHY (locked): Project → Template → Activity → Task → Checklist. Visible
@@ -393,8 +402,11 @@ LOCAL-DATE RULE: never use new Date().toISOString().slice(0, 10) or
 someTimestamp.slice(0, 10) to answer "what calendar day is this for the user" — that
 reads the UTC date, which disagrees with local date near midnight in any non-UTC
 timezone. Use src/lib/planner-dates.ts (todayDateOnly, dateKeyFromTimestamp,
-localDayBoundsUtc, parseDateOnly). This exact bug was found and partially fixed in
-CD-190; CD-193 (open, not started) covers the remaining unfixed call sites.
+localDayBoundsUtc, parseDateOnly). This exact bug was found and fixed in two passes:
+CD-190 (one time-entry-specific instance) and CD-193 (merged — a repository-wide audit
+and fix of the remaining ~20 call sites; see decisions.md's CD-193 entry). A fresh
+repo-wide search should still find zero real occurrences of the anti-pattern (only
+explanatory comments) — re-verify before assuming a NEW call site is already covered.
 
 DATA PROVIDER ARCHITECTURE: every domain has a provider interface
 (src/lib/data/providers/<domain>-provider.ts) with mock and Supabase implementations,
@@ -425,9 +437,8 @@ anything that may have changed since this snapshot, then docs/domain-model.md an
 docs/authorization.md before touching product logic or permissions.
 
 IMMEDIATE NEXT MILESTONE: a hosting-provider decision + first deployment + production
-verification (docs/deployment.md has the audit and a smoke-test checklist), OR a
-Product Owner merge decision for CD-193 (implemented, local-QA'd, Product-Owner
-manual-QA APPROVED, Git/Jira checkpoint in progress this session — see above). Do not
-deploy, transition Jira past "Code review," or merge CD-193's PR unless explicitly
-instructed to.
+verification (docs/deployment.md has the audit and a smoke-test checklist) — CD-193 is
+merged and `pending deployment` like every other completed ticket (see above); no
+ticket is currently in progress. Do not deploy or transition any ticket's Jira status
+past "pending deployment" unless explicitly instructed to.
 ```
