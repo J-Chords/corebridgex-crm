@@ -41,14 +41,15 @@ and dashboard date surfaces) is no longer open — merged, see the full record f
 below in this file and in `current-state.md`/`decisions.md`.
 
 **CD-221** (Align Project date update behavior across mock and Supabase providers) is
-currently open, implemented on branch `fix/CD-221-project-date-provider-parity`.
-Ordinary `updateProject` now preserves `startDate`/`endDate`/`completionDate` instead
-of letting an ordinary metadata edit overwrite them — matching hosted's
+merged — PR #21, merge commit `26811dfddceb84c2bf14856f4abf462e9b79eea9` (current
+`main`), implementation commit `942cff74a0366c77b24e4d331f2f496952789c30`. Ordinary
+`updateProject` now preserves `startDate`/`endDate`/`completionDate` instead of
+letting an ordinary metadata edit overwrite them — matching hosted's
 `update_project_record`, which already had no parameters for those three fields.
 Provider-only parity hardening: no UI change, no Supabase provider functional change,
 no migration/RPC/schema change, no hosted mutation. Direct provider QA 32/32 PASS,
 browser QA 14/14 PASS, all four provider builds PASS, Product Owner manual QA
-APPROVED. Awaiting the Git/PR/Jira Code-review checkpoint as of this note — see
+APPROVED, Jira `pending deployment`. Frontend deployment not performed — see
 `current-state.md`/`decisions.md` for the full record.
 
 ## 6. Current Jira states
