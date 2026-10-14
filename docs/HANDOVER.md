@@ -40,6 +40,17 @@ later tickets (CD-211 through CD-218, CD-193) and has not been kept fully curren
 and dashboard date surfaces) is no longer open — merged, see the full record further
 below in this file and in `current-state.md`/`decisions.md`.
 
+**CD-221** (Align Project date update behavior across mock and Supabase providers) is
+currently open, implemented on branch `fix/CD-221-project-date-provider-parity`.
+Ordinary `updateProject` now preserves `startDate`/`endDate`/`completionDate` instead
+of letting an ordinary metadata edit overwrite them — matching hosted's
+`update_project_record`, which already had no parameters for those three fields.
+Provider-only parity hardening: no UI change, no Supabase provider functional change,
+no migration/RPC/schema change, no hosted mutation. Direct provider QA 32/32 PASS,
+browser QA 14/14 PASS, all four provider builds PASS, Product Owner manual QA
+APPROVED. Awaiting the Git/PR/Jira Code-review checkpoint as of this note — see
+`current-state.md`/`decisions.md` for the full record.
+
 ## 6. Current Jira states
 
 This section is stale (predates CD-211 onward) — see `current-state.md`'s own "Jira
