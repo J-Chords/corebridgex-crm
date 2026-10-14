@@ -89,6 +89,23 @@ function hydrateFromTemplate(template: TemplateWithTasks): { details: BuilderDet
   };
 }
 
+/** CD-222 (A2) — same copy as `hydrateFromTemplate`, except every persistence id is stripped (`id:
+ * null`) and the name gets a "(Copy)" suffix. Used only to pre-fill a Duplicate — never passed to
+ * `template`, so `isEdit` stays false and Save always goes through `createTemplateBundle`, never
+ * `updateTemplateBundle`. The source Reusable Template's own rows, and any real Task already
+ * materialized from it, are never read for writing and never touched. */
+function hydrateForDuplicate(source: TemplateWithTasks): { details: BuilderDetails; tasks: BuilderTask[] } {
+  const hydrated = hydrateFromTemplate(source);
+  return {
+    details: { ...hydrated.details, name: `${source.name} (Copy)` },
+    tasks: hydrated.tasks.map((task) => ({
+      ...task,
+      id: null,
+      checklistItems: task.checklistItems.map((ci) => ({ ...ci, id: null })),
+    })),
+  };
+}
+
 function moveItem<T>(arr: T[], index: number, direction: "up" | "down"): T[] {
   const target = direction === "up" ? index - 1 : index + 1;
   if (target < 0 || target >= arr.length) return arr;
@@ -106,6 +123,11 @@ interface ReusableTemplateBuilderDialogProps {
   serviceLine: ServiceLine;
   /** Omit to create a new Reusable Template under `serviceLine`. */
   template?: TemplateWithTasks;
+  /** CD-222 (A2) — pre-fills a Duplicate of this Reusable Template (same parent, fresh identities,
+   * "(Copy)"-suffixed name). Mutually exclusive with `template` in practice — a caller should only
+   * ever set one of the two at a time; if both were somehow set, `template` (edit) wins, matching
+   * `isEdit`'s own derivation below. Never causes `isEdit` to become true. */
+  duplicateFrom?: TemplateWithTasks;
   onSaved: (saved: TemplateWithTasks) => void;
 }
 
@@ -125,10 +147,12 @@ export function ReusableTemplateBuilderDialog({
   onOpenChange,
   serviceLine,
   template,
+  duplicateFrom,
   onSaved,
 }: ReusableTemplateBuilderDialogProps) {
   const { user } = useAuth();
   const isEdit = Boolean(template);
+  const isDuplicate = !isEdit && Boolean(duplicateFrom);
 
   const [step, setStep] = useState<Step>("details");
   const [details, setDetails] = useState<BuilderDetails>(emptyDetails);
@@ -145,11 +169,15 @@ export function ReusableTemplateBuilderDialog({
       const hydrated = hydrateFromTemplate(template);
       setDetails(hydrated.details);
       setTasks(hydrated.tasks);
+    } else if (duplicateFrom) {
+      const hydrated = hydrateForDuplicate(duplicateFrom);
+      setDetails(hydrated.details);
+      setTasks(hydrated.tasks);
     } else {
       setDetails(emptyDetails());
       setTasks([]);
     }
-  }, [open, template]);
+  }, [open, template, duplicateFrom]);
 
   if (!user) return null;
 
@@ -296,17 +324,21 @@ export function ReusableTemplateBuilderDialog({
     <FormDialog
       open={open}
       onOpenChange={onOpenChange}
-      srTitle={isEdit ? "Edit Reusable Template" : "New Reusable Template"}
+      srTitle={isEdit ? "Edit Reusable Template" : isDuplicate ? "Duplicate Reusable Template" : "New Reusable Template"}
     >
       <div className="flex h-full min-h-0 flex-col">
         <FormDrawerHeader
-          title={isEdit ? "Edit Reusable Template" : "New Reusable Template"}
+          title={isEdit ? "Edit Reusable Template" : isDuplicate ? "Duplicate Reusable Template" : "New Reusable Template"}
           context={
             step === "details"
-              ? `For ${serviceLine.name} — name, description, and recurrence.`
+              ? isDuplicate
+                ? `For ${serviceLine.name} — review the duplicated name, description, and recurrence before creating it.`
+                : `For ${serviceLine.name} — name, description, and recurrence.`
               : step === "tasks"
                 ? "Add the Tasks this Reusable Template creates, and each Task's own Checklist Items."
-                : "Review the full Reusable Template before it saves. Nothing is saved yet."
+                : isDuplicate
+                  ? "Review the duplicated Reusable Template before it saves. Nothing is saved yet — this is a new, independent copy."
+                  : "Review the full Reusable Template before it saves. Nothing is saved yet."
           }
         />
 
@@ -601,7 +633,7 @@ export function ReusableTemplateBuilderDialog({
             )}
             {step === "preview" && (
               <Button type="button" disabled={isSubmitting} onClick={handleSave}>
-                {isSubmitting ? "Saving…" : isEdit ? "Save Changes" : "Create Reusable Template"}
+                {isSubmitting ? "Saving…" : isEdit ? "Save Changes" : isDuplicate ? "Create Duplicate" : "Create Reusable Template"}
               </Button>
             )}
           </div>

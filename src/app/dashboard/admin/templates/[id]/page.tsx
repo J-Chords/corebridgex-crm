@@ -2,7 +2,7 @@
 
 import { use, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Pencil, Plus, Trash2 } from "lucide-react";
+import { Copy, Pencil, Plus, Trash2 } from "lucide-react";
 import { useAuth } from "@/lib/auth/auth-context";
 import { useServiceStaffing } from "@/lib/data/hooks/use-service-membership";
 import { useServiceLineCatalog } from "@/lib/data/hooks/use-service-lines";
@@ -52,6 +52,9 @@ export default function AdminTemplateDetailPage({ params }: { params: Promise<{ 
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [reusableBuilderOpen, setReusableBuilderOpen] = useState(false);
   const [editingReusableTemplate, setEditingReusableTemplate] = useState<TemplateWithTasks | null>(null);
+  // CD-222 (A2) — set only by the Duplicate action below; mutually exclusive with
+  // `editingReusableTemplate` (each trigger clears the other before opening the dialog).
+  const [duplicatingReusableTemplate, setDuplicatingReusableTemplate] = useState<TemplateWithTasks | null>(null);
   const [pendingReusableId, setPendingReusableId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -252,6 +255,7 @@ export default function AdminTemplateDetailPage({ params }: { params: Promise<{ 
             size="sm"
             onClick={() => {
               setEditingReusableTemplate(null);
+              setDuplicatingReusableTemplate(null);
               setReusableBuilderOpen(true);
             }}
           >
@@ -291,10 +295,25 @@ export default function AdminTemplateDetailPage({ params }: { params: Promise<{ 
                       aria-label={`Edit ${reusable.name}`}
                       onClick={() => {
                         setEditingReusableTemplate(reusable);
+                        setDuplicatingReusableTemplate(null);
                         setReusableBuilderOpen(true);
                       }}
                     >
                       <Pencil />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      aria-label={`Duplicate ${reusable.name}`}
+                      title="Duplicate"
+                      onClick={() => {
+                        setDuplicatingReusableTemplate(reusable);
+                        setEditingReusableTemplate(null);
+                        setReusableBuilderOpen(true);
+                      }}
+                    >
+                      <Copy />
                     </Button>
                     <Button
                       type="button"
@@ -319,6 +338,7 @@ export default function AdminTemplateDetailPage({ params }: { params: Promise<{ 
         onOpenChange={setReusableBuilderOpen}
         serviceLine={serviceLine}
         template={editingReusableTemplate ?? undefined}
+        duplicateFrom={duplicatingReusableTemplate ?? undefined}
         onSaved={() => {
           refreshTemplates();
         }}
