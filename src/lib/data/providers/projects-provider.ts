@@ -91,9 +91,16 @@ export interface ProjectInput {
   contractStartDate: string | null;
   contractMonths: number;
   contractEndDate: string | null;
-  /** The real, actual-successful-completion date — distinct from `contractEndDate`. */
+  /** The real, actual-successful-completion date — distinct from `contractEndDate`. Read by
+   * `createProject`/`createClientProject` at creation time (unchanged); CD-221 — `updateProject`
+   * ignores this field entirely on every later ordinary edit, matching `update_project_record`,
+   * which has no parameter for it at all. After creation, only the first Completed transition
+   * (`setProjectStatus`, when null) ever stamps it — an ordinary edit can never rewrite it. */
   completionDate: string | null;
-  /** The Project's own planned/actual work timeline — see `Project.startDate`/`endDate`. */
+  /** The Project's own planned/actual work timeline — see `Project.startDate`/`endDate`. Used by
+   * `createProject`/`createClientProject` only; CD-221 — `updateProject` ignores both fields
+   * (no UI path sets them to a genuinely different value anyway — see `project-form-dialog.tsx`),
+   * matching `update_project_record`, which has no parameters for either. */
   startDate: string | null;
   endDate: string | null;
   description: string | null;

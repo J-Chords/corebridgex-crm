@@ -394,9 +394,15 @@ export const mockProjectsProvider: ProjectsProvider = {
       contractStartDate: input.contractStartDate,
       contractMonths: input.contractMonths,
       contractEndDate: input.contractEndDate,
-      completionDate: input.completionDate,
-      startDate: input.startDate,
-      endDate: input.endDate,
+      // CD-221 — an ordinary metadata edit never touches startDate/endDate/completionDate, matching
+      // the real `update_project_record` RPC (which has no parameters for these three at all).
+      // completionDate may still be supplied at creation (createProject/createClientProject,
+      // unchanged); after that, only the first Completed transition (setProjectStatus) stamps it
+      // when null — an ordinary edit here can never rewrite it. startDate/endDate have no editable
+      // UI path at all — see project-form-dialog.tsx.
+      completionDate: existing.completionDate,
+      startDate: existing.startDate,
+      endDate: existing.endDate,
       description: input.description,
       projectGroupId: input.projectGroupId,
       tags: input.tags,
