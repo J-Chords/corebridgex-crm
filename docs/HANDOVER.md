@@ -52,15 +52,17 @@ browser QA 14/14 PASS, all four provider builds PASS, Product Owner manual QA
 APPROVED, Jira `pending deployment`. Frontend deployment not performed — see
 `current-state.md`/`decisions.md` for the full record.
 
-**CD-222** (A2 — Duplicate a Reusable Template workflow) is implemented on branch
-`feature/CD-222-duplicate-reusable-template`, not yet committed/pushed/merged. A2's
-long-ambiguous scope is now locked: duplicate one Reusable Template workflow bundle
-only (never the parent Template/`service_lines`), same parent, Admin-only, via the
-existing create path (`createTemplateBundle`/`admin_create_template_bundle`) — no
-migration, no new RPC, no Supabase provider change. Direct provider QA 37/37 PASS,
-application-regression 5/5 PASS, browser QA 22/22 PASS, all four provider builds
-PASS, Product Owner manual QA APPROVED, awaiting the Git/PR/Jira checkpoint as of
-this note — Jira CD-222 still `New`. See `current-state.md`/`decisions.md`/
+**CD-222** (A2 — Duplicate a Reusable Template workflow) is merged — PR #23, merge
+commit `a7b219b88a3963ff649cb1f71688385f89065d59` (current `main`), implementation
+commit `40ef962fae74cb8cd9985fb704c254c25299659d`. A2's long-ambiguous scope is now
+locked: duplicate one Reusable Template workflow bundle only (never the parent
+Template/`service_lines`), same parent, Admin-only, via the existing create path
+(`createTemplateBundle`/`admin_create_template_bundle`) — no migration, no new RPC,
+no Supabase provider change. Direct provider QA 37/37 PASS, application-regression
+5/5 PASS, browser QA 22/22 PASS, all four provider builds PASS, Product Owner
+manual QA APPROVED, Jira `pending deployment`. Frontend deployment has NOT
+occurred — the next project-level activity is the separate final production-
+release/deployment programme. See `current-state.md`/`decisions.md`/
 `domain-model.md` for the full record.
 
 ## 6. Current Jira states
