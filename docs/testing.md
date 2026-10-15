@@ -30,6 +30,8 @@ Mock data is **in-memory and resets on a full page reload** (see `architecture.m
 
 Browser automation for this kind of QA (Playwright or similar) is a **technique**, not a project dependency — it is not installed in `package.json`; when used, it's installed ad hoc into an isolated/scratch location for the duration of the QA pass, never added to the repo's own dependencies.
 
+3. **A Playwright script's own error handler must still close the browser and exit the process** (discovered during CD-221): a script that logs a caught error and sets `process.exitCode` but never calls `browser.close()`/`process.exit()` can leave the Node process running indefinitely afterward, mimicking a genuine hang (an orphaned `node your-script.js` process, not a stuck page) — confirmed in practice by finding exactly such a leftover process via `tasklist`/`Get-CimInstance Win32_Process` (matched by its exact command line, never by image name alone — the real system browser also shows up as `chrome.exe`/similar and must never be touched). Always wrap the whole run in `try { ... } finally { await browser.close(); }` and end with an explicit `process.exit(code)`, and give every action/navigation a finite timeout so a genuine stuck step fails fast instead of hanging the default 30s per call.
+
 ## Deterministic timezone QA (CD-193)
 
 For a change to local-calendar-date logic specifically (not just "verify it looks right once"), two complementary techniques were established during CD-193's normalization pass — prefer both over a single real-time spot-check:
