@@ -1,6 +1,6 @@
 # Current State
 
-**Last verified: 2026-10-13.** This document changes often — re-verify against Jira and `git log`/`gh pr list` before relying on it for anything consequential.
+**Last verified: 2026-10-16.** This document changes often — re-verify against Jira and `git log`/`gh pr list` before relying on it for anything consequential.
 
 ## Current `main`
 
@@ -9,6 +9,16 @@ a7b219b88a3963ff649cb1f71688385f89065d59
 ```
 
 Verify freshly with `git rev-parse origin/main`. This is PR #23's normal merge commit (CD-222, A2 — Duplicate a Reusable Template workflow — see below), built on PR #22's merge commit `e950aa431d060066afcee983ef7e47ec936e2b82` (CD-221 post-merge documentation checkpoint — docs-only), PR #21's merge commit `26811dfddceb84c2bf14856f4abf462e9b79eea9` (CD-221, Project date update provider-parity hardening), PR #20's merge commit `e9c9710097cdd7324b22c1bf652a6262c73fedbd` (CD-193 post-merge documentation checkpoint — docs-only), and PR #19's merge commit `6692e98018d540894a6b648e02630b4f75f56b44` (CD-193, local-calendar-date normalization).
+
+## CD-225 — UI-0: UI Foundation (in progress, awaiting Product Owner manual QA)
+
+**Not yet committed.** Implemented on branch `feature/CD-225-ui-foundation`, created fresh from `main` at `ee5294e0199555b64bc0e842a6ba2a354c89d8ee` (PR #24's merge commit). First implementation phase of the newly-approved UI/UX redesign programme (Epic CD-224, UI-0 through UI-10) that followed a dedicated read-only audit — see `decisions.md`'s "UI/UX Redesign Programme approved" and "CD-225 — UI-0" entries.
+
+**Scope**: a visual-token foundation (spacing, elevation/shadow, motion-duration tokens, one missing pill-radius token — additive only, nothing existing re-themed); a global keyboard `:focus-visible` fix (previously invisible everywhere in the app — root cause and fix recorded in `decisions.md`/`troubleshooting.md`); accessible names for the Sidebar collapse/expand trigger (now state-aware: "Expand navigation"/"Collapse navigation") and both donut charts (`TaskStatusDonut`/`ClientHealthDonut`, data-derived from the same values they render, never invented); and the Breadcrumb separator swapped from a literal ">" to a `ChevronRight` icon. Five files changed: `globals.css`, `sidebar.tsx`, `breadcrumb.tsx`, `task-status-donut.tsx`, `client-health-donut.tsx`. No package/dependency change (`package.json`/`package-lock.json` untouched), no migration, no RPC change, no route/page redesign — later UI-phase scope, explicitly deferred (landing page, login, app shell, Task Center, Dashboard/My Day/Project/Company/Template/Admin Users/Reports/Comments redesign, form-shell migration, and others).
+
+**QA**: `tsc --noEmit`/scoped ESLint/`git diff --check` clean; all 4 provider-mode builds (mock/supabase-auth/supabase-core/supabase) built cleanly in an isolated copy (`D:\cbx-qa-cd225`). A Playwright browser QA script (31/31 checks) against that isolated mock-mode copy confirmed, across Admin/Team Lead/Employee and light/dark mode: keyboard focus is now visible on sidebar nav links, the sidebar collapse/expand trigger, the theme toggle, the collapsed-sidebar account-menu trigger, and Create Task dialog form fields; a mouse click does not leave a persistent focus ring; the SidebarTrigger's accessible name correctly flips between "Expand navigation"/"Collapse navigation"; both donut charts expose a non-empty, data-derived accessible name; the Breadcrumb's separator is now a decorative icon with no literal ">" in its visible text; reduced-motion and responsive spot-checks are unaffected (the pre-existing Tasks-page horizontal-overflow finding at 1024px is out of this ticket's scope, recorded only); zero console/page errors throughout.
+
+**Status**: implementation and QA complete. **Product Owner manual QA: APPROVED.** Checkpoint (commit/push/PR/Jira) in progress — not yet committed.
 
 ## Completed / merged
 
