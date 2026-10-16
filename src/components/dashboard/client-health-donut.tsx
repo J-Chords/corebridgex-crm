@@ -37,10 +37,16 @@ export function ClientHealthDonut({ counts }: ClientHealthDonutProps) {
     return [...acc, { ...segment, offset: priorDash }];
   }, []);
 
+  // CD-225 (UI-0) — derived from the same `counted` data the chart itself renders; see
+  // TaskStatusDonut's identical comment for why this doesn't conflict with the adjacent legend.
+  const summary = `Client health distribution: ${counted
+    .map((s) => `${s.count} ${STATUS_LABEL[s.status]}`)
+    .join(", ")}.`;
+
   return (
     <div className="flex items-center gap-5">
       <div className="relative size-28 shrink-0">
-        <svg viewBox="0 0 100 100" className="size-28 -rotate-90">
+        <svg viewBox="0 0 100 100" className="size-28 -rotate-90" role="img" aria-label={summary}>
           <circle cx="50" cy="50" r={RADIUS} fill="none" stroke="var(--border)" strokeWidth="12" />
           {segments.map(({ status, count, offset }) => {
             const dash = (count / total) * CIRCUMFERENCE;
