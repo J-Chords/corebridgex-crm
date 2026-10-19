@@ -38,6 +38,22 @@ Any time you're tempted to write `new Date().toISOString().slice(0, 10)` or `som
 
 Mock data lives in a single in-memory module-level object (`mock-db.ts`) — no persistence. A hard navigation or dev-server restart loses any state you built up (e.g. a controlled QA scenario with specific Draft/Submitted people). Build test state via real UI flows in one continuous browser session. See `testing.md`.
 
+## A global style meant to override a Tailwind utility must be unlayered, not `@layer base` (found during CD-225/UI-0)
+
+**Symptom**: a `:focus-visible { outline: ...; }` rule added inside the existing `@layer base { ... }` block in `globals.css` compiled without error but had zero visible effect in the browser on any `Button`-based element.
+
+**Root cause**: Tailwind v4's own cascade-layer order is `theme < base < components < utilities`. `buttonVariants` (`src/components/ui/button.tsx`) ships Tailwind's `outline-none` utility unconditionally as part of its base class string — that utility lives in the `utilities` layer, which always wins over anything in `@layer base`, regardless of selector specificity. This is the actual root cause behind the "no visible keyboard focus anywhere" UI/UX audit finding.
+
+**Fix**: declare the rule as a plain, unlayered top-level rule (outside any `@layer` block) instead. Per the CSS Cascade Layers spec, an unlayered rule always outranks every layered rule regardless of specificity — this is the only way to unconditionally win against a Tailwind utility class without `!important` or editing every primitive component individually. See `decisions.md`'s CD-225 entry.
+
+## Playwright/Chromium `:focus-visible` is driven by a page-global "last input modality" flag, not a per-element one (found during CD-225/UI-0 browser QA)
+
+**Symptom**: a deterministic `locator.focus()` check (even preceded by `document.activeElement.blur()`) intermittently failed to show `:focus-visible` styling on an element whose CSS was confirmed correct by direct inspection — most often right after a `.click()` occurred anywhere on the page (e.g. toggling dark mode via a theme-toggle button, or two mouse clicks on the same element in sequence).
+
+**Root cause**: Chromium's `:focus-visible` heuristic tracks the last *input modality* (keyboard vs. pointer) at the page/document level, not per element. A programmatic `.focus()` call does not itself reset that flag — it inherits whichever modality was last real (a prior mouse `.click()` anywhere on the page keeps every subsequent `.focus()` call "non-keyboard" until a genuine keyboard event occurs), even on a completely different, never-clicked element. `document.activeElement.blur()` does not reset it either.
+
+**Fix**: before a deterministic `.focus()`-based focus-visible check, issue one real `page.keyboard.press("Tab")` first (it doesn't matter where it lands) to flip the page's modality flag back to "keyboard," then call `.focus()` on the actual target element. To test "a mouse click should *not* show a focus-visible ring," make sure the clicked element wasn't already the activeElement from a prior check — clicking an already-focused element fires no new focus event and just keeps showing whatever focus state it already had.
+
 ## A migration file's own header comment can be stale
 
 Two migrations dated 2026-09-11 still say "NOT YET APPLIED TO THE HOSTED PROJECT" in their own file header, but were in fact applied and verified against hosted Supabase shortly after being written — nobody went back to update the comment post-deployment. Treat a migration header as a snapshot of intent *at authoring time*, not a live status check. Confirm actual hosted state via `current-state.md` or the Supabase Dashboard, not by reading migration comments.

@@ -48,6 +48,15 @@
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
 
+  /* CD-225 (UI-0) — elevation foundation. Three restrained tiers; current surfaces mostly use
+     `ring-1 ring-foreground/10` for separation (a deliberate flat aesthetic, unchanged by this
+     ticket) — these tokens are additive, for the cases (floating/overlay surfaces) where a real
+     shadow reads better than a ring. Light/dark values differ (see `:root`/`.dark`), same pattern
+     as every color token above. Not broadly applied in this ticket — later UI phases adopt them. */
+  --shadow-subtle: var(--shadow-subtle);
+  --shadow-floating: var(--shadow-floating);
+  --shadow-dialog: var(--shadow-dialog);
+
   /* Plexa status colors — themable, not static, since success/primary shift hue between themes */
   --color-success: var(--success);
   --color-warning: var(--warning);
@@ -70,6 +79,9 @@
   --radius-lg: 12px;
   --radius-xl: 16px;
   --radius-2xl: 22px;
+  /* CD-225 (UI-0) — the one radius tier the reference has that wasn't yet ported: fully round,
+     for pill badges/segmented controls. Not yet consumed anywhere; later UI phases adopt it. */
+  --radius-pill: 9999px;
 
   /* Plexa type scale — the sizes used pervasively across dense UI (badges, captions, body, table cells) */
   --text-xs: 11px;
@@ -79,6 +91,22 @@
 
   /* Plexa's named "spring" easing — used on every card/stat hover in the reference */
   --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  /* CD-225 (UI-0) — spacing foundation. Tailwind v4's own default `--spacing` multiplier is
+     already exactly the Plexa reference's 4px base rhythm (`p-1`/`gap-1`/etc. already resolve to
+     4px multiples) — declared explicitly here so the convention is documented and discoverable in
+     one place, not left as an implicit default. No existing utility classes change value; this is
+     the foundation later UI phases build on, not a migration of anything in this ticket. */
+  --spacing: 0.25rem;
+
+  /* CD-225 (UI-0) — motion foundation, formalizing the reference's three timing tiers as named,
+     Tailwind-consumable duration tokens (`duration-micro`/`duration-standard`/`duration-slow`).
+     Pair `duration-standard`/`duration-slow` with the existing `--ease-spring`; `duration-micro` is
+     for simple hover/focus feedback and pairs with the browser default `ease`. Not applied broadly
+     in this ticket — later UI phases consume these instead of ad hoc duration values. */
+  --duration-micro: 150ms;
+  --duration-standard: 280ms;
+  --duration-slow: 600ms;
 }
 
 :root {
@@ -128,6 +156,11 @@
   --identity-2-foreground: #ffffff;
   --identity-3: #7c3aed;
   --identity-3-foreground: #ffffff;
+  /* CD-225 (UI-0) — restrained elevation tiers, light mode. Low-opacity, tight-spread; not meant
+     to read as a dramatic/consumer-style shadow. */
+  --shadow-subtle: 0 1px 2px 0 rgba(6, 13, 26, 0.04);
+  --shadow-floating: 0 4px 12px -2px rgba(6, 13, 26, 0.08), 0 2px 4px -2px rgba(6, 13, 26, 0.04);
+  --shadow-dialog: 0 12px 32px -4px rgba(6, 13, 26, 0.12), 0 4px 8px -4px rgba(6, 13, 26, 0.08);
 }
 
 .dark {
@@ -175,6 +208,12 @@
   --identity-2-foreground: #ffffff;
   --identity-3: #7c3aed;
   --identity-3-foreground: #ffffff;
+  /* CD-225 (UI-0) — restrained elevation tiers, dark mode. Pure-black shadows still read correctly
+     here since every elevated surface (`--card`, popovers) is lighter than `--background`; opacity
+     raised versus light mode to stay visible against the already-dark page. */
+  --shadow-subtle: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
+  --shadow-floating: 0 4px 12px -2px rgba(0, 0, 0, 0.4), 0 2px 4px -2px rgba(0, 0, 0, 0.3);
+  --shadow-dialog: 0 12px 32px -4px rgba(0, 0, 0, 0.5), 0 4px 8px -4px rgba(0, 0, 0, 0.4);
 }
 
 @layer base {
@@ -187,6 +226,22 @@
   html {
     @apply font-sans;
   }
+}
+
+/* CD-225 (UI-0) — global focus-visible foundation. The live browser audit confirmed no visible
+   keyboard-focus indicator existed anywhere. Root cause, confirmed directly: `buttonVariants`
+   (and other primitives) ship Tailwind's own `outline-none` utility unconditionally as part of
+   their base class list — and in Tailwind v4's cascade-layer order (base < components <
+   utilities), ANY rule placed in `@layer base` loses to that utility regardless of selector
+   specificity. The only clean way to win without `!important` or editing every primitive is to
+   declare this rule UNLAYERED — per the CSS Cascade Layers spec, unlayered styles always outrank
+   layered ones (Tailwind's utilities included), which is exactly what's needed here. This is
+   additive to, never a replacement for, any component's own `focus-visible:ring-*` styling — it's
+   the authoritative baseline everywhere else. `:focus-visible` (not `:focus`) means a mouse click
+   never leaves a lingering outline; only real keyboard/programmatic focus does. */
+:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
 }
 
 /* Decorative dot-matrix canvas from the reference — purely visual, sits behind content.

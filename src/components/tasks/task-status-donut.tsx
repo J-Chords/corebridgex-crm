@@ -29,10 +29,18 @@ export function TaskStatusDonut({ tasks }: TaskStatusDonutProps) {
     return [...acc, { ...segment, offset: priorDash }];
   }, []);
 
+  // CD-225 (UI-0) — derived from the same `counted` data the chart itself renders, so it can never
+  // drift out of sync or invent a count. The adjacent legend already repeats this as visible text;
+  // this gives a screen-reader user the same "at a glance" summary a sighted user gets from the
+  // shape alone, rather than only the row-by-row legend.
+  const summary = `Task status distribution: ${counted
+    .map((s) => `${s.count} ${TASK_STATUS_SELECT_ITEMS[s.status]}`)
+    .join(", ")}.`;
+
   return (
     <div className="flex items-center gap-5">
       <div className="relative size-28 shrink-0">
-        <svg viewBox="0 0 100 100" className="size-28 -rotate-90">
+        <svg viewBox="0 0 100 100" className="size-28 -rotate-90" role="img" aria-label={summary}>
           <circle cx="50" cy="50" r={RADIUS} fill="none" stroke="var(--border)" strokeWidth="12" />
           {segments.map(({ status, count, offset }) => {
             const dash = (count / total) * CIRCUMFERENCE;

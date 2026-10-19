@@ -256,7 +256,12 @@ function SidebarTrigger({
   onClick,
   ...props
 }: React.ComponentProps<typeof Button>) {
-  const { toggleSidebar } = useSidebar()
+  const { isMobile, state, openMobile, toggleSidebar } = useSidebar()
+  // CD-225 (UI-0) — a static "Toggle Sidebar" label never told an assistive-tech user which way
+  // the trigger was about to act; reflect the actual current state instead (mirroring whichever
+  // flag toggleSidebar itself reads — openMobile on mobile, state elsewhere).
+  const isOpen = isMobile ? openMobile : state === "expanded"
+  const label = isOpen ? "Collapse navigation" : "Expand navigation"
 
   return (
     <Button
@@ -272,7 +277,7 @@ function SidebarTrigger({
       {...props}
     >
       <PanelLeftIcon />
-      <span className="sr-only">Toggle Sidebar</span>
+      <span className="sr-only">{label}</span>
     </Button>
   )
 }
