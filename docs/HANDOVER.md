@@ -80,6 +80,22 @@ occurred. Next ticket in the UI/UX programme: CD-226 (UI-1 — Public Landing Pa
 Login Redesign), not yet started. See `current-state.md`/`decisions.md` for the
 full record.
 
+**CD-226** (UI-1 — Public Landing Page & Login Redesign) is merged — PR #27,
+merge commit `ab97deea2dfd5b1f7e2e0dccadaa238e640d1cc3` (current `main`),
+implementation commit `74da9977fdd5bc194df3cd321055e49dad236f9e`. Second
+implementation phase of the UI/UX Redesign programme (Epic CD-224). `/` now
+renders a real public landing page for unauthenticated visitors instead of
+redirecting straight to `/login`; an authenticated visitor's `/` behavior is
+unchanged. The login page gained a two-pane brand-panel-plus-sign-in-card
+composition; `LoginForm`'s own authentication logic was not touched. Approved
+across three Product Owner review passes (initial implementation, a light-mode/
+motion polish pass, and a final sizing correction — the sign-in card now
+genuinely renders at 512px on desktop). Browser QA 54/54 PASS, all four provider
+builds PASS, Product Owner manual QA APPROVED, Jira `pending deployment`.
+Frontend deployment has NOT occurred. Next ticket in the UI/UX programme: CD-227
+(UI-2 — Authenticated App Shell), not yet started. See `current-state.md`/
+`decisions.md` for the full record.
+
 ## 6. Current Jira states
 
 This section is stale (predates CD-211 onward) — see `current-state.md`'s own "Jira
