@@ -65,6 +65,21 @@ occurred — the next project-level activity is the separate final production-
 release/deployment programme. See `current-state.md`/`decisions.md`/
 `domain-model.md` for the full record.
 
+**CD-225** (UI-0 — UI Foundation: Tokens, Focus States & Accessibility Baseline) is
+merged — PR #25, merge commit `4ec3c40deb1583ddfc2eececd930e1700f8c4be8` (current
+`main`), implementation commit `cd1a4beaaebd668d68c65045db93752c47d5625e`. First
+implementation phase of a newly-approved, separate Professional UI/UX Redesign
+programme (Epic CD-224, UI-0 through UI-10) that followed a dedicated read-only
+audit. Establishes a spacing/shadow-elevation/motion-duration token foundation, a
+global unlayered keyboard `:focus-visible` treatment, state-aware Sidebar trigger
+naming, data-derived donut-chart accessible names, and a Lucide breadcrumb
+separator — no business-rule/provider/RPC/database/lifecycle change, no new
+dependency. Browser QA 31/31 PASS (x2), all four provider builds PASS, Product
+Owner manual QA APPROVED, Jira `pending deployment`. Frontend deployment has NOT
+occurred. Next ticket in the UI/UX programme: CD-226 (UI-1 — Public Landing Page &
+Login Redesign), not yet started. See `current-state.md`/`decisions.md` for the
+full record.
+
 ## 6. Current Jira states
 
 This section is stale (predates CD-211 onward) — see `current-state.md`'s own "Jira
