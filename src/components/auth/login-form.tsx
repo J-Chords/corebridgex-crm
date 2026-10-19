@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type CSSProperties } from "react";
 import { useRouter } from "next/navigation";
 import { AlertCircle } from "lucide-react";
 import { useAuth } from "@/lib/auth/auth-context";
@@ -47,12 +47,15 @@ export function LoginForm() {
   }
 
   return (
-    <Card className="w-full max-w-sm">
-      <CardHeader>
-        <CardTitle className="text-xl">Corebridge X</CardTitle>
-        <CardDescription>
-          Internal staff sign-in. This tool is invite-only — accounts are
-          created by an admin, there is no self-signup.
+    <Card
+      className="w-full max-w-lg shadow-dialog"
+      style={{ "--card-spacing": "1.75rem" } as CSSProperties}
+    >
+      <CardHeader className="gap-2">
+        <CardTitle className="text-2xl">Sign in</CardTitle>
+        <CardDescription className="text-[0.9rem] leading-relaxed">
+          Internal staff sign-in. This tool is invite-only: accounts are
+          created by an admin, and there is no self-signup.
         </CardDescription>
       </CardHeader>
       <form
@@ -61,7 +64,7 @@ export function LoginForm() {
           handleLogin(email, password);
         }}
       >
-        <CardContent className="flex flex-col gap-4">
+        <CardContent className="flex flex-col gap-5">
           <FloatingLabelInput
             id="email"
             label="Work email"
@@ -86,8 +89,12 @@ export function LoginForm() {
             </Alert>
           )}
         </CardContent>
-        <CardFooter className="flex flex-col gap-4">
-          <Button type="submit" className="w-full" disabled={isSubmitting}>
+        <CardFooter className="flex flex-col gap-5">
+          <Button
+            type="submit"
+            className="h-11 w-full text-base shadow-subtle transition-shadow duration-standard hover:shadow-floating"
+            disabled={isSubmitting}
+          >
             {isSubmitting ? "Signing in…" : "Sign in"}
           </Button>
 
@@ -107,7 +114,7 @@ export function LoginForm() {
                     type="button"
                     variant="outline"
                     size="sm"
-                    className="h-auto flex-col gap-0.5 py-2"
+                    className="h-auto flex-col gap-0.5 py-2 transition-transform duration-standard hover:-translate-y-0.5"
                     disabled={isSubmitting}
                     onClick={() => handleLogin(account.email, "demo")}
                   >
