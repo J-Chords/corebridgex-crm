@@ -5,18 +5,10 @@ import { useRouter, usePathname } from "next/navigation";
 import {
   ChevronsLeft,
   ChevronsRight,
-  ClipboardList,
-  FolderKanban,
-  Home,
   HelpCircle,
-  ListChecks,
   LogOut,
   Search,
   Settings,
-  ShieldCheck,
-  Sun,
-  Users,
-  UsersRound,
   type LucideIcon,
 } from "lucide-react";
 import { useSidebar } from "@/components/ui/sidebar";
@@ -43,22 +35,11 @@ import { useAuth } from "@/lib/auth/auth-context";
 import { useHelpDialog } from "@/lib/help-dialog-context";
 import { useCommandPalette } from "@/lib/command-palette-context";
 import { ROLE_LABELS } from "@/lib/data/role-labels";
-import { canViewTeamActivityPage, isSuperadmin } from "@/lib/data/permissions";
 import { SearchTriggerBar } from "@/components/dashboard/search-trigger-bar";
+import { getNavGroups, isNavItemActive, type NavGroup } from "@/components/dashboard/nav-config";
 import { cn } from "@/lib/utils";
 
 import { getInitials as initials } from "@/lib/initials";
-
-interface NavItem {
-  href: string;
-  label: string;
-  icon: LucideIcon;
-}
-
-interface NavGroup {
-  label: string;
-  items: NavItem[];
-}
 
 type SidebarUser = { fullName: string; email: string; role: "employee" | "supervisor" | "superadmin" };
 
@@ -70,6 +51,10 @@ type SidebarUser = { fullName: string; email: string; role: "employee" | "superv
  * mounts alongside it. Icon-only tooltips only ever show while collapsed (the only state where a
  * label isn't already visible next to its icon); expanded mode shows real text labels and no
  * tooltips at all. Mobile keeps its own single merged Sheet, unchanged.
+ *
+ * CD-227 (UI-2) — nav-group construction moved to the shared `nav-config.ts` module so
+ * `DashboardTopbar`'s current-location label can read the exact same list instead of a second,
+ * driftable copy; role-visibility predicates/order are byte-identical to before this extraction.
  */
 export function AppSidebar() {
   const { user, logout } = useAuth();
@@ -79,41 +64,10 @@ export function AppSidebar() {
   const { setOpen: setPaletteOpen } = useCommandPalette();
   const { isMobile, openMobile, setOpenMobile, state, toggleSidebar } = useSidebar();
 
-  // Employee-first: every role gets the same core operational destinations — Supervisor and
-  // Superadmin only ever ADD to this, never replace it, per the locked "Supervisor = Employee +
-  // team" / "Superadmin = + org admin" principle. Team Activity keeps the same page-level
-  // visibility gate its two predecessor pages (Team Time, Team Updates) each had.
-  const workspaceItems: NavItem[] = [
-    { href: "/dashboard", label: "Dashboard", icon: Home },
-    { href: "/dashboard/my-day", label: "My Day", icon: Sun },
-    { href: "/dashboard/tasks", label: "Tasks", icon: ListChecks },
-    { href: "/dashboard/reports/client", label: "Reports", icon: ClipboardList },
-  ];
-  // Project Level consolidation — Projects is now the ONE primary client/company workspace
-  // destination for every role, including Superadmin; "Companies" is deliberately no longer a
-  // top-level nav item (the route/data model/RLS are all untouched — Superadmin still reaches it
-  // via a "View full client record" link from a Project's own Overview tab, or its direct URL).
-  const clientWorkItems: NavItem[] = [{ href: "/dashboard/projects", label: "Projects", icon: FolderKanban }];
-  // CD-190 — Team Time and Team Updates merged into one Team Activity page (Updates/Time tabs);
-  // one nav item, same existing Supervisor/Superadmin visibility gate as both had individually.
-  const teamItems: NavItem[] = [
-    ...(user && canViewTeamActivityPage(user) ? [{ href: "/dashboard/team-activity", label: "Team Activity", icon: Users }] : []),
-  ];
-  const adminItems: NavItem[] = [
-    ...(user && isSuperadmin(user) ? [{ href: "/dashboard/admin/users", label: "Users", icon: UsersRound }] : []),
-    // CD-218 — Reusable Templates (System B's Task/Checklist bundle authoring) live INSIDE a
-    // Template's own detail page now, not a separate nav entry — see docs/domain-model.md.
-    ...(user && isSuperadmin(user) ? [{ href: "/dashboard/admin/templates", label: "Templates", icon: ShieldCheck }] : []),
-  ];
-  const groups: NavGroup[] = [
-    { label: "Workspace", items: workspaceItems },
-    { label: "Client work", items: clientWorkItems },
-    ...(teamItems.length > 0 ? [{ label: "Team", items: teamItems }] : []),
-    ...(adminItems.length > 0 ? [{ label: "Admin", items: adminItems }] : []),
-  ];
+  const groups = getNavGroups(user);
 
   function isActive(href: string) {
-    return href === "/dashboard" ? pathname === href : pathname.startsWith(href);
+    return isNavItemActive(pathname, href);
   }
 
   async function handleLogout() {
@@ -182,7 +136,7 @@ function CollapsedNavButton({
   onClick?: () => void;
 }) {
   const className = cn(
-    "flex size-9 items-center justify-center rounded-lg text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+    "relative flex size-9 items-center justify-center rounded-lg text-sidebar-foreground/70 transition-colors duration-standard hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
     active && "bg-sidebar-accent text-sidebar-accent-foreground"
   );
   const trigger = href ? (
@@ -194,6 +148,10 @@ function CollapsedNavButton({
     <Tooltip>
       <TooltipTrigger render={trigger}>
         <Icon className="size-[18px]" aria-hidden="true" />
+        {/* Icon-only mode has no label text to carry the active signal, so a small dot
+           underneath does — same restrained "accent, not a repaint" language as the
+           expanded row's left bar below. */}
+        {active && <span aria-hidden="true" className="absolute bottom-1 size-1 rounded-full bg-primary" />}
       </TooltipTrigger>
       <TooltipContent side="right">{label}</TooltipContent>
     </Tooltip>
@@ -210,7 +168,7 @@ function NavGroupSection({
   if (group.items.length === 0) return null;
   return (
     <div className="flex flex-col gap-0.5">
-      <span className="px-2 py-1 font-mono text-[10px] font-semibold tracking-wider text-sidebar-foreground/50 uppercase">
+      <span className="px-2.5 pb-1.5 font-mono text-[10px] font-semibold tracking-wider text-sidebar-foreground/45 uppercase">
         {group.label}
       </span>
       {group.items.map((item) => {
@@ -221,11 +179,17 @@ function NavGroupSection({
             key={item.href}
             href={item.href}
             className={cn(
-              "flex h-8 items-center gap-2.5 rounded-md px-2 text-sm text-sidebar-foreground/85 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+              "relative flex h-9 items-center gap-3 rounded-lg px-2.5 text-sm text-sidebar-foreground/80 transition-colors duration-standard hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
               active && "bg-sidebar-accent font-medium text-sidebar-accent-foreground"
             )}
           >
-            <Icon className="size-4 shrink-0" aria-hidden="true" />
+            {/* Confident-but-restrained active indicator — a thin accent bar, not a repaint of
+               the whole row (the tinted background already does that). Same visual language as
+               the collapsed icon's active dot below. */}
+            {active && (
+              <span aria-hidden="true" className="absolute inset-y-1.5 left-0 w-[3px] rounded-full bg-primary" />
+            )}
+            <Icon className="size-[18px] shrink-0" aria-hidden="true" />
             <span className="truncate">{item.label}</span>
           </Link>
         );
@@ -240,6 +204,11 @@ function NavGroupSection({
  * real labels/group headers and no tooltips; collapsed shows icon-only rows with tooltips and a
  * thin divider between groups instead of a text header, so every destination (including
  * Projects/Team, which the old rail deliberately left out) stays reachable while collapsed too.
+ *
+ * CD-227 (UI-2) — a small desktop-only inset (margin + rounded corners + a real elevation token,
+ * reusing the same `shadow-floating`/`ring-foreground/10` signature as every `Card` in the product)
+ * instead of a flush edge-to-edge panel, so the nav panel reads as its own distinct surface against
+ * the shell's neutral canvas (see `dashboard/layout.tsx`) rather than just a bordered strip.
  */
 function DesktopSidebar({
   groups,
@@ -263,7 +232,7 @@ function DesktopSidebar({
   return (
     <div
       className={cn(
-        "sticky top-0 z-10 flex h-svh shrink-0 flex-col border-r bg-sidebar py-3 print:hidden",
+        "sticky top-2 z-10 ml-2 flex h-[calc(100svh-1rem)] shrink-0 flex-col rounded-xl bg-sidebar py-3 shadow-floating ring-1 ring-foreground/10 transition-[width] duration-200 ease-linear print:hidden",
         collapsed ? "w-14 items-center" : "w-60"
       )}
     >
@@ -272,7 +241,7 @@ function DesktopSidebar({
           <Link
             href="/dashboard"
             className="mb-2 flex size-8 items-center justify-center rounded-md bg-primary text-primary-foreground"
-            aria-label="Corebridge X — Home"
+            aria-label="Corebridge X home"
           >
             <span className="text-[11px] font-bold">CX</span>
           </Link>
@@ -296,7 +265,10 @@ function DesktopSidebar({
               </div>
             ))}
           </div>
-          <div className="flex flex-col items-center gap-1 border-t pt-2">
+          {/* A distinct "utility zone" — its own tinted panel, not just a divider line — so
+             account/settings/help reads as a separate footer region, matching the expanded
+             sidebar's own account-area treatment below. */}
+          <div className="mt-2 flex w-full flex-col items-center gap-1 rounded-lg bg-sidebar-accent/30 py-2">
             <CollapsedNavButton icon={Settings} label="Settings" active={isActive("/dashboard/settings")} href="/dashboard/settings" />
             <CollapsedNavButton icon={HelpCircle} label="Help" onClick={onOpenHelp} />
             <Tooltip>
@@ -305,7 +277,7 @@ function DesktopSidebar({
                   <button
                     type="button"
                     className="flex size-9 items-center justify-center rounded-lg hover:bg-sidebar-accent"
-                    aria-label={`${user.fullName} — account menu`}
+                    aria-label={`${user.fullName}, account menu`}
                   />
                 }
               >
@@ -319,8 +291,13 @@ function DesktopSidebar({
         </>
       ) : (
         <>
-          <div className="flex items-center justify-between gap-2 px-3">
-            <span className="truncate text-sm font-semibold text-sidebar-foreground">Corebridge X</span>
+          <div className="flex items-center justify-between gap-2 px-3.5 pb-3">
+            <Link href="/dashboard" className="flex min-w-0 items-center gap-2" aria-label="Corebridge X home">
+              <span className="flex size-7 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground">
+                <span className="text-[10px] font-bold">CX</span>
+              </span>
+              <span className="truncate font-heading text-[15px] font-semibold text-sidebar-foreground">Corebridge X</span>
+            </Link>
             <Tooltip>
               <TooltipTrigger
                 render={<Button variant="ghost" size="icon-sm" onClick={onToggleCollapse} aria-label="Collapse navigation" />}
@@ -330,19 +307,25 @@ function DesktopSidebar({
               <TooltipContent side="bottom">Collapse</TooltipContent>
             </Tooltip>
           </div>
-          <div className="px-3 pt-2 pb-1">
+          {/* The brand row above is its own header cap — a real rule beneath it, not just
+             whitespace, so "brand / navigation / account" reads as three distinct zones instead
+             of one continuous list. */}
+          <div className="border-t border-sidebar-border" />
+          <div className="px-3 pt-3 pb-1">
             <SearchTriggerBar variant="compact" placeholder="Search…" />
           </div>
-          <div className="mt-2 flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-2">
+          <div className="mt-3 flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto px-2.5">
             {groups.map((group) => (
               <NavGroupSection key={group.label} group={group} isActive={isActive} />
             ))}
           </div>
-          <div className="flex flex-col gap-0.5 border-t px-2 pt-2">
+          {/* Account footer — its own tinted panel (not just a divider + plain rows), so it reads
+             as a distinct "utility zone" the way the collapsed rail's own footer now does too. */}
+          <div className="mx-2 mt-2 flex flex-col gap-0.5 rounded-lg bg-sidebar-accent/30 p-1.5">
             <Link
               href="/dashboard/settings"
               className={cn(
-                "flex h-8 items-center gap-2.5 rounded-md px-2 text-sm text-sidebar-foreground/85 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                "flex h-8 items-center gap-2.5 rounded-md px-2 text-sm text-sidebar-foreground/80 transition-colors duration-standard hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
                 isActive("/dashboard/settings") && "bg-sidebar-accent font-medium text-sidebar-accent-foreground"
               )}
             >
@@ -352,7 +335,7 @@ function DesktopSidebar({
             <button
               type="button"
               onClick={onOpenHelp}
-              className="flex h-8 items-center gap-2.5 rounded-md px-2 text-left text-sm text-sidebar-foreground/85 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+              className="flex h-8 items-center gap-2.5 rounded-md px-2 text-left text-sm text-sidebar-foreground/80 transition-colors duration-standard hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
             >
               <HelpCircle className="size-4 shrink-0" aria-hidden="true" />
               <span>Help</span>
@@ -362,7 +345,7 @@ function DesktopSidebar({
                 render={
                   <button
                     type="button"
-                    className="flex h-11 items-center gap-2.5 rounded-md px-2 text-left text-sm transition-colors hover:bg-sidebar-accent data-open:bg-sidebar-accent"
+                    className="flex h-11 items-center gap-2.5 rounded-md px-2 text-left text-sm transition-colors duration-standard hover:bg-sidebar-accent data-open:bg-sidebar-accent"
                   />
                 }
               >
@@ -401,7 +384,9 @@ function DesktopSidebar({
   );
 }
 
-/** Mobile/tablet — one merged Sheet, same grouped items, no permanent split-panel footprint. */
+/** Mobile/tablet — one merged Sheet, same grouped items, no permanent split-panel footprint.
+ * Desktop's floating inset is a desktop-only affordance (full-bleed Sheet already treats mobile
+ * width as precious) — the same brand/nav/account hierarchy carries over without it. */
 function MobileNavPanel({
   groups,
   isActive,
@@ -421,11 +406,11 @@ function MobileNavPanel({
 }) {
   return (
     <div className="flex h-full flex-col">
-      <div className="flex items-center gap-2 border-b px-3 py-3">
-        <div className="flex size-7 items-center justify-center rounded-md bg-primary text-primary-foreground">
+      <div className="flex items-center gap-2 border-b px-3.5 py-3.5">
+        <span className="flex size-7 items-center justify-center rounded-md bg-primary text-primary-foreground">
           <span className="text-xs font-bold">CX</span>
-        </div>
-        <span className="text-sm font-semibold">Corebridge X</span>
+        </span>
+        <span className="font-heading text-[15px] font-semibold">Corebridge X</span>
       </div>
       <div className="px-3 pt-3 pb-1">
         <button
@@ -437,15 +422,18 @@ function MobileNavPanel({
           <span className="flex-1 truncate">Search…</span>
         </button>
       </div>
-      <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-2 pt-2" onClick={(e) => {
-        const target = e.target as HTMLElement;
-        if (target.closest("a")) onNavigate();
-      }}>
+      <div
+        className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto px-2.5 pt-3"
+        onClick={(e) => {
+          const target = e.target as HTMLElement;
+          if (target.closest("a")) onNavigate();
+        }}
+      >
         {groups.map((group) => (
           <NavGroupSection key={group.label} group={group} isActive={isActive} />
         ))}
       </div>
-      <div className="flex flex-col gap-0.5 border-t px-2 py-2">
+      <div className="mx-2 mb-2 flex flex-col gap-0.5 rounded-lg bg-sidebar-accent/30 p-1.5">
         <Link
           href="/dashboard/settings"
           onClick={onNavigate}

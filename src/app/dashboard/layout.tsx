@@ -42,11 +42,15 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         <ToastProvider>
           <KeyboardShortcuts />
           <CommandPalette />
-          <SidebarProvider>
+          {/* CD-227 (UI-2) — the canvas tone lives on this outer wrapper (not just `<main>`) so
+             the gap around the sidebar's own floating inset (see app-sidebar.tsx) and the
+             content area read as one continuous neutral surface, with the sidebar/topbar's
+             lighter `bg-sidebar`/`bg-background` surfaces popping forward against it. */}
+          <SidebarProvider className="bg-muted/40">
             <AppSidebar />
             <div className="flex min-h-svh min-w-0 flex-1 flex-col">
               <DashboardTopbar />
-              <main className="min-w-0 flex-1 bg-muted/20 p-6 print:bg-white print:p-0">
+              <main className="min-w-0 flex-1 p-6 print:bg-white print:p-0">
                 <PageTransition>{children}</PageTransition>
               </main>
             </div>
