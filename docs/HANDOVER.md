@@ -92,8 +92,23 @@ across three Product Owner review passes (initial implementation, a light-mode/
 motion polish pass, and a final sizing correction — the sign-in card now
 genuinely renders at 512px on desktop). Browser QA 54/54 PASS, all four provider
 builds PASS, Product Owner manual QA APPROVED, Jira `pending deployment`.
-Frontend deployment has NOT occurred. Next ticket in the UI/UX programme: CD-227
-(UI-2 — Authenticated App Shell), not yet started. See `current-state.md`/
+Frontend deployment has NOT occurred.
+
+**CD-227** (UI-2 — Authenticated App Shell) is merged — PR #29, merge commit
+`7d5a59f0608539f7d6bbfb30651a8033779135fc` (current `main`), implementation
+commit `c923c38d77409eee36413166f947418f47ed14ba`. Third implementation phase
+of the UI/UX Redesign programme (Epic CD-224). A first, modest visual pass was
+reviewed and explicitly rejected by the Product Owner as not a noticeable
+redesign; the merged scope is the subsequent substantial redesign — a
+floating, inset sidebar with real elevation (replacing a flush edge-to-edge
+panel), taller/denser nav rows, distinct tinted account-footer zones, a
+stronger shell canvas tone, and a topbar current-location label sourced from
+a new shared `nav-config.ts` module (confirmed behavior-equivalent to the
+prior inline navigation it replaced). No navigation, authorization,
+authentication, or provider change. Browser QA 75/75 PASS, all four provider
+builds PASS, Product Owner manual QA APPROVED, Jira `pending deployment`.
+Frontend deployment has NOT occurred. Next ticket in the UI/UX programme:
+CD-228 (UI-3 — Dashboard & My Day), not yet started. See `current-state.md`/
 `decisions.md` for the full record.
 
 ## 6. Current Jira states
