@@ -142,7 +142,7 @@ export function NeedsAttentionStrip({
   if (categories.length === 0) {
     return (
       <div
-        className={cn("flex items-center gap-2 rounded-lg border bg-muted/20 px-3 py-2 text-sm text-muted-foreground", className)}
+        className={cn("flex items-center gap-2 rounded-lg border bg-muted/20 px-3 py-2 text-sm text-muted-foreground shadow-sm", className)}
         style={style}
       >
         <Sparkles className="size-3.5 text-success" aria-hidden="true" />
@@ -154,7 +154,7 @@ export function NeedsAttentionStrip({
   const expanded = categories.find((c) => c.key === expandedKey) ?? null;
 
   return (
-    <div className={cn("flex flex-col gap-2 rounded-lg border bg-muted/20 p-2.5", className)} style={style}>
+    <div className={cn("flex flex-col gap-2 rounded-lg border bg-muted/20 p-2.5 shadow-sm", className)} style={style}>
       <div className="flex flex-wrap items-center gap-1.5">
         <span className="mr-0.5 font-mono text-xs tracking-wider text-muted-foreground uppercase">Attention</span>
         {categories.map((cat, i) => {

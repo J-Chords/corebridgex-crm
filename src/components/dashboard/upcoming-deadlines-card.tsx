@@ -99,7 +99,7 @@ export function UpcomingDeadlinesCard({ tasks, title = "Upcoming", className, st
   const overflow = upcoming.length - preview.length;
 
   return (
-    <Card className={className} style={style}>
+    <Card className={cn("shadow-sm", className)} style={style}>
       <CardHeader>
         <CardTitle className="text-base">{title}</CardTitle>
         <CardAction>

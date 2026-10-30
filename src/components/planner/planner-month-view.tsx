@@ -47,7 +47,8 @@ export function PlannerMonthView({ anchorDate, onAnchorDateChange, onOpenDay, ta
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <span className="font-heading text-lg font-semibold tracking-tight">{formatMonthLabel(anchor)}</span>
         <div className="flex items-center gap-1">
           <Button variant="outline" size="icon-sm" onClick={() => shiftMonth(-1)} aria-label="Previous month">
             <ChevronLeft />
@@ -59,7 +60,6 @@ export function PlannerMonthView({ anchorDate, onAnchorDateChange, onOpenDay, ta
             <ChevronRight />
           </Button>
         </div>
-        <span className="text-sm font-medium">{formatMonthLabel(anchor)}</span>
       </div>
 
       <div className="grid grid-cols-7 gap-px overflow-hidden rounded-lg border bg-border text-xs">

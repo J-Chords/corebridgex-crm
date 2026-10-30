@@ -76,7 +76,7 @@ export function BucketTaskGrid({ user, tasks, selectedStatus, focusTaskId, onCha
   }
 
   return (
-    <div key={selectedStatus} className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+    <div key={selectedStatus} className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(min(300px,100%),1fr))]">
       {combined.map((task, i) => {
         const isExiting = task.id in exiting;
         return (

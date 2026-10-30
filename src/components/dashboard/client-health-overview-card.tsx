@@ -7,16 +7,16 @@ import type { ClientHealthStatus } from "@/lib/data/client-health";
 import { projectHrefForCompany } from "@/lib/data/project-display";
 import { Card, CardContent, CardHeader, CardTitle, CardAction } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ClientHealthDonut } from "@/components/dashboard/client-health-donut";
+import { ClientHealthGauge } from "@/components/dashboard/client-health-gauge";
 import { CardExpandButton } from "@/components/dashboard/card-expand-button";
 import { DashboardWidgetFocusDialog } from "@/components/dashboard/dashboard-widget-focus-dialog";
 import { STAGGER_ITEM_CLASS, staggerDelay } from "@/lib/stagger";
 import { cn } from "@/lib/utils";
 
-const STATUS_META: Record<ClientHealthStatus, { label: string; variant: "success" | "warning" | "destructive" }> = {
-  "on-track": { label: "On Track", variant: "success" },
-  "needs-attention": { label: "Needs Attention", variant: "warning" },
-  "at-risk": { label: "At Risk", variant: "destructive" },
+const STATUS_META: Record<ClientHealthStatus, { label: string; variant: "success" | "warning" | "destructive"; dot: string }> = {
+  "on-track": { label: "On Track", variant: "success", dot: "var(--success)" },
+  "needs-attention": { label: "Needs Attention", variant: "warning", dot: "var(--warning)" },
+  "at-risk": { label: "At Risk", variant: "destructive", dot: "var(--destructive)" },
 };
 
 const MAX_ROWS = 6;
@@ -51,7 +51,10 @@ function renderGroup(
             )}
             style={staggerDelay(i)}
           >
-            <span className="truncate text-sm font-medium group-hover/row:underline">{company.name}</span>
+            <span className="flex min-w-0 items-center gap-2">
+              <span className="size-1.5 shrink-0 rounded-full" style={{ backgroundColor: STATUS_META[status].dot }} aria-hidden="true" />
+              <span className="truncate text-sm font-medium group-hover/row:underline">{company.name}</span>
+            </span>
             <Badge variant={STATUS_META[status].variant} className="shrink-0">
               {STATUS_META[status].label}
             </Badge>
@@ -76,7 +79,7 @@ export function ClientHealthOverviewCard({ companies, projects, className, style
   const overflow = total - atRiskPreview.length - needsAttentionPreview.length;
 
   return (
-    <Card className={className} style={style}>
+    <Card className={cn("shadow-sm", className)} style={style}>
       <CardHeader>
         <CardTitle className="text-base">Client Health</CardTitle>
         <CardAction>
@@ -88,9 +91,11 @@ export function ClientHealthOverviewCard({ companies, projects, className, style
           <p className="text-sm text-muted-foreground">No clients assigned yet.</p>
         ) : (
           <>
-            <ClientHealthDonut counts={counts} />
-            {renderGroup("At risk", atRiskPreview, "at-risk", projects)}
-            {renderGroup("Needs attention", needsAttentionPreview, "needs-attention", projects)}
+            <ClientHealthGauge counts={counts} />
+            <div className="flex flex-col gap-3 border-t pt-3">
+              {renderGroup("At risk", atRiskPreview, "at-risk", projects)}
+              {renderGroup("Needs attention", needsAttentionPreview, "needs-attention", projects)}
+            </div>
             {overflow > 0 && (
               <button
                 type="button"
@@ -109,7 +114,7 @@ export function ClientHealthOverviewCard({ companies, projects, className, style
           <p className="text-sm text-muted-foreground">No clients assigned yet.</p>
         ) : (
           <>
-            <ClientHealthDonut counts={counts} />
+            <ClientHealthGauge counts={counts} />
             {total === 0 ? (
               <p className="text-sm text-muted-foreground">Every client is on track — nothing needs attention.</p>
             ) : (

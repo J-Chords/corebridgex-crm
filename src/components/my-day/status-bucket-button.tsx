@@ -1,10 +1,23 @@
 "use client";
 
 import { useState, type CSSProperties } from "react";
+import { Circle, CircleDot, Clock, CheckCircle2, XCircle } from "lucide-react";
 import type { TaskStatus } from "@/lib/data/types";
 import { STATUS_COLOR_VAR, TASK_STATUS_SELECT_ITEMS } from "@/components/tasks/task-status-badge";
 import { ACTIVE_TASK_STATUS_ORDER, normalizeLegacyTaskFilterStatus } from "@/lib/data/task-status";
 import { cn } from "@/lib/utils";
+
+/** Same icon-forward language as the Dashboard's `StatCard` (CD-228) — a restrained per-status
+ * glyph, not a new icon system. `canceled` is never actually rendered as a bucket here (see
+ * `STATUS_ORDER` above), but every status-colored surface in this app types its map over the full
+ * `TaskStatus` union (matching `STATUS_COLOR_VAR`'s own convention) rather than a narrowed subset. */
+const STATUS_ICON: Record<TaskStatus, typeof Circle> = {
+  "not-started": Circle,
+  "in-progress": CircleDot,
+  waiting: Clock,
+  completed: CheckCircle2,
+  canceled: XCircle,
+};
 
 /** My Day's own personal "today" buckets — Canceled is deliberately excluded here (closed, not
  * actionable daily work); it still appears in the org-wide "Task(s) by Status" breakdown. Derived
@@ -75,6 +88,7 @@ interface StatusBucketButtonProps {
  */
 export function StatusBucketButton({ status, count, selected, onSelect, className, style }: StatusBucketButtonProps) {
   const color = STATUS_COLOR_VAR[status];
+  const Icon = STATUS_ICON[status];
   return (
     <button
       type="button"
@@ -87,17 +101,21 @@ export function StatusBucketButton({ status, count, selected, onSelect, classNam
         backgroundColor: selected ? `color-mix(in oklch, ${color} 16%, var(--card))` : undefined,
       }}
       className={cn(
-        "flex flex-col items-start gap-1 rounded-xl border bg-card p-4 text-left shadow-sm transition-all duration-300 ease-spring hover:-translate-y-1 hover:shadow-md",
+        "relative flex flex-col items-start gap-1 overflow-hidden rounded-xl border bg-card p-4 text-left shadow-sm transition-all duration-300 ease-spring hover:-translate-y-1 hover:shadow-md",
         !selected && "hover:border-primary/40",
         className
       )}
     >
-      <span
-        className="font-mono text-xs tracking-wider uppercase"
-        style={{ color: selected ? `color-mix(in oklch, ${color} 72%, var(--foreground))` : undefined }}
-      >
-        {TASK_STATUS_SELECT_ITEMS[status]}
-      </span>
+      <span aria-hidden="true" className="absolute inset-x-0 top-0 h-[3px]" style={{ backgroundColor: color, opacity: selected ? 1 : 0.35 }} />
+      <div className="flex w-full items-center justify-between gap-2">
+        <span
+          className="font-mono text-xs tracking-wider uppercase"
+          style={{ color: selected ? `color-mix(in oklch, ${color} 72%, var(--foreground))` : undefined }}
+        >
+          {TASK_STATUS_SELECT_ITEMS[status]}
+        </span>
+        <Icon className="size-4 shrink-0" style={{ color }} aria-hidden="true" />
+      </div>
       <span className="font-heading text-2xl font-semibold tracking-tight" style={{ color }}>
         {count}
       </span>

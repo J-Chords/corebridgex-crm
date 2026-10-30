@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { ListChecks, AlertTriangle, CheckCircle2, HeartPulse } from "lucide-react";
 import type { User } from "@/lib/data/types";
 import type { TaskWithRelations } from "@/lib/data/providers/tasks-provider";
 import { useTasks } from "@/lib/data/hooks/use-tasks";
@@ -15,11 +16,13 @@ import { KpiPreviewList } from "@/components/dashboard/kpi-preview-list";
 import { TaskDrawer } from "@/components/tasks/task-drawer";
 import { TaskKpiDetail } from "@/components/dashboard/task-kpi-detail";
 import { TaskStatusFocusContent } from "@/components/dashboard/task-status-focus-content";
-import { StatCard } from "@/components/ui/stat-card";
+import { StatCard, StatCardSkeleton } from "@/components/ui/stat-card";
 import { SectionBreak } from "@/components/ui/section-break";
 import { Card, CardContent, CardHeader, CardTitle, CardAction } from "@/components/ui/card";
 import { TaskFormDialog } from "@/components/tasks/task-form-dialog";
 import { TaskStatusDonut } from "@/components/tasks/task-status-donut";
+import { FeaturedTrendCard } from "@/components/dashboard/featured-trend-card";
+import { buildDailySeries, isWithinLastNLocalDays } from "@/lib/data/daily-series";
 import { TeamWorkloadCard } from "@/components/dashboard/team-workload-card";
 import { ClientHealthOverviewCard } from "@/components/dashboard/client-health-overview-card";
 import { RecurringWorkDueCard } from "@/components/dashboard/recurring-work-due-card";
@@ -47,7 +50,7 @@ const HEALTH_LABEL: Record<string, string> = {
  * copy; own work is still one click away on My Day.
  */
 export function SupervisorDashboard({ user }: { user: User }) {
-  const { tasks, refresh: refreshTasks } = useTasks();
+  const { tasks, isLoading: tasksLoading, refresh: refreshTasks } = useTasks();
   const { companies } = useCompanies();
   const { projects } = useProjects();
   const { workstreams } = useWorkstreams();
@@ -69,12 +72,24 @@ export function SupervisorDashboard({ user }: { user: User }) {
     (t) => t.status === "completed" && t.statusChangedAt && t.statusChangedAt >= sevenDaysAgoIso
   );
   const completedThisWeekCount = completedThisWeek.length;
+
+  // The featured chart buckets by LOCAL calendar day (see `daily-series.ts`), a different window
+  // than the KPI tile's rolling "now minus 168h" cutoff above — the two can disagree by a partial
+  // day near a local-midnight boundary. Filtering this array by the SAME local-day rule the chart
+  // buckets with (rather than reusing `completedThisWeek`) keeps the chart's own headline number
+  // always equal to the sum of its own visible bars; it is deliberately not forced to match the KPI.
+  const completionsForChart = tasks.filter(
+    (t) => t.status === "completed" && t.statusChangedAt && isWithinLastNLocalDays(t.statusChangedAt)
+  );
+  const completionsSeries = buildDailySeries(completionsForChart, (t) => t.statusChangedAt!, () => 1);
+  const chartCompletionsCount = completionsSeries.reduce((sum, d) => sum + d.value, 0);
   const clientsNeedingAttention = companies.filter((c) => c.health.status !== "on-track");
   const clientsNeedingAttentionCount = clientsNeedingAttention.length;
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
+      <div className="rounded-xl bg-card p-6 shadow-sm ring-1 ring-foreground/10">
+        <span className="font-mono text-xs font-semibold tracking-[0.14em] text-primary uppercase">Overview</span>
         <h1 className="font-heading text-3xl font-semibold tracking-tight sm:text-4xl">Dashboard</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Team workload, upcoming deadlines, client health, and items needing attention.
@@ -86,10 +101,18 @@ export function SupervisorDashboard({ user }: { user: User }) {
         />
       </div>
 
+      {tasksLoading ? (
+        <div className="grid items-start gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {Array.from({ length: 4 }, (_, i) => (
+            <StatCardSkeleton key={i} />
+          ))}
+        </div>
+      ) : (
       <div className="grid items-start gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
           label="Team open tasks"
           value={String(openTasks.length)}
+          icon={ListChecks}
           className={STAGGER_ITEM_CLASS}
           style={staggerDelay(0)}
           detail={{
@@ -111,6 +134,7 @@ export function SupervisorDashboard({ user }: { user: User }) {
         <StatCard
           label="Team overdue"
           value={String(overdueCount)}
+          icon={AlertTriangle}
           tone={overdueCount > 0 ? "warning" : "default"}
           className={STAGGER_ITEM_CLASS}
           style={staggerDelay(1)}
@@ -133,6 +157,7 @@ export function SupervisorDashboard({ user }: { user: User }) {
         <StatCard
           label="Completed this week"
           value={String(completedThisWeekCount)}
+          icon={CheckCircle2}
           className={STAGGER_ITEM_CLASS}
           style={staggerDelay(2)}
           detail={{
@@ -154,6 +179,7 @@ export function SupervisorDashboard({ user }: { user: User }) {
         <StatCard
           label="Clients needing attention"
           value={String(clientsNeedingAttentionCount)}
+          icon={HeartPulse}
           className={STAGGER_ITEM_CLASS}
           style={staggerDelay(3)}
           detail={{
@@ -176,21 +202,32 @@ export function SupervisorDashboard({ user }: { user: User }) {
           viewAllHref="/dashboard/projects"
         />
       </div>
+      )}
 
       <NeedsAttentionStrip teamMembers={teamMembers} teamTasks={tasks} className={STAGGER_ITEM_CLASS} style={staggerDelay(4)} />
 
-      <SectionBreak num="01" label="Team Attention" />
+      {/* Density correction (Product Owner feedback) — the page's remaining content is now three
+         explicitly labeled, visually separated groups instead of one continuous two-column scroll,
+         so each section reads as its own answer to a specific question rather than one undifferentiated
+         wall of cards. No card was removed or hidden; every widget below is the same component with
+         the same data as before, just regrouped by what question it answers. */}
+      <SectionBreak num="01" label="Performance Overview" />
+      <FeaturedTrendCard
+        title="Team Completions — Last 7 Calendar Days"
+        metricValue={String(chartCompletionsCount)}
+        metricCaption="tasks currently marked completed"
+        series={completionsSeries}
+        formatValue={(v) => String(v)}
+        emptyMessage="No tasks completed in the last 7 calendar days."
+        className={STAGGER_ITEM_CLASS}
+        style={staggerDelay(0)}
+      />
 
-      <div className="flex flex-col gap-4">
-        <TeamWorkloadCard members={teamMembers} tasks={tasks} className={STAGGER_ITEM_CLASS} style={staggerDelay(0)} />
-        <div className="grid items-start gap-4 lg:grid-cols-2">
-          <ClientHealthOverviewCard
-            companies={companies}
-            projects={projects}
-            className={cn("min-w-0", STAGGER_ITEM_CLASS)}
-            style={staggerDelay(1)}
-          />
-          <Card className={cn("min-w-0", STAGGER_ITEM_CLASS)} style={staggerDelay(2)}>
+      <SectionBreak num="02" label="Team & Client Operations" />
+      <div className="grid items-start gap-6 lg:grid-cols-2">
+        <div className="flex min-w-0 flex-col gap-6">
+          <TeamWorkloadCard members={teamMembers} tasks={tasks} className={STAGGER_ITEM_CLASS} style={staggerDelay(0)} />
+          <Card className={cn("min-w-0 shadow-sm", STAGGER_ITEM_CLASS)} style={staggerDelay(1)}>
             <CardHeader>
               <CardTitle className="text-base">Team Tasks by Status</CardTitle>
               <CardAction>
@@ -201,6 +238,32 @@ export function SupervisorDashboard({ user }: { user: User }) {
               <TaskStatusDonut tasks={tasks} />
             </CardContent>
           </Card>
+        </div>
+        <ClientHealthOverviewCard
+          companies={companies}
+          projects={projects}
+          className={cn("min-w-0", STAGGER_ITEM_CLASS)}
+          style={staggerDelay(2)}
+        />
+      </div>
+
+      <SectionBreak num="03" label="Activity & Upcoming Work" />
+      <div className="grid items-start gap-6 lg:grid-cols-2">
+        <div className="flex min-w-0 flex-col gap-6">
+          <div className={cn("min-w-0", STAGGER_ITEM_CLASS)} style={staggerDelay(0)}>
+            <TeamActivityCard tasks={tasks} handoffs={handoffs} />
+          </div>
+          <div className={STAGGER_ITEM_CLASS} style={staggerDelay(1)}>
+            <RecentNotificationsCard />
+          </div>
+        </div>
+        <div className="flex min-w-0 flex-col gap-6">
+          <div className={cn("min-w-0", STAGGER_ITEM_CLASS)} style={staggerDelay(2)}>
+            <RecurringWorkDueCard workstreams={workstreams} />
+          </div>
+          <div className={cn("min-w-0", STAGGER_ITEM_CLASS)} style={staggerDelay(3)}>
+            <UpcomingDeadlinesCard tasks={tasks} title="Team Upcoming" />
+          </div>
         </div>
       </div>
 
@@ -223,22 +286,6 @@ export function SupervisorDashboard({ user }: { user: User }) {
           onDeleted={refreshTasks}
         />
       </DashboardWidgetFocusDialog>
-
-      <SectionBreak num="02" label="Review & Activity" />
-
-      <div className="grid items-start gap-4 lg:grid-cols-3">
-        <div className={cn("min-w-0 lg:col-span-2", STAGGER_ITEM_CLASS)} style={staggerDelay(0)}>
-          <TeamActivityCard tasks={tasks} handoffs={handoffs} />
-        </div>
-        <div className={cn("min-w-0 flex flex-col gap-4", STAGGER_ITEM_CLASS)} style={staggerDelay(1)}>
-          <RecurringWorkDueCard workstreams={workstreams} />
-          <UpcomingDeadlinesCard tasks={tasks} title="Team Upcoming" />
-        </div>
-      </div>
-
-      <SectionBreak num="03" label="Notifications" />
-
-      <RecentNotificationsCard />
 
       {editingTask && (
         <TaskFormDialog

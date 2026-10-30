@@ -22,6 +22,14 @@ const LEVEL_BADGE_VARIANT: Record<WorkloadLevel, "success" | "warning" | "destru
   "at-capacity": "destructive",
 };
 
+/** The bar's own fill now matches its row's workload badge instead of a flat primary-colored bar
+ * regardless of level — the color itself becomes part of the at-a-glance read, not just the label. */
+const LEVEL_BAR_COLOR: Record<WorkloadLevel, string> = {
+  available: "var(--success)",
+  busy: "var(--warning)",
+  "at-capacity": "var(--destructive)",
+};
+
 const MAX_ROWS = 6;
 
 interface TeamWorkloadCardProps {
@@ -57,7 +65,7 @@ export function TeamWorkloadCard({ members, tasks, className, style }: TeamWorkl
         )}
         style={staggerDelay(i)}
       >
-        <Avatar className="size-8 shrink-0">
+        <Avatar className="size-9 shrink-0 ring-2 ring-background">
           <AvatarFallback className="text-xs">{initials(member.fullName)}</AvatarFallback>
         </Avatar>
         <div className="min-w-0 flex-1">
@@ -65,10 +73,10 @@ export function TeamWorkloadCard({ members, tasks, className, style }: TeamWorkl
             <span className="truncate text-sm font-medium">{member.fullName}</span>
             <span className="shrink-0 font-mono text-xs text-muted-foreground">{activeCount} active</span>
           </div>
-          <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-muted">
+          <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-muted">
             <div
-              className="h-full rounded-full bg-primary transition-[width] duration-500 ease-out"
-              style={{ width: `${pct}%` }}
+              className="h-full rounded-full transition-[width] duration-500 ease-out"
+              style={{ width: `${pct}%`, backgroundColor: LEVEL_BAR_COLOR[workload.level] }}
             />
           </div>
         </div>
@@ -79,8 +87,37 @@ export function TeamWorkloadCard({ members, tasks, className, style }: TeamWorkl
     );
   }
 
+  /** The compact card's own view — a comparative vertical bar per member (bar height relative to
+   * the busiest person shown, same real `pct` the horizontal rows used), color-coded by that
+   * member's real workload tier. The full accessible row list above still backs the expand drawer. */
+  function renderBar({ member, activeCount, workload }: (typeof rows)[number], i: number) {
+    const pct = Math.max(Math.round((activeCount / maxCount) * 100), 6);
+    const firstName = member.fullName.split(" ")[0];
+    return (
+      <Link
+        key={member.id}
+        href={`/dashboard/tasks?assignee=${member.id}`}
+        title={`${member.fullName} — ${activeCount} active, ${workload.label}`}
+        className={cn("group/bar flex flex-1 flex-col items-center gap-2", STAGGER_ITEM_CLASS)}
+        style={staggerDelay(i)}
+      >
+        <span className="font-mono text-xs font-semibold text-foreground">{activeCount}</span>
+        <div className="flex h-24 w-full items-end justify-center">
+          <div
+            className="w-full max-w-9 rounded-full transition-[height] duration-500 ease-out group-hover/bar:opacity-80"
+            style={{ height: `${pct}%`, backgroundColor: LEVEL_BAR_COLOR[workload.level] }}
+          />
+        </div>
+        <Avatar className="size-7 shrink-0 ring-2 ring-background">
+          <AvatarFallback className="text-[10px]">{initials(member.fullName)}</AvatarFallback>
+        </Avatar>
+        <span className="max-w-full truncate text-xs text-muted-foreground">{firstName}</span>
+      </Link>
+    );
+  }
+
   return (
-    <Card className={className} style={style}>
+    <Card className={cn("shadow-sm", className)} style={style}>
       <CardHeader>
         <CardTitle className="text-base">Team Workload</CardTitle>
         <CardAction>
@@ -92,12 +129,12 @@ export function TeamWorkloadCard({ members, tasks, className, style }: TeamWorkl
           <p className="text-sm text-muted-foreground">No team members yet.</p>
         ) : (
           <>
-            {rows.slice(0, MAX_ROWS).map(renderRow)}
+            <div className="flex items-end justify-between gap-2">{rows.slice(0, MAX_ROWS).map(renderBar)}</div>
             {overflow > 0 && (
               <button
                 type="button"
                 onClick={() => setDrawerOpen(true)}
-                className="mt-1 self-start text-xs font-medium text-primary hover:underline"
+                className="mt-3 self-start text-xs font-medium text-primary hover:underline"
               >
                 +{overflow} more
               </button>

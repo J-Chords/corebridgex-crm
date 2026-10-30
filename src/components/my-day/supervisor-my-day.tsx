@@ -14,7 +14,7 @@ import {
 } from "@/lib/data/hooks/use-task-filters";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { SectionBreak } from "@/components/ui/section-break";
+import { Tabs, TabsList, TabsIndicator, TabsTab, TabsPanel } from "@/components/ui/tabs";
 import { TaskFormDialog } from "@/components/tasks/task-form-dialog";
 import type { TaskWithRelations } from "@/lib/data/providers/tasks-provider";
 import { TaskFilterBar } from "@/components/tasks/task-filter-bar";
@@ -25,6 +25,7 @@ import { STATUS_ORDER, EMPTY_BUCKET_COPY, StatusBucketButton, usePersistedStatus
 import { BucketTaskGrid } from "@/components/my-day/bucket-task-grid";
 import { TodayTimeCard } from "@/components/my-day/today-time-card";
 import { DailyUpdateCard } from "@/components/my-day/daily-update-card";
+import { MyDayTodaySkeleton } from "@/components/my-day/my-day-today-skeleton";
 import { GreetingText } from "@/components/dashboard/greeting-heading";
 import { SearchTriggerBar } from "@/components/dashboard/search-trigger-bar";
 import { myDaySubtitle } from "@/lib/my-day-greeting";
@@ -123,10 +124,13 @@ export function SupervisorMyDay({ user }: SupervisorMyDayProps) {
   const focusTask = findFocusTask(tasks, today);
 
   const hasAnyTasks = tasks.length > 0;
+  // Week/Month "Team" scope toggle's own task source — computed once per render, not re-filtered
+  // per consumer (the schedule view and the Unscheduled panel both read this exact same list).
+  const scheduleTasks = filterTasks(teamScope ? teamTasks : tasks, { ...filters, status: "all" });
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-4 rounded-xl bg-card p-6 shadow-sm ring-1 ring-foreground/10">
         <div>
           <h1 className="font-heading text-3xl font-semibold tracking-tight sm:text-4xl">
             <GreetingText fullName={user.fullName} />
@@ -138,147 +142,160 @@ export function SupervisorMyDay({ user }: SupervisorMyDayProps) {
         </Button>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="flex items-center gap-0.5 rounded-lg border p-0.5">
-          {VIEW_TABS.map(({ key, label, icon: Icon }) => (
-            <Button
-              key={key}
-              size="sm"
-              variant={view === key ? "secondary" : "ghost"}
-              aria-pressed={view === key}
-              onClick={() => handleViewChange(key)}
-            >
-              <Icon /> {label}
-            </Button>
-          ))}
+      <Tabs value={view} onValueChange={(next) => handleViewChange(next as MyDayView)}>
+        <div className="flex flex-wrap items-center gap-2">
+          <TabsList>
+            {VIEW_TABS.map(({ key, label, icon: Icon }) => (
+              <TabsTab key={key} value={key}>
+                <Icon /> {label}
+              </TabsTab>
+            ))}
+            <TabsIndicator />
+          </TabsList>
+          {view !== "today" && (
+            <div className="flex items-center gap-0.5 rounded-lg border p-0.5">
+              <Button size="sm" variant={!teamScope ? "secondary" : "ghost"} aria-pressed={!teamScope} onClick={() => setTeamScope(false)}>
+                My work
+              </Button>
+              <Button size="sm" variant={teamScope ? "secondary" : "ghost"} aria-pressed={teamScope} onClick={() => setTeamScope(true)}>
+                Team
+              </Button>
+            </div>
+          )}
         </div>
-        {view !== "today" && (
-          <div className="flex items-center gap-0.5 rounded-lg border p-0.5">
-            <Button size="sm" variant={!teamScope ? "secondary" : "ghost"} aria-pressed={!teamScope} onClick={() => setTeamScope(false)}>
-              My work
-            </Button>
-            <Button size="sm" variant={teamScope ? "secondary" : "ghost"} aria-pressed={teamScope} onClick={() => setTeamScope(true)}>
-              Team
-            </Button>
+
+        <TabsPanel value="today">
+          <div className="grid items-start gap-6 lg:grid-cols-3">
+            <div className="flex min-w-0 flex-col gap-4 lg:col-span-2">
+              <SearchTriggerBar variant="pill" placeholder="Search clients, tasks, actions…" />
+
+              {tasksLoading ? (
+                <MyDayTodaySkeleton />
+              ) : !hasAnyTasks ? (
+                <Card>
+                  <CardContent className="py-6 text-center text-sm text-muted-foreground">
+                    Nothing on your plate right now — add a task to get your day started.
+                  </CardContent>
+                </Card>
+              ) : (
+                <>
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                    {STATUS_ORDER.map((status, i) => (
+                      <StatusBucketButton
+                        key={status}
+                        status={status}
+                        count={countByStatus[status]}
+                        selected={selectedStatus === status}
+                        onSelect={setSelectedStatus}
+                        className={STAGGER_ITEM_CLASS}
+                        style={staggerDelay(i)}
+                      />
+                    ))}
+                  </div>
+
+                  <div className="flex flex-col gap-3">
+                    <TaskFilterBar
+                      filters={filters}
+                      onChange={patch}
+                      fields={["search", "company", "workstream", "priority"]}
+                      companies={companyOptions}
+                      workstreams={workstreamOptions}
+                      className="flex flex-wrap items-center gap-3"
+                    />
+                    <SavedViewsBar filters={filters} onApply={patch} />
+                  </div>
+
+                  <BucketTaskGrid
+                    user={user}
+                    tasks={bucketTasks}
+                    selectedStatus={selectedStatus}
+                    focusTaskId={focusTask?.id ?? null}
+                    onChanged={refreshTasks}
+                    emptyMessage={
+                      filteredTasks.length === tasks.length
+                        ? EMPTY_BUCKET_COPY[selectedStatus]
+                        : `No ${TASK_STATUS_SELECT_ITEMS[selectedStatus].toLowerCase()} tasks match your filters.`
+                    }
+                    onEdit={setEditingTask}
+                    onDeleted={refreshTasks}
+                  />
+                </>
+              )}
+            </div>
+
+            <div className="flex min-w-0 flex-col gap-4">
+              <span className="font-mono text-xs font-semibold tracking-[0.14em] text-muted-foreground uppercase">
+                Today at a glance
+              </span>
+              <TodayTimeCard className={STAGGER_ITEM_CLASS} style={staggerDelay(0)} />
+              <UpcomingDeadlinesCard tasks={tasks} className={STAGGER_ITEM_CLASS} style={staggerDelay(1)} />
+              <div className={STAGGER_ITEM_CLASS} style={staggerDelay(2)}>
+                <DailyUpdateCard />
+              </div>
+            </div>
           </div>
-        )}
-      </div>
+        </TabsPanel>
 
-      {view === "today" && <SearchTriggerBar variant="pill" placeholder="Search clients, tasks, actions…" />}
-
-      {view === "today" &&
-        (!tasksLoading && !hasAnyTasks ? (
-          <Card>
-            <CardContent className="py-6 text-center text-sm text-muted-foreground">
-              Nothing on your plate right now — add a task to get your day started.
-            </CardContent>
-          </Card>
-        ) : (
-          <>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
-              {STATUS_ORDER.map((status, i) => (
-                <StatusBucketButton
-                  key={status}
-                  status={status}
-                  count={countByStatus[status]}
-                  selected={selectedStatus === status}
-                  onSelect={setSelectedStatus}
-                  className={STAGGER_ITEM_CLASS}
-                  style={staggerDelay(i)}
-                />
-              ))}
-            </div>
-
-            <div className="flex flex-col gap-3">
-              <TaskFilterBar
-                filters={filters}
-                onChange={patch}
-                fields={["search", "company", "workstream", "priority"]}
-                companies={companyOptions}
-                workstreams={workstreamOptions}
-                className="flex flex-wrap items-center gap-3"
-              />
-              <SavedViewsBar filters={filters} onApply={patch} />
-            </div>
-
-            <BucketTaskGrid
-              user={user}
-              tasks={bucketTasks}
-              selectedStatus={selectedStatus}
-              focusTaskId={focusTask?.id ?? null}
-              onChanged={refreshTasks}
-              emptyMessage={
-                filteredTasks.length === tasks.length
-                  ? EMPTY_BUCKET_COPY[selectedStatus]
-                  : `No ${TASK_STATUS_SELECT_ITEMS[selectedStatus].toLowerCase()} tasks match your filters.`
-              }
+        <TabsPanel value="week">
+          <div className="flex flex-col gap-4 rounded-xl bg-card p-5 shadow-sm ring-1 ring-foreground/10">
+            <TaskFilterBar
+              filters={filters}
+              onChange={patch}
+              fields={["search", "company", "workstream", "priority"]}
+              companies={companyOptions}
+              workstreams={workstreamOptions}
+              className="flex flex-wrap items-center gap-3"
+            />
+            <PlannerWeekView
+              anchorDate={weekAnchor}
+              onAnchorDateChange={setWeekAnchor}
+              onOpenDay={openDay}
+              tasks={scheduleTasks}
+              onOpen={openTask}
+              runningTaskId={runningTaskId}
               onEdit={setEditingTask}
               onDeleted={refreshTasks}
             />
-          </>
-        ))}
-
-      {(view === "week" || view === "month") &&
-        (() => {
-          const scheduleTasks = filterTasks(teamScope ? teamTasks : tasks, { ...filters, status: "all" });
-          return (
-            <div className="flex flex-col gap-4">
-              <TaskFilterBar
-                filters={filters}
-                onChange={patch}
-                fields={["search", "company", "workstream", "priority"]}
-                companies={companyOptions}
-                workstreams={workstreamOptions}
-                className="flex flex-wrap items-center gap-3"
-              />
-              {view === "week" ? (
-                <PlannerWeekView
-                  anchorDate={weekAnchor}
-                  onAnchorDateChange={setWeekAnchor}
-                  onOpenDay={openDay}
-                  tasks={scheduleTasks}
-                  onOpen={openTask}
-                  runningTaskId={runningTaskId}
-                  onEdit={setEditingTask}
-                  onDeleted={refreshTasks}
-                />
-              ) : (
-                <PlannerMonthView
-                  anchorDate={monthAnchor}
-                  onAnchorDateChange={setMonthAnchor}
-                  onOpenDay={openDay}
-                  tasks={scheduleTasks}
-                  onOpen={openTask}
-                  runningTaskId={runningTaskId}
-                  onEdit={setEditingTask}
-                  onDeleted={refreshTasks}
-                />
-              )}
-              <PlannerUnscheduledPanel
-                tasks={scheduleTasks}
-                onOpen={openTask}
-                runningTaskId={runningTaskId}
-                onEdit={setEditingTask}
-                onDeleted={refreshTasks}
-              />
-            </div>
-          );
-        })()}
-
-      {view === "today" && (
-        <>
-          <SectionBreak num="01" label="Time & Deadlines" />
-
-          <div className="grid gap-4 lg:grid-cols-2">
-            <TodayTimeCard className={STAGGER_ITEM_CLASS} style={staggerDelay(0)} />
-            <UpcomingDeadlinesCard tasks={tasks} className={STAGGER_ITEM_CLASS} style={staggerDelay(1)} />
+            <PlannerUnscheduledPanel
+              tasks={scheduleTasks}
+              onOpen={openTask}
+              runningTaskId={runningTaskId}
+              onEdit={setEditingTask}
+              onDeleted={refreshTasks}
+            />
           </div>
+        </TabsPanel>
 
-          <SectionBreak num="02" label="Daily Update" />
-
-          <DailyUpdateCard />
-        </>
-      )}
+        <TabsPanel value="month">
+          <div className="flex flex-col gap-4 rounded-xl bg-card p-5 shadow-sm ring-1 ring-foreground/10">
+            <TaskFilterBar
+              filters={filters}
+              onChange={patch}
+              fields={["search", "company", "workstream", "priority"]}
+              companies={companyOptions}
+              workstreams={workstreamOptions}
+              className="flex flex-wrap items-center gap-3"
+            />
+            <PlannerMonthView
+              anchorDate={monthAnchor}
+              onAnchorDateChange={setMonthAnchor}
+              onOpenDay={openDay}
+              tasks={scheduleTasks}
+              onOpen={openTask}
+              runningTaskId={runningTaskId}
+              onEdit={setEditingTask}
+              onDeleted={refreshTasks}
+            />
+            <PlannerUnscheduledPanel
+              tasks={scheduleTasks}
+              onOpen={openTask}
+              runningTaskId={runningTaskId}
+              onEdit={setEditingTask}
+              onDeleted={refreshTasks}
+            />
+          </div>
+        </TabsPanel>
+      </Tabs>
 
       <TaskFormDialog open={taskDialogOpen} onOpenChange={setTaskDialogOpen} mode="create" onSaved={refreshTasks} />
       {editingTask && (
