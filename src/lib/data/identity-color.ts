@@ -38,6 +38,14 @@ export function identityColorForServiceLine(serviceKey: string): { background: s
   return IDENTITY_TOKENS[index];
 }
 
+/** Same deterministic palette/hash as `identityColorForCompany`, keyed by Brand id — the Brand
+ * Snapshot segmented summary bar's per-brand segment colors, so the same brand always gets the
+ * same color there too. */
+export function identityColorForBrand(brandId: string): { background: string; foreground: string } {
+  const index = stableHash(brandId) % IDENTITY_TOKENS.length;
+  return IDENTITY_TOKENS[index];
+}
+
 /**
  * Best-effort "is this Task's Company/Project the permanently-seeded Internal/Non-billable one"
  * check for surfaces that only have a `TaskWithRelations` in hand (no already-fetched

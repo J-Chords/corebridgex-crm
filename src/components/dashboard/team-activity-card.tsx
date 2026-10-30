@@ -85,7 +85,7 @@ export function TeamActivityCard({ tasks, handoffs, title = "Recent Task Activit
   }
 
   return (
-    <Card>
+    <Card className="shadow-sm">
       <CardHeader>
         <CardTitle className="text-base">{title}</CardTitle>
         <CardAction>

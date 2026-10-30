@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type CSSProperties } from "react";
 import Link from "next/link";
 import type { Brand } from "@/lib/data/types";
 import type { CompanyWithRelations } from "@/lib/data/providers/companies-provider";
 import type { TaskWithRelations } from "@/lib/data/providers/tasks-provider";
 import { INTERNAL_BRAND_ID } from "@/lib/data/constants";
 import { isTaskActiveWork } from "@/lib/data/task-display";
+import { identityColorForBrand } from "@/lib/data/identity-color";
 import { Card, CardContent, CardHeader, CardTitle, CardAction } from "@/components/ui/card";
 import { CardExpandButton } from "@/components/dashboard/card-expand-button";
 import { DashboardWidgetFocusDialog } from "@/components/dashboard/dashboard-widget-focus-dialog";
@@ -19,10 +20,12 @@ interface BrandSnapshotCardProps {
   brands: Brand[];
   companies: CompanyWithRelations[];
   tasks: TaskWithRelations[];
+  className?: string;
+  style?: CSSProperties;
 }
 
 /** Per-partner-brand rollup — clients and active tasks per brand, excluding the Internal pseudo-brand (not a real partner). Real data only: reads brandId already on Company/Task, no new provider method. */
-export function BrandSnapshotCard({ brands, companies, tasks }: BrandSnapshotCardProps) {
+export function BrandSnapshotCard({ brands, companies, tasks, className, style }: BrandSnapshotCardProps) {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const partnerBrands = brands.filter((b) => b.id !== INTERNAL_BRAND_ID);
 
@@ -33,6 +36,12 @@ export function BrandSnapshotCard({ brands, companies, tasks }: BrandSnapshotCar
   });
 
   const maxClients = Math.max(1, ...rows.map((r) => r.clientCount));
+  // The real (possibly zero) total — shown as-is in the caption below. Never the `Math.max(1, …)`
+  // guarded version: that guard exists only to keep the segmented bar's own width math from
+  // dividing by zero, and must never leak into displayed text as a fabricated "1" when the real
+  // count is 0 (e.g. partner brands exist but none has a client assigned yet).
+  const realTotalBrandedClients = rows.reduce((sum, r) => sum + r.clientCount, 0);
+  const segmentWidthDenominator = Math.max(1, realTotalBrandedClients);
   const overflow = rows.length - MAX_ROWS;
 
   function renderRow({ brand, clientCount, activeTaskCount }: (typeof rows)[number], i: number) {
@@ -56,7 +65,7 @@ export function BrandSnapshotCard({ brands, companies, tasks }: BrandSnapshotCar
             {clientCount} client{clientCount === 1 ? "" : "s"} · {activeTaskCount} active
           </span>
         </div>
-        <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+        <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
           <div
             className="h-full rounded-full bg-primary transition-[width] duration-500 ease-out"
             style={{ width: `${pct}%` }}
@@ -67,7 +76,7 @@ export function BrandSnapshotCard({ brands, companies, tasks }: BrandSnapshotCar
   }
 
   return (
-    <Card>
+    <Card className={cn("shadow-sm", className)} style={style}>
       <CardHeader>
         <CardTitle className="text-base">Per-Brand Snapshot</CardTitle>
         <CardAction>
@@ -79,6 +88,26 @@ export function BrandSnapshotCard({ brands, companies, tasks }: BrandSnapshotCar
           <p className="text-sm text-muted-foreground">No partner brands yet.</p>
         ) : (
           <>
+            <div className="mb-3 flex flex-col gap-2">
+              <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-muted">
+                {rows
+                  .filter((r) => r.clientCount > 0)
+                  .map(({ brand, clientCount }) => (
+                    <div
+                      key={brand.id}
+                      style={{
+                        width: `${(clientCount / segmentWidthDenominator) * 100}%`,
+                        backgroundColor: identityColorForBrand(brand.id).background,
+                      }}
+                      title={`${brand.name}: ${clientCount} client${clientCount === 1 ? "" : "s"}`}
+                    />
+                  ))}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {realTotalBrandedClients} client{realTotalBrandedClients === 1 ? "" : "s"} across {rows.filter((r) => r.clientCount > 0).length} brand
+                {rows.filter((r) => r.clientCount > 0).length === 1 ? "" : "s"}
+              </p>
+            </div>
             {rows.slice(0, MAX_ROWS).map(renderRow)}
             {overflow > 0 && (
               <button

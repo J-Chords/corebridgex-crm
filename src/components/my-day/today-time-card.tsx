@@ -12,6 +12,7 @@ import { formatMinutes } from "@/lib/format-minutes";
 import { dateKeyFromTimestamp, todayDateOnly } from "@/lib/planner-dates";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
 
 function formatElapsed(seconds: number) {
   const m = Math.floor(seconds / 60);
@@ -90,7 +91,7 @@ export function TodayTimeCard({ className, style }: TodayTimeCardProps) {
   if (!user) return null;
 
   return (
-    <Card className={className} style={style}>
+    <Card className={cn("shadow-sm", className)} style={style}>
       <CardHeader>
         <CardTitle className="text-base">Today</CardTitle>
       </CardHeader>

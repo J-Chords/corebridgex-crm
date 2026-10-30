@@ -14,7 +14,7 @@ import {
 } from "@/lib/data/hooks/use-task-filters";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { SectionBreak } from "@/components/ui/section-break";
+import { Tabs, TabsList, TabsIndicator, TabsTab, TabsPanel } from "@/components/ui/tabs";
 import { TaskFormDialog } from "@/components/tasks/task-form-dialog";
 import type { TaskWithRelations } from "@/lib/data/providers/tasks-provider";
 import { TaskFilterBar } from "@/components/tasks/task-filter-bar";
@@ -25,6 +25,7 @@ import { STATUS_ORDER, EMPTY_BUCKET_COPY, StatusBucketButton, usePersistedStatus
 import { BucketTaskGrid } from "@/components/my-day/bucket-task-grid";
 import { TodayTimeCard } from "@/components/my-day/today-time-card";
 import { DailyUpdateCard } from "@/components/my-day/daily-update-card";
+import { MyDayTodaySkeleton } from "@/components/my-day/my-day-today-skeleton";
 import { GreetingText } from "@/components/dashboard/greeting-heading";
 import { SearchTriggerBar } from "@/components/dashboard/search-trigger-bar";
 import { myDaySubtitle } from "@/lib/my-day-greeting";
@@ -124,7 +125,7 @@ export function EmployeeMyDay({ user }: EmployeeMyDayProps) {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-4 rounded-xl bg-card p-6 shadow-sm ring-1 ring-foreground/10">
         <div>
           <h1 className="font-heading text-3xl font-semibold tracking-tight sm:text-4xl">
             <GreetingText fullName={user.fullName} />
@@ -136,85 +137,104 @@ export function EmployeeMyDay({ user }: EmployeeMyDayProps) {
         </Button>
       </div>
 
-      <div className="flex items-center gap-0.5 self-start rounded-lg border p-0.5">
-        {VIEW_TABS.map(({ key, label, icon: Icon }) => (
-          <Button
-            key={key}
-            size="sm"
-            variant={view === key ? "secondary" : "ghost"}
-            aria-pressed={view === key}
-            onClick={() => handleViewChange(key)}
-          >
-            <Icon /> {label}
-          </Button>
-        ))}
-      </div>
+      <Tabs value={view} onValueChange={(next) => handleViewChange(next as MyDayView)}>
+        <TabsList>
+          {VIEW_TABS.map(({ key, label, icon: Icon }) => (
+            <TabsTab key={key} value={key}>
+              <Icon /> {label}
+            </TabsTab>
+          ))}
+          <TabsIndicator />
+        </TabsList>
 
-      {view === "today" && <SearchTriggerBar variant="pill" placeholder="Search clients, tasks, actions…" />}
+        <TabsPanel value="today">
+          {/* CD-228 revision — Today becomes a main-content/rail composition too: the primary
+             column is the actual work (buckets + task grid, the thing this page exists for); the
+             rail is supporting personal context (today's time, what's coming up, the daily update),
+             consistently grouped instead of stacked full-width below a row of section breaks. */}
+          <div className="grid items-start gap-6 lg:grid-cols-3">
+            <div className="flex min-w-0 flex-col gap-4 lg:col-span-2">
+              <SearchTriggerBar variant="pill" placeholder="Search clients, tasks, actions…" />
 
-      {view === "today" &&
-        (!tasksLoading && !hasAnyTasks ? (
-          <Card>
-            <CardContent className="py-6 text-center text-sm text-muted-foreground">
-              Nothing on your plate right now — add a task to get your day started.
-            </CardContent>
-          </Card>
-        ) : (
-          <>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
-              {STATUS_ORDER.map((status, i) => (
-                <StatusBucketButton
-                  key={status}
-                  status={status}
-                  count={countByStatus[status]}
-                  selected={selectedStatus === status}
-                  onSelect={setSelectedStatus}
-                  className={STAGGER_ITEM_CLASS}
-                  style={staggerDelay(i)}
-                />
-              ))}
+              {tasksLoading ? (
+                <MyDayTodaySkeleton />
+              ) : !hasAnyTasks ? (
+                <Card>
+                  <CardContent className="py-6 text-center text-sm text-muted-foreground">
+                    Nothing on your plate right now — add a task to get your day started.
+                  </CardContent>
+                </Card>
+              ) : (
+                <>
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                    {STATUS_ORDER.map((status, i) => (
+                      <StatusBucketButton
+                        key={status}
+                        status={status}
+                        count={countByStatus[status]}
+                        selected={selectedStatus === status}
+                        onSelect={setSelectedStatus}
+                        className={STAGGER_ITEM_CLASS}
+                        style={staggerDelay(i)}
+                      />
+                    ))}
+                  </div>
+
+                  <div className="flex flex-col gap-3">
+                    <TaskFilterBar
+                      filters={filters}
+                      onChange={patch}
+                      fields={["search", "company", "workstream", "priority"]}
+                      companies={companyOptions}
+                      workstreams={workstreamOptions}
+                      className="flex flex-wrap items-center gap-3"
+                    />
+                    <SavedViewsBar filters={filters} onApply={patch} />
+                  </div>
+
+                  <BucketTaskGrid
+                    user={user}
+                    tasks={bucketTasks}
+                    selectedStatus={selectedStatus}
+                    focusTaskId={focusTask?.id ?? null}
+                    onChanged={refreshTasks}
+                    emptyMessage={
+                      filteredTasks.length === tasks.length
+                        ? EMPTY_BUCKET_COPY[selectedStatus]
+                        : `No ${TASK_STATUS_SELECT_ITEMS[selectedStatus].toLowerCase()} tasks match your filters.`
+                    }
+                    onEdit={setEditingTask}
+                    onDeleted={refreshTasks}
+                  />
+                </>
+              )}
             </div>
 
-            <div className="flex flex-col gap-3">
-              <TaskFilterBar
-                filters={filters}
-                onChange={patch}
-                fields={["search", "company", "workstream", "priority"]}
-                companies={companyOptions}
-                workstreams={workstreamOptions}
-                className="flex flex-wrap items-center gap-3"
-              />
-              <SavedViewsBar filters={filters} onApply={patch} />
+            <div className="flex min-w-0 flex-col gap-4">
+              <span className="font-mono text-xs font-semibold tracking-[0.14em] text-muted-foreground uppercase">
+                Today at a glance
+              </span>
+              <TodayTimeCard className={STAGGER_ITEM_CLASS} style={staggerDelay(0)} />
+              <UpcomingDeadlinesCard tasks={tasks} className={STAGGER_ITEM_CLASS} style={staggerDelay(1)} />
+              <div className={STAGGER_ITEM_CLASS} style={staggerDelay(2)}>
+                <DailyUpdateCard />
+              </div>
             </div>
+          </div>
+        </TabsPanel>
 
-            <BucketTaskGrid
-              user={user}
-              tasks={bucketTasks}
-              selectedStatus={selectedStatus}
-              focusTaskId={focusTask?.id ?? null}
-              onChanged={refreshTasks}
-              emptyMessage={
-                filteredTasks.length === tasks.length
-                  ? EMPTY_BUCKET_COPY[selectedStatus]
-                  : `No ${TASK_STATUS_SELECT_ITEMS[selectedStatus].toLowerCase()} tasks match your filters.`
-              }
-              onEdit={setEditingTask}
-              onDeleted={refreshTasks}
+        <TabsPanel value="week">
+          {/* CD-228 revision — the schedule becomes its own framed zone (matching the page header's
+             card language) instead of a bare grid floating directly on the canvas. */}
+          <div className="flex flex-col gap-4 rounded-xl bg-card p-5 shadow-sm ring-1 ring-foreground/10">
+            <TaskFilterBar
+              filters={filters}
+              onChange={patch}
+              fields={["search", "company", "workstream", "priority"]}
+              companies={companyOptions}
+              workstreams={workstreamOptions}
+              className="flex flex-wrap items-center gap-3"
             />
-          </>
-        ))}
-
-      {(view === "week" || view === "month") && (
-        <div className="flex flex-col gap-4">
-          <TaskFilterBar
-            filters={filters}
-            onChange={patch}
-            fields={["search", "company", "workstream", "priority"]}
-            companies={companyOptions}
-            workstreams={workstreamOptions}
-            className="flex flex-wrap items-center gap-3"
-          />
-          {view === "week" ? (
             <PlannerWeekView
               anchorDate={weekAnchor}
               onAnchorDateChange={setWeekAnchor}
@@ -225,7 +245,26 @@ export function EmployeeMyDay({ user }: EmployeeMyDayProps) {
               onEdit={setEditingTask}
               onDeleted={refreshTasks}
             />
-          ) : (
+            <PlannerUnscheduledPanel
+              tasks={filteredTasks}
+              onOpen={openTask}
+              runningTaskId={runningTaskId}
+              onEdit={setEditingTask}
+              onDeleted={refreshTasks}
+            />
+          </div>
+        </TabsPanel>
+
+        <TabsPanel value="month">
+          <div className="flex flex-col gap-4 rounded-xl bg-card p-5 shadow-sm ring-1 ring-foreground/10">
+            <TaskFilterBar
+              filters={filters}
+              onChange={patch}
+              fields={["search", "company", "workstream", "priority"]}
+              companies={companyOptions}
+              workstreams={workstreamOptions}
+              className="flex flex-wrap items-center gap-3"
+            />
             <PlannerMonthView
               anchorDate={monthAnchor}
               onAnchorDateChange={setMonthAnchor}
@@ -236,31 +275,16 @@ export function EmployeeMyDay({ user }: EmployeeMyDayProps) {
               onEdit={setEditingTask}
               onDeleted={refreshTasks}
             />
-          )}
-          <PlannerUnscheduledPanel
-            tasks={filteredTasks}
-            onOpen={openTask}
-            runningTaskId={runningTaskId}
-            onEdit={setEditingTask}
-            onDeleted={refreshTasks}
-          />
-        </div>
-      )}
-
-      {view === "today" && (
-        <>
-          <SectionBreak num="01" label="Time & Deadlines" />
-
-          <div className="grid gap-4 lg:grid-cols-2">
-            <TodayTimeCard className={STAGGER_ITEM_CLASS} style={staggerDelay(0)} />
-            <UpcomingDeadlinesCard tasks={tasks} className={STAGGER_ITEM_CLASS} style={staggerDelay(1)} />
+            <PlannerUnscheduledPanel
+              tasks={filteredTasks}
+              onOpen={openTask}
+              runningTaskId={runningTaskId}
+              onEdit={setEditingTask}
+              onDeleted={refreshTasks}
+            />
           </div>
-
-          <SectionBreak num="02" label="Daily Update" />
-
-          <DailyUpdateCard />
-        </>
-      )}
+        </TabsPanel>
+      </Tabs>
 
       <TaskFormDialog open={taskDialogOpen} onOpenChange={setTaskDialogOpen} mode="create" onSaved={refreshTasks} />
       {editingTask && (

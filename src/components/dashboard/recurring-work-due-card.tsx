@@ -53,7 +53,7 @@ export function RecurringWorkDueCard({ workstreams }: RecurringWorkDueCardProps)
   }
 
   return (
-    <Card>
+    <Card className="shadow-sm">
       <CardHeader>
         <CardTitle className="text-base">Recurring Work Due</CardTitle>
         <CardAction>

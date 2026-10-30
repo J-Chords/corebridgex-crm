@@ -70,7 +70,7 @@ export function DailyUpdateCard() {
   }
 
   return (
-    <Card>
+    <Card className="shadow-sm">
       <CardHeader className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <ContainedIcon size="md" tone={isDraft ? "neutral" : "success"}>

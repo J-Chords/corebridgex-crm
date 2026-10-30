@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Maximize2 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { ContainedIcon } from "@/components/ui/contained-icon";
+import { Skeleton } from "@/components/ui/skeleton";
 import { DashboardDetailDrawer } from "@/components/dashboard/dashboard-detail-drawer";
 import { cn } from "@/lib/utils";
 import type { LucideIcon } from "lucide-react";
@@ -64,6 +65,14 @@ const TONE_ICON: Record<NonNullable<StatCardProps["tone"]>, "neutral" | "warning
   danger: "danger",
 };
 
+/** The top accent bar's own color — a restrained "this card has a tone" signal, distinct from the
+ * value/icon tone treatment below it, not a full-card repaint. */
+const TONE_ACCENT_CLASS: Record<NonNullable<StatCardProps["tone"]>, string> = {
+  default: "bg-primary/40",
+  warning: "bg-warning",
+  danger: "bg-destructive",
+};
+
 /** Stat card from the reference: mono uppercase micro label, large display value, optional trend delta. */
 export function StatCard({
   label,
@@ -117,11 +126,16 @@ export function StatCard({
     <Card
       style={style}
       className={cn(
-        "relative transition-transform duration-300 ease-spring hover:-translate-y-1 hover:shadow-md",
+        "relative overflow-hidden transition-transform duration-300 ease-spring",
+        // The hover-lift is a "this whole card navigates" affordance — only show it when the body
+        // actually is a Link. An expand-only (non-navigable) card keeps its own Expand button's
+        // hover feedback, but the card body itself must not invite a click that does nothing.
+        navigable && "hover:-translate-y-1 hover:shadow-md",
         TONE_CARD_CLASS[tone],
         className
       )}
     >
+      <span aria-hidden="true" className={cn("absolute inset-x-0 top-0 h-[3px]", TONE_ACCENT_CLASS[tone])} />
       <CardContent className="flex flex-col gap-3 py-1">
         {expandable && (
           <button
@@ -155,6 +169,23 @@ export function StatCard({
           {detail.content(() => setDrawerOpen(false))}
         </DashboardDetailDrawer>
       )}
+    </Card>
+  );
+}
+
+/** Real loading placeholder for a KPI row while its underlying hook's `isLoading` is true — matches
+ * `StatCard`'s own shape (label/icon row, value, caption) so the grid doesn't jump when data arrives. */
+export function StatCardSkeleton({ className, style }: { className?: string; style?: CSSProperties }) {
+  return (
+    <Card style={style} className={cn("relative overflow-hidden", className)}>
+      <CardContent className="flex flex-col gap-3 py-1">
+        <div className="flex items-center justify-between gap-2">
+          <Skeleton className="h-3 w-20" />
+          <Skeleton className="size-7 rounded-md" />
+        </div>
+        <Skeleton className="h-8 w-16" />
+        <Skeleton className="h-3 w-24" />
+      </CardContent>
     </Card>
   );
 }
